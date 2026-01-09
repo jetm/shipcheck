@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import TYPE_CHECKING
 
@@ -25,6 +26,8 @@ _CVE_GLOB_PATTERNS = (
     "*/cve_check_summary*.json",
 )
 
+_REQUIRED_ISSUE_FIELDS = ("id", "status")
+
 
 def _discover_cve_output(build_dir: Path) -> Path | None:
     """Search for CVE scan output in priority order, return first match.
@@ -44,6 +47,49 @@ def _discover_cve_output(build_dir: Path) -> Path | None:
             return matches[0]
 
     return None
+
+
+def _parse_cve_json(cve_file: Path) -> list[dict]:
+    """Parse a CVE JSON file and return the package list.
+
+    Handles all three Yocto CVE output format variants:
+    - sbom-cve-check: integer version, cpes field present
+    - vex.bbclass: integer version, no cpes field
+    - legacy cve-check: string version, no cpes field
+
+    All fields except id and status on issues are optional.
+
+    Returns:
+        List of package dicts, each with 'name', 'version', 'issue', and
+        any other fields present in the source JSON.
+
+    Raises:
+        ValueError: If the file is not valid JSON or lacks required structure.
+    """
+    try:
+        data = json.loads(cve_file.read_text())
+    except (json.JSONDecodeError, OSError) as e:
+        msg = f"Failed to parse CVE JSON: {cve_file}: {e}"
+        raise ValueError(msg) from e
+
+    if "package" not in data:
+        msg = f"Missing 'package' key in CVE JSON: {cve_file}"
+        raise ValueError(msg)
+
+    packages = data["package"]
+
+    for pkg in packages:
+        pkg_name = pkg.get("name", "<unknown>")
+        for issue in pkg.get("issue", []):
+            for field in _REQUIRED_ISSUE_FIELDS:
+                if field not in issue:
+                    msg = (
+                        f"Package '{pkg_name}' has an issue missing required field"
+                        f" '{field}' in {cve_file}"
+                    )
+                    raise ValueError(msg)
+
+    return packages
 
 
 class CVECheck(BaseCheck):
@@ -74,8 +120,32 @@ class CVECheck(BaseCheck):
                 summary="No CVE scan output found",
             )
 
-        # Parsing, severity classification, suppression, and scoring
-        # are implemented in tasks 3.3-3.6.
+        try:
+            packages = _parse_cve_json(cve_file)
+        except ValueError:
+            logger.exception("Failed to parse CVE output: %s", cve_file)
+            return CheckResult(
+                check_id=self.id,
+                check_name=self.name,
+                status=CheckStatus.FAIL,
+                score=0,
+                max_score=50,
+                findings=[
+                    Finding(
+                        message=f"Failed to parse CVE output: {cve_file.name}",
+                        severity="critical",
+                        remediation=(
+                            "Verify the CVE JSON file is valid and matches"
+                            " the expected format."
+                        ),
+                    )
+                ],
+                summary=f"Failed to parse CVE output: {cve_file.name}",
+            )
+
+        # Severity classification, suppression, and scoring
+        # are implemented in tasks 3.4-3.6.
+        total_issues = sum(len(pkg.get("issue", [])) for pkg in packages)
         return CheckResult(
             check_id=self.id,
             check_name=self.name,
@@ -83,5 +153,8 @@ class CVECheck(BaseCheck):
             score=50,
             max_score=50,
             findings=[],
-            summary=f"CVE scan output found: {cve_file.name}",
+            summary=(
+                f"CVE scan output found: {cve_file.name}"
+                f" ({len(packages)} packages, {total_issues} issues)"
+            ),
         )
