@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "package": [
+    {
+      "name": "libxml2",
+      "version": "2.12.3",
+      "layer": "meta",
+      "issue": [
+        {
+          "id": "CVE-2024-0600",
+          "status": "Unpatched",
+          "link": "https://nvd.nist.gov/vuln/detail/CVE-2024-0600",
+          "summary": "Use-after-free in XPath evaluation"
+        },
+        {
+          "id": "CVE-2024-0601",
+          "status": "Unpatched",
+          "scorev3": "0.0",
+          "link": "https://nvd.nist.gov/vuln/detail/CVE-2024-0601",
+          "summary": "Null pointer dereference in schema validation"
+        },
+        {
+          "id": "CVE-2024-0602",
+          "status": "Unpatched",
+          "scorev2": "0.0",
+          "scorev3": "0.0",
+          "scorev4": "0.0",
+          "link": "https://nvd.nist.gov/vuln/detail/CVE-2024-0602",
+          "summary": "Entity expansion DoS"
+        },
+        {
+          "id": "CVE-2024-0603",
+          "status": "Patched",
+          "link": "https://nvd.nist.gov/vuln/detail/CVE-2024-0603",
+          "summary": "Buffer overread in HTML parser",
+          "patch-file": "0001-fix-cve-2024-0603.patch"
+        }
+      ]
+    },
+    {
+      "name": "expat",
+      "version": "2.6.0",
+      "layer": "meta",
+      "issue": [
+        {
+          "id": "CVE-2024-0700",
+          "status": "Unpatched",
+          "scorev3": "",
+          "link": "https://nvd.nist.gov/vuln/detail/CVE-2024-0700",
+          "summary": "Integer overflow in DTD parsing"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "package": [
+    {
+      "name": "curl",
+      "version": "8.5.0",
+      "layer": "meta",
+      "issue": [
+        {
+          "id": "CVE-2024-0100",
+          "status": "Unpatched",
+          "scorev3": "7.5",
+          "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+          "link": "https://nvd.nist.gov/vuln/detail/CVE-2024-0100",
+          "summary": "Authentication bypass in NTLM handler"
+        },
+        {
+          "id": "CVE-2024-0101",
+          "status": "Patched",
+          "scorev3": "5.9",
+          "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N",
+          "link": "https://nvd.nist.gov/vuln/detail/CVE-2024-0101",
+          "summary": "TLS certificate validation issue",
+          "patch-file": "0001-fix-cve-2024-0101.patch"
+        }
+      ]
+    },
+    {
+      "name": "glibc",
+      "version": "2.38",
+      "layer": "meta",
+      "issue": [
+        {
+          "id": "CVE-2024-0200",
+          "status": "Unpatched",
+          "scorev3": "4.0",
+          "vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
+          "link": "https://nvd.nist.gov/vuln/detail/CVE-2024-0200",
+          "summary": "Locale handling memory corruption"
+        },
+        {
+          "id": "CVE-2024-0201",
+          "status": "Unpatched",
+          "scorev3": "2.5",
+          "vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:L/I:N/A:N",
+          "link": "https://nvd.nist.gov/vuln/detail/CVE-2024-0201",
+          "summary": "Minor information leak in resolver"
+        }
+      ]
+    }
+  ]
+}
