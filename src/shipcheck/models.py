@@ -31,7 +31,7 @@ class Finding:
 
 @dataclass
 class CheckResult:
-    """Result of running one check against an image."""
+    """Result of running one check."""
 
     check_name: str
     status: CheckStatus
@@ -50,9 +50,9 @@ class CheckResult:
 
 @dataclass
 class ReportData:
-    """Aggregated report data for one image scan."""
+    """Aggregated report data for a compliance scan."""
 
-    image: str
+    build_dir: str
     results: list[CheckResult] = field(default_factory=list)
     score: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -76,6 +76,6 @@ class BaseCheck(abc.ABC):
     name: str = ""
 
     @abc.abstractmethod
-    def run(self, image: str, **kwargs: Any) -> CheckResult:
+    def run(self, build_dir: str, **kwargs: Any) -> CheckResult:
         """Execute the check and return a result."""
         ...
