@@ -69,6 +69,27 @@ def _select_document(docs: list[tuple[Path, dict]]) -> tuple[Path, dict] | None:
     return max(docs, key=lambda x: _package_count(x[1]))
 
 
+def _detect_format(doc: dict) -> str | None:
+    """Detect the SBOM document format.
+
+    Returns:
+        "spdx-2" for SPDX 2.x, "spdx-3" for SPDX 3.0,
+        "cyclonedx" for CycloneDX, or None if unrecognized.
+    """
+    spdx_version = doc.get("spdxVersion", "")
+    if isinstance(spdx_version, str) and spdx_version.startswith("SPDX-2"):
+        return "spdx-2"
+
+    context = doc.get("@context", "")
+    if isinstance(context, str) and "spdx.org" in context:
+        return "spdx-3"
+
+    if "bomFormat" in doc:
+        return "cyclonedx"
+
+    return None
+
+
 class SBOMCheck(BaseCheck):
     """Validate SPDX 2.3 SBOM documents against BSI TR-03183-2 field requirements."""
 
@@ -146,8 +167,44 @@ class SBOMCheck(BaseCheck):
         path, doc = selected
         pkg_count = _package_count(doc)
 
-        # Stub: format detection and field validation added by tasks 2.3-2.5
-        summary = f"SPDX found at {path.name} ({pkg_count} packages)"
+        fmt = _detect_format(doc)
+
+        if fmt is None:
+            findings.append(
+                Finding(
+                    message=(
+                        "SBOM format not recognized"
+                        " (expected SPDX 2.x, SPDX 3.0, or CycloneDX)"
+                    ),
+                    severity="high",
+                    remediation=_REMEDIATION_SPDX,
+                )
+            )
+            return CheckResult(
+                check_id=self.id,
+                check_name=self.name,
+                status=determine_status(findings),
+                score=0,
+                max_score=50,
+                findings=findings,
+                summary="Unrecognized SBOM format",
+            )
+
+        if fmt in ("spdx-3", "cyclonedx"):
+            fmt_label = "SPDX 3.0" if fmt == "spdx-3" else "CycloneDX"
+            summary = f"{fmt_label} detected — format detected but not fully validated in v0.1"
+            return CheckResult(
+                check_id=self.id,
+                check_name=self.name,
+                status=determine_status(findings),
+                score=10,
+                max_score=50,
+                findings=findings,
+                summary=summary,
+            )
+
+        # SPDX 2.x — field validation added by tasks 2.4-2.5
+        summary = f"SPDX 2.x found at {path.name} ({pkg_count} packages)"
         return CheckResult(
             check_id=self.id,
             check_name=self.name,

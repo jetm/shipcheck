@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 from shipcheck.checks.sbom import (
     SBOMCheck,
+    _detect_format,
     _discover_spdx_files,
     _has_describes,
     _load_spdx_docs,
@@ -367,3 +368,195 @@ class TestDiscoveryInvalidJson:
         result = sbom_check.run(tmp_path, {})
         assert result.status == CheckStatus.FAIL
         assert result.findings[0].severity == "critical"
+
+
+# --- Unit tests for format detection ---
+
+
+class TestDetectFormat:
+    """Unit tests for _detect_format."""
+
+    def test_spdx_2x_detected_by_spdx_version(self):
+        doc = {"spdxVersion": "SPDX-2.3"}
+        assert _detect_format(doc) == "spdx-2"
+
+    def test_spdx_2x_detects_any_2x_variant(self):
+        doc = {"spdxVersion": "SPDX-2.2"}
+        assert _detect_format(doc) == "spdx-2"
+
+    def test_spdx_3_detected_by_context(self):
+        doc = {"@context": "https://spdx.org/rdf/3.0.0/terms"}
+        assert _detect_format(doc) == "spdx-3"
+
+    def test_spdx_3_context_substring_match(self):
+        doc = {"@context": "https://spdx.org/rdf/3.0.1/terms"}
+        assert _detect_format(doc) == "spdx-3"
+
+    def test_cyclonedx_detected_by_bom_format(self):
+        doc = {"bomFormat": "CycloneDX"}
+        assert _detect_format(doc) == "cyclonedx"
+
+    def test_unrecognized_format(self):
+        doc = {"some": "random", "json": "doc"}
+        assert _detect_format(doc) is None
+
+    def test_spdx_2_takes_priority_over_context(self):
+        doc = {"spdxVersion": "SPDX-2.3", "@context": "https://spdx.org/rdf/3.0.0/terms"}
+        assert _detect_format(doc) == "spdx-2"
+
+    def test_spdx_version_must_start_with_spdx_2(self):
+        doc = {"spdxVersion": "SPDX-3.0"}
+        assert _detect_format(doc) != "spdx-2"
+
+
+# --- Integration tests for format detection in SBOMCheck.run ---
+
+
+def _make_spdx3_doc() -> dict:
+    """Build a minimal SPDX 3.0 JSON-LD document."""
+    return {
+        "@context": "https://spdx.org/rdf/3.0.0/terms",
+        "@graph": [
+            {
+                "type": "SpdxDocument",
+                "name": "test-image",
+                "creationInfo": {"specVersion": "3.0.0"},
+            }
+        ],
+    }
+
+
+def _make_cyclonedx_doc() -> dict:
+    """Build a minimal CycloneDX 1.5 document."""
+    return {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "components": [{"type": "library", "name": "test-pkg", "version": "1.0"}],
+    }
+
+
+class TestFormatDetectionSpdx2:
+    """SPDX 2.x document triggers full validation path (task 2.4 adds validation)."""
+
+    def test_spdx_2_format_detected(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", _make_spdx_doc(has_describes=True))
+        result = sbom_check.run(tmp_path, {})
+        assert "SPDX 2" in result.summary
+
+    def test_spdx_2_status_not_fail_for_valid_doc(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", _make_spdx_doc(has_describes=True))
+        result = sbom_check.run(tmp_path, {})
+        assert result.status != CheckStatus.FAIL
+
+
+class TestFormatDetectionSpdx3:
+    """SPDX 3.0 document gets detection-only: PASS with note, score 10."""
+
+    def test_spdx_3_passes_with_note(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", _make_spdx3_doc())
+        result = sbom_check.run(tmp_path, {})
+        assert result.status == CheckStatus.PASS
+        assert "not fully validated" in result.summary
+
+    def test_spdx_3_scores_10(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", _make_spdx3_doc())
+        result = sbom_check.run(tmp_path, {})
+        assert result.score == 10
+
+    def test_spdx_3_no_findings(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", _make_spdx3_doc())
+        result = sbom_check.run(tmp_path, {})
+        assert result.findings == []
+
+
+class TestFormatDetectionCycloneDX:
+    """CycloneDX document gets detection-only: PASS with note, score 10."""
+
+    def test_cyclonedx_passes_with_note(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", _make_cyclonedx_doc())
+        result = sbom_check.run(tmp_path, {})
+        assert result.status == CheckStatus.PASS
+        assert "not fully validated" in result.summary
+
+    def test_cyclonedx_scores_10(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", _make_cyclonedx_doc())
+        result = sbom_check.run(tmp_path, {})
+        assert result.score == 10
+
+    def test_cyclonedx_no_findings(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", _make_cyclonedx_doc())
+        result = sbom_check.run(tmp_path, {})
+        assert result.findings == []
+
+
+class TestFormatDetectionUnrecognized:
+    """Unrecognized format produces a high-severity finding."""
+
+    def test_unrecognized_format_returns_fail(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", {"some": "unknown", "format": "data"})
+        result = sbom_check.run(tmp_path, {})
+        assert result.status == CheckStatus.FAIL
+
+    def test_unrecognized_format_has_high_finding(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", {"some": "unknown", "format": "data"})
+        result = sbom_check.run(tmp_path, {})
+        assert len(result.findings) == 1
+        assert result.findings[0].severity == "high"
+
+    def test_unrecognized_format_score(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", {"some": "unknown", "format": "data"})
+        result = sbom_check.run(tmp_path, {})
+        assert result.score == 0
+
+
+class TestFormatDetectionWithFixtures:
+    """Test format detection using the real fixture files."""
+
+    @pytest.fixture
+    def fixtures_dir(self) -> Path:
+        from pathlib import Path
+
+        return Path(__file__).parent.parent / "fixtures" / "sbom"
+
+    def test_spdx_23_fixture(self, tmp_path: Path, sbom_check: SBOMCheck, fixtures_dir: Path):
+        import shutil
+
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        spdx_dir.mkdir(parents=True)
+        shutil.copy(fixtures_dir / "valid-spdx-2.3.json", spdx_dir / "image.spdx.json")
+        result = sbom_check.run(tmp_path, {})
+        assert "SPDX 2" in result.summary
+        assert result.status != CheckStatus.FAIL or any(
+            f.severity in ("critical", "high") for f in result.findings
+        )
+
+    def test_spdx_30_fixture(self, tmp_path: Path, sbom_check: SBOMCheck, fixtures_dir: Path):
+        import shutil
+
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        spdx_dir.mkdir(parents=True)
+        shutil.copy(fixtures_dir / "valid-spdx-3.0.json", spdx_dir / "image.spdx.json")
+        result = sbom_check.run(tmp_path, {})
+        assert result.score == 10
+        assert "not fully validated" in result.summary
+
+    def test_cyclonedx_fixture(self, tmp_path: Path, sbom_check: SBOMCheck, fixtures_dir: Path):
+        import shutil
+
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        spdx_dir.mkdir(parents=True)
+        shutil.copy(fixtures_dir / "valid-cyclonedx-1.5.json", spdx_dir / "image.spdx.json")
+        result = sbom_check.run(tmp_path, {})
+        assert result.score == 10
+        assert "not fully validated" in result.summary
