@@ -1,0 +1,25 @@
+build_dir: ./build
+
+framework: CRA
+
+checks:
+  - sbom-generation
+  - cve-tracking
+
+sbom:
+  required_fields:
+    - name
+    - version
+    - supplier
+    - license
+    - checksum
+
+cve:
+  suppress:
+    - CVE-2023-1234
+    - CVE-2024-5678
+
+report:
+  format: json
+  output: my-report
+  fail_on: high
