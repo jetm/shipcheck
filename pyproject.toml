@@ -1,7 +1,3 @@
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
 [project]
 name = "shipcheck"
 version = "0.0.1"
@@ -32,6 +28,7 @@ dev = [
     "bump-my-version",
     "pre-commit",
     "ruff",
+    "ty",
     "pytest>=9.0.2",
     "pytest-cov>=6.0",
     "pytest-randomly>=3.15",
@@ -46,15 +43,15 @@ Homepage = "https://github.com/jetm/shipcheck"
 Repository = "https://github.com/jetm/shipcheck"
 Issues = "https://github.com/jetm/shipcheck/issues"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/shipcheck"]
+[tool.uv]
+package = true
 
 [tool.ruff]
 line-length = 100
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "TCH"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["shipcheck"]
@@ -64,6 +61,7 @@ known-first-party = ["shipcheck"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 addopts = ["-v", "--tb=short", "--cov=shipcheck", "--cov-report=term-missing"]
 timeout = 30
 markers = [
@@ -83,6 +81,14 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "if __name__ == .__main__.",
 ]
+
+[tool.ty.rules]
+call-non-callable = "ignore"
+invalid-argument-type = "ignore"
+invalid-type-form = "ignore"
+no-matching-overload = "ignore"
+not-subscriptable = "ignore"
+unresolved-attribute = "ignore"
 
 [tool.bumpversion]
 current_version = "0.0.1"
