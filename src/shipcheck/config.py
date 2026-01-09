@@ -29,7 +29,7 @@ class ShipcheckConfig:
     output_format: str = "terminal"
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ShipcheckConfig":
+    def from_dict(cls, data: dict[str, Any]) -> ShipcheckConfig:
         """Build a config from a raw dict (e.g. parsed YAML)."""
         checks_data = data.get("checks", {})
         checks = ChecksConfig(
@@ -44,13 +44,13 @@ class ShipcheckConfig:
         )
 
     @classmethod
-    def load(cls, path: Path) -> "ShipcheckConfig":
+    def load(cls, path: Path) -> ShipcheckConfig:
         """Load config from a YAML file."""
         with path.open() as fh:
             data = yaml.safe_load(fh) or {}
         return cls.from_dict(data)
 
     @classmethod
-    def default(cls) -> "ShipcheckConfig":
+    def default(cls) -> ShipcheckConfig:
         """Return a default config."""
         return cls()

@@ -1,7 +1,6 @@
 """CLI entry points for shipcheck."""
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -24,12 +23,12 @@ def check(
         "--format",
         help="Output format (markdown, json, html).",
     ),
-    checks: Optional[str] = typer.Option(
+    checks: str | None = typer.Option(
         None,
         "--checks",
         help="Comma-separated list of checks to run.",
     ),
-    fail_on: Optional[str] = typer.Option(
+    fail_on: str | None = typer.Option(
         None,
         "--fail-on",
         help="Exit non-zero if findings at this severity or above (critical, high, medium, low).",

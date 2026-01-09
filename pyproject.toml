@@ -8,7 +8,7 @@ version = "0.0.1"
 description = "Embedded Linux compliance auditor — CRA, Secure Boot, SBOM, CVE tracking"
 authors = [{name = "Javier Tia"}]
 license = "Apache-2.0"
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 readme = "README.md"
 keywords = ["yocto", "embedded", "compliance", "cra", "sbom", "cve", "security", "firmware"]
 classifiers = [
@@ -17,9 +17,6 @@ classifiers = [
     "Topic :: Security",
     "Topic :: Software Development :: Quality Assurance",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 ]
 
@@ -30,15 +27,15 @@ dependencies = [
     "pyyaml>=6.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "bump-my-version",
     "pre-commit",
     "ruff",
-]
-test = [
-    "pytest",
-    "pytest-cov",
+    "pytest>=9.0.2",
+    "pytest-cov>=6.0",
+    "pytest-randomly>=3.15",
+    "pytest-timeout>=2.3",
 ]
 
 [project.scripts]
@@ -54,14 +51,24 @@ packages = ["src/shipcheck"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W"]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["shipcheck"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/shipcheck/cli.py" = ["B008"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["-v", "--tb=short", "--cov=shipcheck", "--cov-report=term-missing"]
+timeout = 30
+markers = [
+    "integration: tests requiring external tools or filesystem",
+]
 
 [tool.coverage.run]
 source = ["src/shipcheck"]
@@ -70,6 +77,7 @@ omit = ["tests/*"]
 [tool.coverage.report]
 precision = 2
 show_missing = true
+fail_under = 90
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",
