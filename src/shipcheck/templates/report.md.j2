@@ -1,0 +1,33 @@
+# shipcheck Compliance Report
+
+**Version:** {{ report.shipcheck_version }}
+**Build directory:** {{ report.build_dir }}
+**Timestamp:** {{ report.timestamp }}
+**Framework:** {{ report.framework }} ({{ report.framework_version }})
+**BSI TR:** {{ report.bsi_tr_version }}
+
+## Check Results
+
+{% for check in report.checks %}
+### {{ check.check_name }}
+
+| Field | Value |
+|-------|-------|
+| Status | **{{ check.status.value | upper }}** |
+| Score | {{ check.score }}/{{ check.max_score }} |
+| Summary | {{ check.summary }} |
+
+{% if check.findings %}
+#### Findings
+
+{% for finding in check.findings %}
+- **[{{ finding.severity }}]** {{ finding.message }}
+{%- if finding.remediation %}
+  - Remediation: {{ finding.remediation }}
+{%- endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+## Readiness Score
+
+**{{ report.total_score }}/{{ report.max_total_score }}**
