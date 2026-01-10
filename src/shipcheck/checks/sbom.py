@@ -90,6 +90,112 @@ def _detect_format(doc: dict) -> str | None:
     return None
 
 
+def _validate_spdx2_metadata(doc: dict) -> list[Finding]:
+    """Validate document-level SPDX 2.3 fields per BSI TR-03183-2.
+
+    Checks: creationInfo (created, creators), non-empty packages, DESCRIBES relationship.
+    """
+    findings: list[Finding] = []
+
+    creation_info = doc.get("creationInfo")
+    if not isinstance(creation_info, dict):
+        findings.append(
+            Finding(
+                message="Missing creationInfo — no creation timestamp or creator contact",
+                severity="medium",
+            )
+        )
+    else:
+        if not creation_info.get("created"):
+            findings.append(
+                Finding(
+                    message="Missing creationInfo.created timestamp",
+                    severity="medium",
+                )
+            )
+        creators = creation_info.get("creators")
+        if not creators or not isinstance(creators, list) or len(creators) == 0:
+            findings.append(
+                Finding(
+                    message=(
+                        "Missing or empty creationInfo.creators"
+                        " — at least one creator required"
+                    ),
+                    severity="medium",
+                )
+            )
+
+    packages = doc.get("packages", [])
+    if not isinstance(packages, list) or len(packages) == 0:
+        findings.append(
+            Finding(
+                message="No packages listed in SBOM document",
+                severity="medium",
+            )
+        )
+
+    if not _has_describes(doc):
+        findings.append(
+            Finding(
+                message=(
+                    "No DESCRIBES relationship found"
+                    " — document should describe at least one package"
+                ),
+                severity="medium",
+            )
+        )
+
+    return findings
+
+
+def _validate_spdx2_packages(packages: list[dict]) -> tuple[list[Finding], int]:
+    """Validate per-package SPDX 2.3 fields per BSI TR-03183-2.
+
+    Required fields: name, versionInfo, supplier (not NOASSERTION),
+    licenseDeclared (not NOASSERTION), checksums (non-empty).
+
+    Returns:
+        Tuple of (findings, count_of_fully_compliant_packages).
+    """
+    findings: list[Finding] = []
+    compliant = 0
+
+    for pkg in packages:
+        pkg_name = pkg.get("name", "<unknown>")
+        pkg_issues: list[str] = []
+
+        if not pkg.get("name"):
+            pkg_issues.append("name")
+
+        if not pkg.get("versionInfo"):
+            pkg_issues.append("versionInfo")
+
+        supplier = pkg.get("supplier", "")
+        if not supplier or supplier == "NOASSERTION":
+            pkg_issues.append("supplier")
+
+        license_declared = pkg.get("licenseDeclared", "")
+        if not license_declared or license_declared == "NOASSERTION":
+            pkg_issues.append("licenseDeclared")
+
+        checksums = pkg.get("checksums")
+        if not checksums or not isinstance(checksums, list) or len(checksums) == 0:
+            pkg_issues.append("checksum")
+
+        if pkg_issues:
+            for field in pkg_issues:
+                findings.append(
+                    Finding(
+                        message=f"Package '{pkg_name}': missing or invalid {field}",
+                        severity="low",
+                    )
+                )
+        else:
+            compliant += 1
+
+    return findings, compliant
+
+
 class SBOMCheck(BaseCheck):
     """Validate SPDX 2.3 SBOM documents against BSI TR-03183-2 field requirements."""
 
@@ -203,13 +309,38 @@ class SBOMCheck(BaseCheck):
                 summary=summary,
             )
 
-        # SPDX 2.x — field validation added by tasks 2.4-2.5
+        # SPDX 2.x — full field validation
+        findings.extend(_validate_spdx2_metadata(doc))
+
+        packages = doc.get("packages", [])
+        if isinstance(packages, list) and packages:
+            pkg_findings, compliant_count = _validate_spdx2_packages(packages)
+            findings.extend(pkg_findings)
+        else:
+            compliant_count = 0
+
+        # Scoring: 10 (format) + 5 (metadata) + 5 (DESCRIBES) + 30 (per-package)
+        score = 10
+        metadata_ok = not any(
+            f.severity == "medium"
+            and "DESCRIBES" not in f.message
+            for f in findings
+        )
+        describes_ok = _has_describes(doc)
+
+        if metadata_ok:
+            score += 5
+        if describes_ok:
+            score += 5
+        if pkg_count > 0:
+            score += round(30 * compliant_count / pkg_count)
+
         summary = f"SPDX 2.x found at {path.name} ({pkg_count} packages)"
         return CheckResult(
             check_id=self.id,
             check_name=self.name,
             status=determine_status(findings),
-            score=10,
+            score=score,
             max_score=50,
             findings=findings,
             summary=summary,

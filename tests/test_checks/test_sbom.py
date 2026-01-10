@@ -18,8 +18,24 @@ from shipcheck.checks.sbom import (
     _load_spdx_docs,
     _package_count,
     _select_document,
+    _validate_spdx2_metadata,
+    _validate_spdx2_packages,
 )
 from shipcheck.models import CheckStatus
+
+
+def _make_compliant_package(name: str = "pkg1") -> dict:
+    """Build a fully compliant SPDX 2.3 package entry."""
+    return {
+        "SPDXID": f"SPDXRef-Package-{name}",
+        "name": name,
+        "versionInfo": "1.0.0",
+        "supplier": f"Organization: {name}-org (contact@example.com)",
+        "licenseDeclared": "MIT",
+        "checksums": [
+            {"algorithm": "SHA256", "checksumValue": "abc123" * 10},
+        ],
+    }
 
 
 def _make_spdx_doc(
@@ -30,7 +46,7 @@ def _make_spdx_doc(
 ) -> dict:
     """Build a minimal SPDX 2.3 JSON document for testing."""
     if packages is None:
-        packages = [{"name": "pkg1", "SPDXID": "SPDXRef-Package-pkg1"}]
+        packages = [_make_compliant_package("pkg1")]
 
     relationships = []
     if has_describes:
@@ -560,3 +576,310 @@ class TestFormatDetectionWithFixtures:
         result = sbom_check.run(tmp_path, {})
         assert result.score == 10
         assert "not fully validated" in result.summary
+
+
+# --- Unit tests for SPDX 2.3 field validation ---
+
+
+class TestValidateSpdx2Metadata:
+    """Unit tests for _validate_spdx2_metadata."""
+
+    def test_valid_metadata_no_findings(self):
+        doc = _make_spdx_doc(has_describes=True)
+        findings = _validate_spdx2_metadata(doc)
+        assert findings == []
+
+    def test_missing_creation_info(self):
+        doc = _make_spdx_doc(has_describes=True)
+        del doc["creationInfo"]
+        findings = _validate_spdx2_metadata(doc)
+        assert len(findings) == 1
+        assert findings[0].severity == "medium"
+        assert "creationInfo" in findings[0].message
+
+    def test_missing_created_timestamp(self):
+        doc = _make_spdx_doc(has_describes=True)
+        del doc["creationInfo"]["created"]
+        findings = _validate_spdx2_metadata(doc)
+        assert len(findings) == 1
+        assert findings[0].severity == "medium"
+        msg = findings[0].message.lower()
+        assert "timestamp" in msg or "created" in msg
+
+    def test_missing_creators(self):
+        doc = _make_spdx_doc(has_describes=True)
+        del doc["creationInfo"]["creators"]
+        findings = _validate_spdx2_metadata(doc)
+        assert len(findings) == 1
+        assert findings[0].severity == "medium"
+
+    def test_empty_creators(self):
+        doc = _make_spdx_doc(has_describes=True)
+        doc["creationInfo"]["creators"] = []
+        findings = _validate_spdx2_metadata(doc)
+        assert len(findings) == 1
+        assert findings[0].severity == "medium"
+
+    def test_missing_packages(self):
+        doc = _make_spdx_doc(has_describes=True)
+        doc["packages"] = []
+        findings = _validate_spdx2_metadata(doc)
+        assert any("packages" in f.message.lower() for f in findings)
+        pkg_finding = [f for f in findings if "packages" in f.message.lower()][0]
+        assert pkg_finding.severity == "medium"
+
+    def test_no_describes_relationship(self):
+        doc = _make_spdx_doc(has_describes=False)
+        findings = _validate_spdx2_metadata(doc)
+        assert any("DESCRIBES" in f.message for f in findings)
+        describes_finding = [f for f in findings if "DESCRIBES" in f.message][0]
+        assert describes_finding.severity == "medium"
+
+    def test_multiple_metadata_issues(self):
+        doc = _make_spdx_doc(has_describes=False)
+        del doc["creationInfo"]
+        doc["packages"] = []
+        findings = _validate_spdx2_metadata(doc)
+        assert len(findings) == 3
+
+
+class TestValidateSpdx2Packages:
+    """Unit tests for _validate_spdx2_packages."""
+
+    def test_compliant_package_no_findings(self):
+        packages = [_make_compliant_package("busybox")]
+        findings, compliant_count = _validate_spdx2_packages(packages)
+        assert findings == []
+        assert compliant_count == 1
+
+    def test_missing_name(self):
+        pkg = _make_compliant_package()
+        del pkg["name"]
+        findings, compliant_count = _validate_spdx2_packages([pkg])
+        assert len(findings) == 1
+        assert findings[0].severity == "low"
+        assert compliant_count == 0
+
+    def test_missing_version_info(self):
+        pkg = _make_compliant_package()
+        del pkg["versionInfo"]
+        findings, compliant_count = _validate_spdx2_packages([pkg])
+        assert len(findings) == 1
+        assert findings[0].severity == "low"
+        assert compliant_count == 0
+
+    def test_noassertion_supplier(self):
+        pkg = _make_compliant_package()
+        pkg["supplier"] = "NOASSERTION"
+        findings, compliant_count = _validate_spdx2_packages([pkg])
+        assert len(findings) == 1
+        assert findings[0].severity == "low"
+        assert "supplier" in findings[0].message.lower()
+        assert compliant_count == 0
+
+    def test_missing_supplier(self):
+        pkg = _make_compliant_package()
+        del pkg["supplier"]
+        findings, compliant_count = _validate_spdx2_packages([pkg])
+        assert len(findings) == 1
+        assert findings[0].severity == "low"
+        assert compliant_count == 0
+
+    def test_noassertion_license_declared(self):
+        pkg = _make_compliant_package()
+        pkg["licenseDeclared"] = "NOASSERTION"
+        findings, compliant_count = _validate_spdx2_packages([pkg])
+        assert len(findings) == 1
+        assert findings[0].severity == "low"
+        assert "license" in findings[0].message.lower()
+        assert compliant_count == 0
+
+    def test_missing_license_declared(self):
+        pkg = _make_compliant_package()
+        del pkg["licenseDeclared"]
+        findings, compliant_count = _validate_spdx2_packages([pkg])
+        assert len(findings) == 1
+        assert compliant_count == 0
+
+    def test_empty_checksums(self):
+        pkg = _make_compliant_package()
+        pkg["checksums"] = []
+        findings, compliant_count = _validate_spdx2_packages([pkg])
+        assert len(findings) == 1
+        assert findings[0].severity == "low"
+        assert "checksum" in findings[0].message.lower()
+        assert compliant_count == 0
+
+    def test_missing_checksums(self):
+        pkg = _make_compliant_package()
+        del pkg["checksums"]
+        findings, compliant_count = _validate_spdx2_packages([pkg])
+        assert len(findings) == 1
+        assert compliant_count == 0
+
+    def test_multiple_issues_per_package(self):
+        pkg = _make_compliant_package()
+        pkg["supplier"] = "NOASSERTION"
+        pkg["licenseDeclared"] = "NOASSERTION"
+        pkg["checksums"] = []
+        findings, compliant_count = _validate_spdx2_packages([pkg])
+        assert len(findings) == 3
+        assert compliant_count == 0
+
+    def test_mixed_packages(self):
+        good = _make_compliant_package("good")
+        bad = _make_compliant_package("bad")
+        bad["supplier"] = "NOASSERTION"
+        findings, compliant_count = _validate_spdx2_packages([good, bad])
+        assert len(findings) == 1
+        assert compliant_count == 1
+
+    def test_finding_includes_package_name(self):
+        pkg = _make_compliant_package("busybox")
+        pkg["supplier"] = "NOASSERTION"
+        findings, _ = _validate_spdx2_packages([pkg])
+        assert "busybox" in findings[0].message
+
+    def test_multiple_packages_all_compliant(self):
+        pkgs = [_make_compliant_package(f"pkg{i}") for i in range(5)]
+        findings, compliant_count = _validate_spdx2_packages(pkgs)
+        assert findings == []
+        assert compliant_count == 5
+
+
+# --- Integration tests for SPDX 2.3 validation in SBOMCheck.run ---
+
+
+class TestValidationFullyCompliantDoc:
+    """Fully compliant SPDX 2.3 document produces PASS with score 50."""
+
+    def test_status_is_pass(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        doc = _make_spdx_doc(
+            packages=[_make_compliant_package(f"pkg{i}") for i in range(3)],
+            has_describes=True,
+        )
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        assert result.status == CheckStatus.PASS
+
+    def test_no_findings(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        doc = _make_spdx_doc(
+            packages=[_make_compliant_package(f"pkg{i}") for i in range(3)],
+            has_describes=True,
+        )
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        assert result.findings == []
+
+
+class TestValidationMissingMetadata:
+    """Missing creationInfo produces medium finding."""
+
+    def test_missing_creation_info_warns(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        doc = _make_spdx_doc(has_describes=True)
+        del doc["creationInfo"]
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        assert result.status == CheckStatus.WARN
+        assert any(f.severity == "medium" for f in result.findings)
+
+    def test_missing_creators_warns(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        doc = _make_spdx_doc(has_describes=True)
+        doc["creationInfo"]["creators"] = []
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        assert result.status == CheckStatus.WARN
+
+
+class TestValidationMissingDescribes:
+    """Missing DESCRIBES relationship produces medium finding."""
+
+    def test_no_describes_warns(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        doc = _make_spdx_doc(has_describes=False)
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        assert result.status == CheckStatus.WARN
+        assert any("DESCRIBES" in f.message for f in result.findings)
+
+
+class TestValidationPackageIssues:
+    """Per-package field issues produce low-severity findings."""
+
+    def test_noassertion_supplier_low_finding(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        pkg = _make_compliant_package("busybox")
+        pkg["supplier"] = "NOASSERTION"
+        doc = _make_spdx_doc(packages=[pkg], has_describes=True)
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        assert result.status == CheckStatus.WARN
+        assert any(f.severity == "low" for f in result.findings)
+
+    def test_empty_checksums_low_finding(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        pkg = _make_compliant_package("busybox")
+        pkg["checksums"] = []
+        doc = _make_spdx_doc(packages=[pkg], has_describes=True)
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        assert any(f.severity == "low" for f in result.findings)
+
+    def test_noassertion_license_low_finding(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        pkg = _make_compliant_package("openssl")
+        pkg["licenseDeclared"] = "NOASSERTION"
+        doc = _make_spdx_doc(packages=[pkg], has_describes=True)
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        assert any(f.severity == "low" for f in result.findings)
+
+
+class TestValidationWithFixtures:
+    """Integration tests using real fixture files."""
+
+    @pytest.fixture
+    def fixtures_dir(self) -> Path:
+        from pathlib import Path
+
+        return Path(__file__).parent.parent / "fixtures" / "sbom"
+
+    def test_valid_spdx_23_passes(self, tmp_path: Path, sbom_check: SBOMCheck, fixtures_dir: Path):
+        import shutil
+
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        spdx_dir.mkdir(parents=True)
+        shutil.copy(fixtures_dir / "valid-spdx-2.3.json", spdx_dir / "image.spdx.json")
+        result = sbom_check.run(tmp_path, {})
+        assert result.status == CheckStatus.PASS
+        assert result.findings == []
+
+    def test_missing_supplier_fixture_warns(
+        self, tmp_path: Path, sbom_check: SBOMCheck, fixtures_dir: Path
+    ):
+        import shutil
+
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        spdx_dir.mkdir(parents=True)
+        shutil.copy(fixtures_dir / "missing-supplier.json", spdx_dir / "image.spdx.json")
+        result = sbom_check.run(tmp_path, {})
+        assert result.status == CheckStatus.WARN
+        assert any(f.severity == "low" and "supplier" in f.message.lower() for f in result.findings)
+
+    def test_missing_checksum_fixture_warns(
+        self, tmp_path: Path, sbom_check: SBOMCheck, fixtures_dir: Path
+    ):
+        import shutil
+
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        spdx_dir.mkdir(parents=True)
+        shutil.copy(fixtures_dir / "missing-checksum.json", spdx_dir / "image.spdx.json")
+        result = sbom_check.run(tmp_path, {})
+        assert result.status == CheckStatus.WARN
+        assert any(
+            f.severity == "low" and "checksum" in f.message.lower() for f in result.findings
+        )
