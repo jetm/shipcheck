@@ -28,6 +28,74 @@ _CVE_GLOB_PATTERNS = (
 
 _REQUIRED_ISSUE_FIELDS = ("id", "status")
 
+_SCORE_FIELDS = ("scorev4", "scorev3", "scorev2")
+
+
+def _extract_cvss_score(issue: dict) -> float | None:
+    """Extract the best available CVSS score from an issue dict.
+
+    Priority: scorev4 > scorev3 > scorev2.
+    Values of "0.0", empty string, or absent are treated as missing.
+    """
+    for field in _SCORE_FIELDS:
+        raw = issue.get(field)
+        if raw is None or raw == "" or raw == "0.0":
+            continue
+        return float(raw)
+    return None
+
+
+def _classify_severity(cvss: float | None) -> str:
+    """Map a CVSS score to a severity band. Missing score -> high."""
+    if cvss is None:
+        return "high"
+    if cvss >= 9.0:
+        return "critical"
+    if cvss >= 7.0:
+        return "high"
+    if cvss >= 4.0:
+        return "medium"
+    return "low"
+
+
+def _build_findings(packages: list[dict]) -> list[Finding]:
+    """Generate findings for unpatched CVEs only."""
+    findings: list[Finding] = []
+    for pkg in packages:
+        pkg_name = pkg.get("name", "<unknown>")
+        for issue in pkg.get("issue", []):
+            if issue["status"] != "Unpatched":
+                continue
+            cvss = _extract_cvss_score(issue)
+            severity = _classify_severity(cvss)
+            summary = issue.get("summary", issue["id"])
+            findings.append(
+                Finding(
+                    message=f"{issue['id']}: {summary}",
+                    severity=severity,
+                    remediation=(
+                        f"Patch or mitigate {issue['id']} in package {pkg_name}. "
+                        f"Check upstream for fixes or apply a CVE patch."
+                    ),
+                    details={
+                        "cve_id": issue["id"],
+                        "cvss": cvss,
+                        "package": pkg_name,
+                    },
+                )
+            )
+    return findings
+
+
+def _determine_status(findings: list[Finding]) -> CheckStatus:
+    """Determine check status from findings."""
+    if not findings:
+        return CheckStatus.PASS
+    severities = {f.severity for f in findings}
+    if severities & {"critical", "high"}:
+        return CheckStatus.FAIL
+    return CheckStatus.WARN
+
 
 def _discover_cve_output(build_dir: Path) -> Path | None:
     """Search for CVE scan output in priority order, return first match.
@@ -143,18 +211,29 @@ class CVECheck(BaseCheck):
                 summary=f"Failed to parse CVE output: {cve_file.name}",
             )
 
-        # Severity classification, suppression, and scoring
-        # are implemented in tasks 3.4-3.6.
+        findings = _build_findings(packages)
+        status = _determine_status(findings)
+
+        # Scoring is implemented in task 3.6.
+        total_unpatched = len(findings)
         total_issues = sum(len(pkg.get("issue", [])) for pkg in packages)
+        if total_unpatched > 0:
+            summary = (
+                f"{total_unpatched} unpatched CVE(s) found in {cve_file.name}"
+                f" ({len(packages)} packages, {total_issues} issues)"
+            )
+        else:
+            summary = (
+                f"CVE scan output found: {cve_file.name}"
+                f" ({len(packages)} packages, {total_issues} issues)"
+            )
+
         return CheckResult(
             check_id=self.id,
             check_name=self.name,
-            status=CheckStatus.PASS,
+            status=status,
             score=50,
             max_score=50,
-            findings=[],
-            summary=(
-                f"CVE scan output found: {cve_file.name}"
-                f" ({len(packages)} packages, {total_issues} issues)"
-            ),
+            findings=findings,
+            summary=summary,
         )

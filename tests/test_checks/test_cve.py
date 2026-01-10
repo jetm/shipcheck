@@ -7,7 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from shipcheck.checks.cve import CVECheck, _discover_cve_output, _parse_cve_json
+from shipcheck.checks.cve import (
+    CVECheck,
+    _classify_severity,
+    _discover_cve_output,
+    _extract_cvss_score,
+    _parse_cve_json,
+)
 from shipcheck.models import CheckStatus
 
 
@@ -262,3 +268,348 @@ class TestParseCveJson:
 
         with pytest.raises(ValueError, match="missing required field 'status'"):
             _parse_cve_json(f)
+
+# --- Severity classification tests ---
+
+
+class TestExtractCvssScore:
+    """Tests for _extract_cvss_score: v4 > v3 > v2 priority."""
+
+    def test_prefers_scorev4_over_v3(self) -> None:
+        issue = {"id": "CVE-2024-0001", "status": "Unpatched", "scorev4": "9.5", "scorev3": "9.8"}
+        assert _extract_cvss_score(issue) == 9.5
+
+    def test_falls_back_to_scorev3(self) -> None:
+        issue = {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "7.5"}
+        assert _extract_cvss_score(issue) == 7.5
+
+    def test_falls_back_to_scorev2(self) -> None:
+        issue = {"id": "CVE-2024-0001", "status": "Unpatched", "scorev2": "6.0"}
+        assert _extract_cvss_score(issue) == 6.0
+
+    def test_returns_none_when_all_absent(self) -> None:
+        issue = {"id": "CVE-2024-0001", "status": "Unpatched"}
+        assert _extract_cvss_score(issue) is None
+
+    def test_treats_zero_as_missing(self) -> None:
+        issue = {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "0.0"}
+        assert _extract_cvss_score(issue) is None
+
+    def test_treats_empty_string_as_missing(self) -> None:
+        issue = {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": ""}
+        assert _extract_cvss_score(issue) is None
+
+    def test_skips_zero_v4_uses_v3(self) -> None:
+        issue = {"id": "CVE-2024-0001", "status": "Unpatched", "scorev4": "0.0", "scorev3": "8.1"}
+        assert _extract_cvss_score(issue) == 8.1
+
+    def test_all_zero_returns_none(self) -> None:
+        issue = {
+            "id": "CVE-2024-0001",
+            "status": "Unpatched",
+            "scorev2": "0.0",
+            "scorev3": "0.0",
+            "scorev4": "0.0",
+        }
+        assert _extract_cvss_score(issue) is None
+
+
+class TestClassifySeverity:
+    """Tests for _classify_severity: CVSS band mapping."""
+
+    def test_critical_band(self) -> None:
+        assert _classify_severity(9.0) == "critical"
+        assert _classify_severity(10.0) == "critical"
+        assert _classify_severity(9.8) == "critical"
+
+    def test_high_band(self) -> None:
+        assert _classify_severity(7.0) == "high"
+        assert _classify_severity(8.9) == "high"
+
+    def test_medium_band(self) -> None:
+        assert _classify_severity(4.0) == "medium"
+        assert _classify_severity(6.9) == "medium"
+
+    def test_low_band(self) -> None:
+        assert _classify_severity(0.1) == "low"
+        assert _classify_severity(3.9) == "low"
+
+    def test_missing_score_is_high(self) -> None:
+        assert _classify_severity(None) == "high"
+
+
+class TestCVECheckSeverityClassification:
+    """Integration tests for CVE severity classification in CVECheck.run."""
+
+    def test_severity_unpatched_critical(self, tmp_path: Path) -> None:
+        """Unpatched CVE with CVSS 9.8 produces a critical finding."""
+        data = {
+            "version": 1,
+            "package": [
+                {
+                    "name": "openssl",
+                    "version": "3.1.4",
+                    "issue": [
+                        {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "9.8"},
+                    ],
+                }
+            ],
+        }
+        images_dir = tmp_path / "tmp" / "deploy" / "images"
+        _write_cve_json(images_dir / "test.sbom-cve-check.yocto.json", data)
+
+        check = CVECheck()
+        result = check.run(tmp_path, {})
+
+        assert len(result.findings) == 1
+        assert result.findings[0].severity == "critical"
+        assert "CVE-2024-0001" in result.findings[0].message
+
+    def test_severity_unpatched_no_score_is_high(self, tmp_path: Path) -> None:
+        """Unpatched CVE with no CVSS score produces a high finding."""
+        data = {
+            "version": 1,
+            "package": [
+                {
+                    "name": "libxml2",
+                    "version": "2.12.3",
+                    "issue": [
+                        {"id": "CVE-2024-0600", "status": "Unpatched"},
+                    ],
+                }
+            ],
+        }
+        images_dir = tmp_path / "tmp" / "deploy" / "images"
+        _write_cve_json(images_dir / "test.sbom-cve-check.yocto.json", data)
+
+        check = CVECheck()
+        result = check.run(tmp_path, {})
+
+        assert len(result.findings) == 1
+        assert result.findings[0].severity == "high"
+
+    def test_severity_patched_cve_no_finding(self, tmp_path: Path) -> None:
+        """Patched CVEs produce no findings."""
+        data = {
+            "version": 1,
+            "package": [
+                {
+                    "name": "openssl",
+                    "version": "3.1.4",
+                    "issue": [
+                        {"id": "CVE-2024-0002", "status": "Patched", "scorev3": "7.5"},
+                    ],
+                }
+            ],
+        }
+        images_dir = tmp_path / "tmp" / "deploy" / "images"
+        _write_cve_json(images_dir / "test.sbom-cve-check.yocto.json", data)
+
+        check = CVECheck()
+        result = check.run(tmp_path, {})
+
+        assert result.findings == []
+        assert result.status == CheckStatus.PASS
+
+    def test_severity_ignored_cve_no_finding(self, tmp_path: Path) -> None:
+        """Ignored CVEs produce no findings."""
+        data = {
+            "version": 1,
+            "package": [
+                {
+                    "name": "busybox",
+                    "version": "1.36.1",
+                    "issue": [
+                        {"id": "CVE-2024-0010", "status": "Ignored", "scorev3": "3.3"},
+                    ],
+                }
+            ],
+        }
+        images_dir = tmp_path / "tmp" / "deploy" / "images"
+        _write_cve_json(images_dir / "test.sbom-cve-check.yocto.json", data)
+
+        check = CVECheck()
+        result = check.run(tmp_path, {})
+
+        assert result.findings == []
+        assert result.status == CheckStatus.PASS
+
+    def test_severity_v4_preferred_over_v3(self, tmp_path: Path) -> None:
+        """Score v4 is used when both v4 and v3 are present."""
+        data = {
+            "version": 1,
+            "package": [
+                {
+                    "name": "openssl",
+                    "version": "3.1.4",
+                    "issue": [
+                        {
+                            "id": "CVE-2024-0001",
+                            "status": "Unpatched",
+                            "scorev3": "9.8",
+                            "scorev4": "6.5",
+                        },
+                    ],
+                }
+            ],
+        }
+        images_dir = tmp_path / "tmp" / "deploy" / "images"
+        _write_cve_json(images_dir / "test.sbom-cve-check.yocto.json", data)
+
+        check = CVECheck()
+        result = check.run(tmp_path, {})
+
+        assert len(result.findings) == 1
+        # v4=6.5 -> medium, not critical (v3=9.8 would be critical)
+        assert result.findings[0].severity == "medium"
+
+    def test_severity_finding_has_details(self, tmp_path: Path) -> None:
+        """Finding includes structured details with cve_id, cvss, and package."""
+        data = {
+            "version": 1,
+            "package": [
+                {
+                    "name": "openssl",
+                    "version": "3.1.4",
+                    "issue": [
+                        {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "9.8"},
+                    ],
+                }
+            ],
+        }
+        images_dir = tmp_path / "tmp" / "deploy" / "images"
+        _write_cve_json(images_dir / "test.sbom-cve-check.yocto.json", data)
+
+        check = CVECheck()
+        result = check.run(tmp_path, {})
+
+        finding = result.findings[0]
+        assert finding.details is not None
+        assert finding.details["cve_id"] == "CVE-2024-0001"
+        assert finding.details["cvss"] == 9.8
+        assert finding.details["package"] == "openssl"
+
+    def test_severity_finding_details_missing_score(self, tmp_path: Path) -> None:
+        """Finding details has cvss=None when no score available."""
+        data = {
+            "version": 1,
+            "package": [
+                {
+                    "name": "libxml2",
+                    "version": "2.12.3",
+                    "issue": [
+                        {"id": "CVE-2024-0600", "status": "Unpatched"},
+                    ],
+                }
+            ],
+        }
+        images_dir = tmp_path / "tmp" / "deploy" / "images"
+        _write_cve_json(images_dir / "test.sbom-cve-check.yocto.json", data)
+
+        check = CVECheck()
+        result = check.run(tmp_path, {})
+
+        finding = result.findings[0]
+        assert finding.details["cvss"] is None
+
+    def test_severity_mixed_statuses(self, tmp_path: Path) -> None:
+        """Only unpatched CVEs produce findings; patched and ignored are skipped."""
+        data = {
+            "version": 1,
+            "package": [
+                {
+                    "name": "openssl",
+                    "version": "3.1.4",
+                    "issue": [
+                        {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "9.8"},
+                        {"id": "CVE-2024-0002", "status": "Patched", "scorev3": "7.5"},
+                        {"id": "CVE-2024-0003", "status": "Unpatched", "scorev3": "5.3"},
+                    ],
+                },
+                {
+                    "name": "busybox",
+                    "version": "1.36.1",
+                    "issue": [
+                        {"id": "CVE-2024-0010", "status": "Ignored", "scorev3": "3.3"},
+                    ],
+                },
+            ],
+        }
+        images_dir = tmp_path / "tmp" / "deploy" / "images"
+        _write_cve_json(images_dir / "test.sbom-cve-check.yocto.json", data)
+
+        check = CVECheck()
+        result = check.run(tmp_path, {})
+
+        assert len(result.findings) == 2
+        cve_ids = {f.details["cve_id"] for f in result.findings}
+        assert cve_ids == {"CVE-2024-0001", "CVE-2024-0003"}
+        severities = {f.severity for f in result.findings}
+        assert "critical" in severities  # CVE-2024-0001 (9.8)
+        assert "medium" in severities  # CVE-2024-0003 (5.3)
+
+    def test_severity_check_status_fail_on_critical(self, tmp_path: Path) -> None:
+        """Check status is FAIL when critical findings exist."""
+        data = {
+            "version": 1,
+            "package": [
+                {
+                    "name": "openssl",
+                    "version": "3.1.4",
+                    "issue": [
+                        {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "9.8"},
+                    ],
+                }
+            ],
+        }
+        images_dir = tmp_path / "tmp" / "deploy" / "images"
+        _write_cve_json(images_dir / "test.sbom-cve-check.yocto.json", data)
+
+        check = CVECheck()
+        result = check.run(tmp_path, {})
+        assert result.status == CheckStatus.FAIL
+
+    def test_severity_check_status_warn_on_medium_only(self, tmp_path: Path) -> None:
+        """Check status is WARN when only medium/low findings exist."""
+        data = {
+            "version": 1,
+            "package": [
+                {
+                    "name": "pkg",
+                    "version": "1.0",
+                    "issue": [
+                        {"id": "CVE-2024-0099", "status": "Unpatched", "scorev3": "5.3"},
+                    ],
+                }
+            ],
+        }
+        images_dir = tmp_path / "tmp" / "deploy" / "images"
+        _write_cve_json(images_dir / "test.sbom-cve-check.yocto.json", data)
+
+        check = CVECheck()
+        result = check.run(tmp_path, {})
+        assert result.status == CheckStatus.WARN
+
+    def test_severity_finding_has_remediation(self, tmp_path: Path) -> None:
+        """Critical/high findings include non-null remediation."""
+        data = {
+            "version": 1,
+            "package": [
+                {
+                    "name": "openssl",
+                    "version": "3.1.4",
+                    "issue": [
+                        {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "9.8"},
+                    ],
+                }
+            ],
+        }
+        images_dir = tmp_path / "tmp" / "deploy" / "images"
+        _write_cve_json(images_dir / "test.sbom-cve-check.yocto.json", data)
+
+        check = CVECheck()
+        result = check.run(tmp_path, {})
+
+        finding = result.findings[0]
+        assert finding.remediation is not None
+        assert len(finding.remediation) > 0
