@@ -1,14 +1,60 @@
 """CLI entry points for shipcheck."""
 
+from __future__ import annotations
+
+from dataclasses import asdict
 from pathlib import Path
 
 import typer
+from rich.console import Console
+
+from shipcheck.checks.registry import get_default_registry
+from shipcheck.config import load_config
+from shipcheck.report import html, json_report, markdown, terminal
+from shipcheck.report.score import build_report_data
 
 app = typer.Typer(
     name="shipcheck",
     help="Embedded Linux compliance auditor — CRA, Secure Boot, SBOM, CVE tracking",
     no_args_is_help=True,
 )
+
+_VALID_FORMATS = {"markdown", "json", "html"}
+_FORMAT_EXT = {"markdown": "md", "json": "json", "html": "html"}
+
+_SEVERITY_ORDER = ["critical", "high", "medium", "low"]
+
+
+def _build_check_config(config) -> dict:
+    """Build a dict keyed by check ID from the ShipcheckConfig for the registry."""
+    return {
+        "sbom-generation": asdict(config.sbom),
+        "cve-tracking": asdict(config.cve),
+    }
+
+
+def _should_fail(results, fail_on: str | None) -> bool:
+    """Return True if any finding meets or exceeds the fail_on severity threshold."""
+    if fail_on is None:
+        return False
+
+    threshold_idx = _SEVERITY_ORDER.index(fail_on)
+    failing_severities = set(_SEVERITY_ORDER[: threshold_idx + 1])
+
+    for result in results:
+        for finding in result.findings:
+            if finding.severity in failing_severities:
+                return True
+    return False
+
+
+def _render_file_report(report_data, fmt: str) -> str:
+    """Render a file report and return the content string."""
+    if fmt == "json":
+        return json_report.render(report_data)
+    if fmt == "html":
+        return html.render(report_data)
+    return markdown.render(report_data)
 
 
 @app.command()
@@ -35,7 +81,48 @@ def check(
     ),
 ) -> None:
     """Run compliance checks against a Yocto build directory."""
-    typer.echo("Not implemented")
+    config = load_config(Path(".shipcheck.yaml"))
+
+    check_ids = [c.strip() for c in checks.split(",")] if checks else None
+    config.apply_cli_overrides(
+        build_dir=str(build_dir),
+        format=format,
+        checks=check_ids,
+        fail_on=fail_on,
+    )
+
+    fmt = config.report.format
+    if fmt not in _VALID_FORMATS:
+        valid = ", ".join(sorted(_VALID_FORMATS))
+        typer.echo(f"Error: invalid format '{fmt}'. Choose from: {valid}", err=True)
+        raise typer.Exit(code=1)
+
+    registry = get_default_registry()
+    check_config = _build_check_config(config)
+
+    try:
+        results = registry.run_checks(
+            build_dir=config.build_dir,
+            config=check_config,
+            check_ids=config.checks,
+        )
+    except ValueError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    report_data = build_report_data(results, build_dir=str(config.build_dir))
+
+    console = Console()
+    terminal.render(report_data, console=console)
+
+    content = _render_file_report(report_data, fmt)
+    ext = _FORMAT_EXT[fmt]
+    output_name = f"{config.report.output}.{ext}"
+    Path(output_name).write_text(content)
+    console.print(f"\nFull report saved to: {output_name}")
+
+    if _should_fail(results, config.report.fail_on):
+        raise typer.Exit(code=1)
 
 
 @app.command()
