@@ -159,9 +159,7 @@ class TestCliOverride:
                 "report": {"format": "html", "fail_on": "high"},
             }
         )
-        config.apply_cli_overrides(
-            build_dir=None, format=None, checks=None, fail_on=None
-        )
+        config.apply_cli_overrides(build_dir=None, format=None, checks=None, fail_on=None)
         assert config.build_dir == Path("./build")
         assert config.report.format == "html"
         assert config.report.fail_on == "high"
@@ -173,9 +171,7 @@ class TestCliOverride:
                 "report": {"format": "html", "fail_on": "low"},
             }
         )
-        config.apply_cli_overrides(
-            build_dir="./other", format="json", fail_on="critical"
-        )
+        config.apply_cli_overrides(build_dir="./other", format="json", fail_on="critical")
         assert config.build_dir == Path("./other")
         assert config.report.format == "json"
         assert config.report.fail_on == "critical"

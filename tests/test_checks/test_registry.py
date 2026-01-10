@@ -216,9 +216,7 @@ class TestCheckRegistryFiltering:
         registry.register(StubCheck(check_id="sbom-generation", name="SBOM"))
         registry.register(StubCheck(check_id="cve-tracking", name="CVE"))
 
-        results = registry.run_checks(
-            build_dir=tmp_path, config={}, check_ids=["cve-tracking"]
-        )
+        results = registry.run_checks(build_dir=tmp_path, config={}, check_ids=["cve-tracking"])
 
         assert len(results) == 1
         assert results[0].check_id == "cve-tracking"
@@ -242,9 +240,7 @@ class TestCheckRegistryFiltering:
         registry.register(StubCheck(check_id="second", name="Second"))
         registry.register(StubCheck(check_id="third", name="Third"))
 
-        results = registry.run_checks(
-            build_dir=tmp_path, config={}, check_ids=["third", "first"]
-        )
+        results = registry.run_checks(build_dir=tmp_path, config={}, check_ids=["third", "first"])
 
         assert [r.check_id for r in results] == ["first", "third"]
 
@@ -262,9 +258,7 @@ class TestCheckRegistryFiltering:
         registry.register(StubCheck(check_id="known", name="Known"))
 
         with pytest.raises(ValueError, match="Unknown check.*nonexistent"):
-            registry.run_checks(
-                build_dir=tmp_path, config={}, check_ids=["nonexistent"]
-            )
+            registry.run_checks(build_dir=tmp_path, config={}, check_ids=["nonexistent"])
 
 
 class TestDefaultRegistry:
