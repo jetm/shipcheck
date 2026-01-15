@@ -128,7 +128,48 @@ def check(
 @app.command()
 def init() -> None:
     """Initialize a shipcheck configuration file in the current directory."""
-    typer.echo("Not implemented")
+    config_path = Path(".shipcheck.yaml")
+    if config_path.exists():
+        typer.echo("Configuration file already exists: .shipcheck.yaml")
+        return
+
+    scaffold = """\
+# shipcheck configuration
+# See https://github.com/tiamarin/shipcheck for documentation.
+
+# Path to the Yocto build directory
+# build_dir: ./build
+
+# Compliance framework (only CRA supported in v0.1)
+# framework: CRA
+
+# List of check IDs to run (default: all)
+# checks:
+#   - sbom-generation
+#   - cve-tracking
+
+# SBOM check configuration
+# sbom:
+#   required_fields:
+#     - name
+#     - version
+#     - supplier
+#     - license
+#     - checksum
+
+# CVE check configuration
+# cve:
+#   suppress:
+#     - CVE-2023-1234
+
+# Report output options
+# report:
+#   format: markdown        # markdown | json | html
+#   output: shipcheck-report
+#   fail_on: null            # null | critical | high | medium | low
+"""
+    config_path.write_text(scaffold)
+    typer.echo("Created .shipcheck.yaml")
 
 
 @app.command()

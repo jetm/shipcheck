@@ -153,3 +153,70 @@ class TestCheckErrors:
     def test_unknown_check_id(self, build_dir_empty: Path) -> None:
         result = runner.invoke(app, ["check", "--build-dir", str(build_dir_empty), "--checks", "nonexistent"])
         assert result.exit_code != 0
+
+
+class TestInitCommand:
+    """Tests for `shipcheck init`."""
+
+    def test_init_creates_config_file(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(app, ["init"])
+        assert result.exit_code == 0
+        config_path = tmp_path / ".shipcheck.yaml"
+        assert config_path.exists(), "Expected .shipcheck.yaml to be created"
+
+    def test_init_scaffold_contains_all_config_sections(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        runner.invoke(app, ["init"])
+        content = (tmp_path / ".shipcheck.yaml").read_text()
+        assert "build_dir" in content
+        assert "framework" in content
+        assert "checks" in content
+        assert "sbom" in content
+        assert "cve" in content
+        assert "report" in content
+
+    def test_init_scaffold_is_commented(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        runner.invoke(app, ["init"])
+        content = (tmp_path / ".shipcheck.yaml").read_text()
+        comment_lines = [line for line in content.splitlines() if line.startswith("#")]
+        assert len(comment_lines) >= 5, "Scaffold should contain explanatory comments"
+
+    def test_init_refuses_overwrite(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        existing = tmp_path / ".shipcheck.yaml"
+        existing.write_text("build_dir: ./build\n")
+        original_content = existing.read_text()
+
+        result = runner.invoke(app, ["init"])
+        assert result.exit_code == 0
+        assert "already exists" in result.output
+        assert existing.read_text() == original_content, "File content should not be modified"
+
+    def test_init_prints_success_message(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(app, ["init"])
+        assert ".shipcheck.yaml" in result.output
+
+    def test_init_scaffold_contains_sbom_fields(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        runner.invoke(app, ["init"])
+        content = (tmp_path / ".shipcheck.yaml").read_text()
+        assert "required_fields" in content
+        assert "supplier" in content
+        assert "checksum" in content
+
+    def test_init_scaffold_contains_cve_fields(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        runner.invoke(app, ["init"])
+        content = (tmp_path / ".shipcheck.yaml").read_text()
+        assert "suppress" in content
+
+    def test_init_scaffold_contains_report_fields(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        runner.invoke(app, ["init"])
+        content = (tmp_path / ".shipcheck.yaml").read_text()
+        assert "format" in content
+        assert "output" in content
+        assert "fail_on" in content
