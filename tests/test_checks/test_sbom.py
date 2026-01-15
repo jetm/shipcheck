@@ -883,3 +883,209 @@ class TestValidationWithFixtures:
         assert any(
             f.severity == "low" and "checksum" in f.message.lower() for f in result.findings
         )
+
+
+# --- Scoring tests (task 2.5) ---
+
+
+class TestScoringFullyCompliant:
+    """Fully compliant SPDX 2.3 doc scores 50/50."""
+
+    def test_scoring_perfect_score(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        doc = _make_spdx_doc(
+            packages=[_make_compliant_package(f"pkg{i}") for i in range(5)],
+            has_describes=True,
+        )
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        assert result.score == 50
+        assert result.max_score == 50
+
+    def test_scoring_single_package_perfect(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        doc = _make_spdx_doc(
+            packages=[_make_compliant_package("only")],
+            has_describes=True,
+        )
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        assert result.score == 50
+
+
+class TestScoringPartialPackageCoverage:
+    """Per-package coverage: 30 * (compliant / total), rounded."""
+
+    def test_scoring_30_of_42_packages_compliant(self, tmp_path: Path, sbom_check: SBOMCheck):
+        """Spec scenario: 30 of 42 packages have all required fields -> round(30*30/42) = 21."""
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        compliant = [_make_compliant_package(f"good{i}") for i in range(30)]
+        non_compliant = []
+        for i in range(12):
+            pkg = _make_compliant_package(f"bad{i}")
+            pkg["supplier"] = "NOASSERTION"
+            non_compliant.append(pkg)
+        doc = _make_spdx_doc(
+            packages=compliant + non_compliant,
+            has_describes=True,
+        )
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        # 10 (format) + 5 (metadata) + 5 (DESCRIBES) + round(30*30/42) = 10+5+5+21 = 41
+        assert result.score == 41
+
+    def test_scoring_half_packages_compliant(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        compliant = [_make_compliant_package(f"good{i}") for i in range(5)]
+        non_compliant = []
+        for i in range(5):
+            pkg = _make_compliant_package(f"bad{i}")
+            pkg["checksums"] = []
+            non_compliant.append(pkg)
+        doc = _make_spdx_doc(
+            packages=compliant + non_compliant,
+            has_describes=True,
+        )
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        # 10 + 5 + 5 + round(30*5/10) = 10+5+5+15 = 35
+        assert result.score == 35
+
+    def test_scoring_no_packages_compliant(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        non_compliant = []
+        for i in range(3):
+            pkg = _make_compliant_package(f"bad{i}")
+            pkg["supplier"] = "NOASSERTION"
+            non_compliant.append(pkg)
+        doc = _make_spdx_doc(
+            packages=non_compliant,
+            has_describes=True,
+        )
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        # 10 + 5 + 5 + round(30*0/3) = 20
+        assert result.score == 20
+
+
+class TestScoringMetadataDeduction:
+    """Missing metadata costs 5 points."""
+
+    def test_scoring_missing_creation_info(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        doc = _make_spdx_doc(
+            packages=[_make_compliant_package("pkg1")],
+            has_describes=True,
+        )
+        del doc["creationInfo"]
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        # 10 (format) + 0 (metadata missing) + 5 (DESCRIBES) + 30 (1/1 compliant) = 45
+        assert result.score == 45
+
+    def test_scoring_empty_creators(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        doc = _make_spdx_doc(
+            packages=[_make_compliant_package("pkg1")],
+            has_describes=True,
+        )
+        doc["creationInfo"]["creators"] = []
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        assert result.score == 45
+
+
+class TestScoringDescribesDeduction:
+    """Missing DESCRIBES costs 5 points."""
+
+    def test_scoring_no_describes(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        doc = _make_spdx_doc(
+            packages=[_make_compliant_package("pkg1")],
+            has_describes=False,
+        )
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        # 10 + 5 + 0 + 30 = 45
+        assert result.score == 45
+
+
+class TestScoringCombinedDeductions:
+    """Multiple deductions stack."""
+
+    def test_scoring_missing_metadata_and_describes(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        doc = _make_spdx_doc(
+            packages=[_make_compliant_package("pkg1")],
+            has_describes=False,
+        )
+        del doc["creationInfo"]
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        # 10 + 0 + 0 + 30 = 40
+        assert result.score == 40
+
+    def test_scoring_all_deductions(self, tmp_path: Path, sbom_check: SBOMCheck):
+        """Missing metadata, no DESCRIBES, all packages non-compliant."""
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        non_compliant = []
+        for i in range(4):
+            pkg = _make_compliant_package(f"bad{i}")
+            pkg["supplier"] = "NOASSERTION"
+            non_compliant.append(pkg)
+        doc = _make_spdx_doc(
+            packages=non_compliant,
+            has_describes=False,
+        )
+        del doc["creationInfo"]
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        # 10 + 0 + 0 + 0 = 10
+        assert result.score == 10
+
+
+class TestScoringDetectionOnly:
+    """Detection-only formats (SPDX 3.0, CycloneDX) cap at 10 points."""
+
+    def test_scoring_spdx_3_capped_at_10(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", _make_spdx3_doc())
+        result = sbom_check.run(tmp_path, {})
+        assert result.score == 10
+        assert result.max_score == 50
+
+    def test_scoring_cyclonedx_capped_at_10(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", _make_cyclonedx_doc())
+        result = sbom_check.run(tmp_path, {})
+        assert result.score == 10
+        assert result.max_score == 50
+
+
+class TestScoringEdgeCases:
+    """Edge cases for score computation."""
+
+    def test_scoring_unrecognized_format_scores_zero(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", {"unknown": "format"})
+        result = sbom_check.run(tmp_path, {})
+        assert result.score == 0
+
+    def test_scoring_missing_spdx_dir_scores_zero(self, tmp_path: Path, sbom_check: SBOMCheck):
+        result = sbom_check.run(tmp_path, {})
+        assert result.score == 0
+
+    def test_scoring_empty_spdx_dir_scores_zero(self, tmp_path: Path, sbom_check: SBOMCheck):
+        (tmp_path / "tmp" / "deploy" / "spdx").mkdir(parents=True)
+        result = sbom_check.run(tmp_path, {})
+        assert result.score == 0
+
+    def test_scoring_max_score_always_50(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        doc = _make_spdx_doc(
+            packages=[_make_compliant_package("pkg1")],
+            has_describes=True,
+        )
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        assert result.max_score == 50
