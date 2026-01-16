@@ -33,6 +33,9 @@ MANIFEST
 *.manifest
 *.spec
 
+# Generated reports
+shipcheck-report.*
+
 # Unit test / coverage reports
 htmlcov/
 .tox/
