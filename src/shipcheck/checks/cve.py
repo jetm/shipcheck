@@ -116,6 +116,22 @@ def _determine_status(findings: list[Finding]) -> CheckStatus:
     return CheckStatus.WARN
 
 
+_SEVERITY_DEDUCTIONS: dict[str, int] = {
+    "critical": 15,
+    "high": 10,
+    "medium": 5,
+    "low": 2,
+}
+
+
+def _compute_score(findings: list[Finding]) -> int:
+    """Compute CVE readiness score: start at 50, deduct per finding severity, floor at 0."""
+    score = 50
+    for finding in findings:
+        score -= _SEVERITY_DEDUCTIONS.get(finding.severity, 0)
+    return max(score, 0)
+
+
 def _discover_cve_output(build_dir: Path) -> Path | None:
     """Search for CVE scan output in priority order, return first match.
 
@@ -238,7 +254,7 @@ class CVECheck(BaseCheck):
         findings, suppressed = _build_findings(packages, suppress_ids)
         status = _determine_status(findings)
 
-        # Scoring is implemented in task 3.6.
+        score = _compute_score(findings)
         total_unpatched = len(findings)
         total_issues = sum(len(pkg.get("issue", [])) for pkg in packages)
 
@@ -261,7 +277,7 @@ class CVECheck(BaseCheck):
             check_id=self.id,
             check_name=self.name,
             status=status,
-            score=50,
+            score=score,
             max_score=50,
             findings=findings,
             summary=summary,
