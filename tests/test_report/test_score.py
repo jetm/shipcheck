@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from shipcheck.models import CheckResult, CheckStatus, Finding, ReportData
 from shipcheck.report.score import build_report_data, compute_score, determine_overall_status
 

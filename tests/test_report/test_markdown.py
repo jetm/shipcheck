@@ -295,7 +295,7 @@ class TestMarkdownStructure:
         )
         output = render(_make_report(checks=[check], total_score=50))
         lines = output.strip().split("\n")
-        heading_lines = [l for l in lines if l.startswith("#")]
+        heading_lines = [line for line in lines if line.startswith("#")]
         assert any("shipcheck" in h.lower() for h in heading_lines)
         assert any("readiness" in h.lower() for h in heading_lines)
 
