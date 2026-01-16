@@ -58,33 +58,52 @@ def _classify_severity(cvss: float | None) -> str:
     return "low"
 
 
-def _build_findings(packages: list[dict]) -> list[Finding]:
-    """Generate findings for unpatched CVEs only."""
+def _build_findings(
+    packages: list[dict],
+    suppress_ids: set[str] | None = None,
+) -> tuple[list[Finding], list[dict]]:
+    """Generate findings for unpatched CVEs, applying suppression.
+
+    Returns:
+        A tuple of (findings, suppressed) where suppressed is a list of
+        dicts with cve_id, package, and cvss for each suppressed CVE.
+    """
+    if suppress_ids is None:
+        suppress_ids = set()
     findings: list[Finding] = []
+    suppressed: list[dict] = []
     for pkg in packages:
         pkg_name = pkg.get("name", "<unknown>")
         for issue in pkg.get("issue", []):
             if issue["status"] != "Unpatched":
                 continue
             cvss = _extract_cvss_score(issue)
+            cve_id = issue["id"]
+            if cve_id in suppress_ids:
+                suppressed.append({
+                    "cve_id": cve_id,
+                    "package": pkg_name,
+                    "cvss": cvss,
+                })
+                continue
             severity = _classify_severity(cvss)
-            summary = issue.get("summary", issue["id"])
+            summary = issue.get("summary", cve_id)
             findings.append(
                 Finding(
-                    message=f"{issue['id']}: {summary}",
+                    message=f"{cve_id}: {summary}",
                     severity=severity,
                     remediation=(
-                        f"Patch or mitigate {issue['id']} in package {pkg_name}. "
+                        f"Patch or mitigate {cve_id} in package {pkg_name}. "
                         f"Check upstream for fixes or apply a CVE patch."
                     ),
                     details={
-                        "cve_id": issue["id"],
+                        "cve_id": cve_id,
                         "cvss": cvss,
                         "package": pkg_name,
                     },
                 )
             )
-    return findings
+    return findings, suppressed
 
 
 def _determine_status(findings: list[Finding]) -> CheckStatus:
@@ -172,7 +191,7 @@ class CVECheck(BaseCheck):
         cve_file = _discover_cve_output(build_dir)
 
         if cve_file is None:
-            return CheckResult(
+            result = CheckResult(
                 check_id=self.id,
                 check_name=self.name,
                 status=CheckStatus.FAIL,
@@ -187,12 +206,14 @@ class CVECheck(BaseCheck):
                 ],
                 summary="No CVE scan output found",
             )
+            result.suppressed = []  # type: ignore[attr-defined]
+            return result
 
         try:
             packages = _parse_cve_json(cve_file)
         except ValueError:
             logger.exception("Failed to parse CVE output: %s", cve_file)
-            return CheckResult(
+            result = CheckResult(
                 check_id=self.id,
                 check_name=self.name,
                 status=CheckStatus.FAIL,
@@ -210,25 +231,33 @@ class CVECheck(BaseCheck):
                 ],
                 summary=f"Failed to parse CVE output: {cve_file.name}",
             )
+            result.suppressed = []  # type: ignore[attr-defined]
+            return result
 
-        findings = _build_findings(packages)
+        suppress_ids = set(config.get("suppress", []))
+        findings, suppressed = _build_findings(packages, suppress_ids)
         status = _determine_status(findings)
 
         # Scoring is implemented in task 3.6.
         total_unpatched = len(findings)
         total_issues = sum(len(pkg.get("issue", [])) for pkg in packages)
+
+        parts: list[str] = []
         if total_unpatched > 0:
-            summary = (
+            parts.append(
                 f"{total_unpatched} unpatched CVE(s) found in {cve_file.name}"
                 f" ({len(packages)} packages, {total_issues} issues)"
             )
         else:
-            summary = (
+            parts.append(
                 f"CVE scan output found: {cve_file.name}"
                 f" ({len(packages)} packages, {total_issues} issues)"
             )
+        if suppressed:
+            parts.append(f"{len(suppressed)} suppressed by configuration")
+        summary = "; ".join(parts)
 
-        return CheckResult(
+        result = CheckResult(
             check_id=self.id,
             check_name=self.name,
             status=status,
@@ -237,3 +266,5 @@ class CVECheck(BaseCheck):
             findings=findings,
             summary=summary,
         )
+        result.suppressed = suppressed  # type: ignore[attr-defined]
+        return result

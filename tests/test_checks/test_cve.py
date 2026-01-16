@@ -613,3 +613,175 @@ class TestCVECheckSeverityClassification:
         finding = result.findings[0]
         assert finding.remediation is not None
         assert len(finding.remediation) > 0
+
+
+# --- Suppression tests ---
+
+
+class TestCVECheckSuppression:
+    """Tests for CVE suppression via config['suppress'] list."""
+
+    def _make_build(self, tmp_path: Path) -> Path:
+        """Create a build dir with CVE data containing mixed statuses."""
+        data = {
+            "version": 1,
+            "package": [
+                {
+                    "name": "openssl",
+                    "version": "3.1.4",
+                    "issue": [
+                        {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "9.8"},
+                        {"id": "CVE-2024-0002", "status": "Unpatched", "scorev3": "7.5"},
+                        {"id": "CVE-2024-0003", "status": "Patched", "scorev3": "5.3"},
+                    ],
+                },
+                {
+                    "name": "busybox",
+                    "version": "1.36.1",
+                    "issue": [
+                        {"id": "CVE-2024-0010", "status": "Unpatched", "scorev3": "4.0"},
+                    ],
+                },
+            ],
+        }
+        images_dir = tmp_path / "tmp" / "deploy" / "images"
+        _write_cve_json(images_dir / "test.sbom-cve-check.yocto.json", data)
+        return tmp_path
+
+    def test_suppress_excludes_from_findings(self, tmp_path: Path) -> None:
+        """Suppressed CVE IDs do not appear in findings."""
+        build = self._make_build(tmp_path)
+        config = {"suppress": ["CVE-2024-0001"]}
+
+        check = CVECheck()
+        result = check.run(build, config)
+
+        cve_ids = {f.details["cve_id"] for f in result.findings}
+        assert "CVE-2024-0001" not in cve_ids
+        assert "CVE-2024-0002" in cve_ids
+        assert "CVE-2024-0010" in cve_ids
+
+    def test_suppress_critical_changes_status(self, tmp_path: Path) -> None:
+        """Suppressing the only critical CVE changes status from FAIL to FAIL (high remains)."""
+        build = self._make_build(tmp_path)
+        config = {"suppress": ["CVE-2024-0001"]}
+
+        check = CVECheck()
+        result = check.run(build, config)
+
+        # CVE-2024-0002 is high, so status is still FAIL
+        assert result.status == CheckStatus.FAIL
+
+    def test_suppress_all_high_and_critical_gives_warn(self, tmp_path: Path) -> None:
+        """Suppressing all critical+high CVEs changes status to WARN when medium/low remain."""
+        build = self._make_build(tmp_path)
+        config = {"suppress": ["CVE-2024-0001", "CVE-2024-0002"]}
+
+        check = CVECheck()
+        result = check.run(build, config)
+
+        # Only CVE-2024-0010 (medium, CVSS 4.0) remains
+        assert result.status == CheckStatus.WARN
+        assert len(result.findings) == 1
+
+    def test_suppress_all_unpatched_gives_pass(self, tmp_path: Path) -> None:
+        """Suppressing all unpatched CVEs gives PASS status."""
+        build = self._make_build(tmp_path)
+        config = {"suppress": ["CVE-2024-0001", "CVE-2024-0002", "CVE-2024-0010"]}
+
+        check = CVECheck()
+        result = check.run(build, config)
+
+        assert result.status == CheckStatus.PASS
+        assert result.findings == []
+
+    def test_suppress_tracks_suppressed_list(self, tmp_path: Path) -> None:
+        """Suppressed CVEs are tracked on the result for JSON report."""
+        build = self._make_build(tmp_path)
+        config = {"suppress": ["CVE-2024-0001", "CVE-2024-0010"]}
+
+        check = CVECheck()
+        result = check.run(build, config)
+
+        suppressed = getattr(result, "suppressed", None)
+        assert suppressed is not None
+        assert isinstance(suppressed, list)
+        assert len(suppressed) == 2
+        suppressed_ids = {s["cve_id"] for s in suppressed}
+        assert suppressed_ids == {"CVE-2024-0001", "CVE-2024-0010"}
+
+    def test_suppress_entry_has_details(self, tmp_path: Path) -> None:
+        """Each suppressed entry has cve_id, package, and cvss fields."""
+        build = self._make_build(tmp_path)
+        config = {"suppress": ["CVE-2024-0001"]}
+
+        check = CVECheck()
+        result = check.run(build, config)
+
+        suppressed = getattr(result, "suppressed", None)
+        assert len(suppressed) == 1
+        entry = suppressed[0]
+        assert entry["cve_id"] == "CVE-2024-0001"
+        assert entry["package"] == "openssl"
+        assert entry["cvss"] == 9.8
+
+    def test_suppress_does_not_affect_patched(self, tmp_path: Path) -> None:
+        """Suppressing a patched CVE ID has no effect (patched CVEs already excluded)."""
+        build = self._make_build(tmp_path)
+        config = {"suppress": ["CVE-2024-0003"]}
+
+        check = CVECheck()
+        result = check.run(build, config)
+
+        # CVE-2024-0003 is patched, so suppression list should be empty
+        suppressed = getattr(result, "suppressed", None)
+        assert suppressed is not None
+        assert len(suppressed) == 0
+
+    def test_suppress_empty_list_no_effect(self, tmp_path: Path) -> None:
+        """Empty suppress list does not affect results."""
+        build = self._make_build(tmp_path)
+        config = {"suppress": []}
+
+        check = CVECheck()
+        result = check.run(build, config)
+
+        assert len(result.findings) == 3  # all unpatched CVEs
+        suppressed = getattr(result, "suppressed", None)
+        assert suppressed is not None
+        assert len(suppressed) == 0
+
+    def test_suppress_nonexistent_cve_ignored(self, tmp_path: Path) -> None:
+        """CVE IDs in suppress list that don't exist in data are silently ignored."""
+        build = self._make_build(tmp_path)
+        config = {"suppress": ["CVE-9999-0001"]}
+
+        check = CVECheck()
+        result = check.run(build, config)
+
+        assert len(result.findings) == 3
+        suppressed = getattr(result, "suppressed", None)
+        assert len(suppressed) == 0
+
+    def test_suppress_no_config_key(self, tmp_path: Path) -> None:
+        """Missing suppress key in config means no suppression."""
+        build = self._make_build(tmp_path)
+
+        check = CVECheck()
+        result = check.run(build, {})
+
+        assert len(result.findings) == 3
+        suppressed = getattr(result, "suppressed", None)
+        assert suppressed is not None
+        assert len(suppressed) == 0
+
+    def test_suppress_summary_mentions_count(self, tmp_path: Path) -> None:
+        """Summary mentions number of suppressed CVEs."""
+        build = self._make_build(tmp_path)
+        config = {"suppress": ["CVE-2024-0001", "CVE-2024-0010"]}
+
+        check = CVECheck()
+        result = check.run(build, config)
+
+        assert "2" in result.summary
+        assert "suppressed" in result.summary.lower()
