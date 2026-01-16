@@ -269,6 +269,7 @@ class TestParseCveJson:
         with pytest.raises(ValueError, match="missing required field 'status'"):
             _parse_cve_json(f)
 
+
 # --- Severity classification tests ---
 
 
@@ -808,10 +809,13 @@ class TestCVECheckScoring:
 
     def test_scoring_no_unpatched_cves_gives_50(self, tmp_path: Path) -> None:
         """All patched CVEs yield full score of 50."""
-        build = self._make_build_with_cves(tmp_path, [
-            {"id": "CVE-2024-0001", "status": "Patched", "scorev3": "9.8"},
-            {"id": "CVE-2024-0002", "status": "Patched", "scorev3": "7.5"},
-        ])
+        build = self._make_build_with_cves(
+            tmp_path,
+            [
+                {"id": "CVE-2024-0001", "status": "Patched", "scorev3": "9.8"},
+                {"id": "CVE-2024-0002", "status": "Patched", "scorev3": "7.5"},
+            ],
+        )
         check = CVECheck()
         result = check.run(build, {})
 
@@ -819,11 +823,14 @@ class TestCVECheckScoring:
 
     def test_scoring_three_critical_cves(self, tmp_path: Path) -> None:
         """Three critical CVEs: 50 - 3*15 = 5."""
-        build = self._make_build_with_cves(tmp_path, [
-            {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "9.8"},
-            {"id": "CVE-2024-0002", "status": "Unpatched", "scorev3": "9.1"},
-            {"id": "CVE-2024-0003", "status": "Unpatched", "scorev3": "9.0"},
-        ])
+        build = self._make_build_with_cves(
+            tmp_path,
+            [
+                {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "9.8"},
+                {"id": "CVE-2024-0002", "status": "Unpatched", "scorev3": "9.1"},
+                {"id": "CVE-2024-0003", "status": "Unpatched", "scorev3": "9.0"},
+            ],
+        )
         check = CVECheck()
         result = check.run(build, {})
 
@@ -831,10 +838,13 @@ class TestCVECheckScoring:
 
     def test_scoring_floor_at_zero(self, tmp_path: Path) -> None:
         """Deductions exceeding 50 produce score 0, not negative."""
-        build = self._make_build_with_cves(tmp_path, [
-            {"id": f"CVE-2024-{i:04d}", "status": "Unpatched", "scorev3": "9.8"}
-            for i in range(10)
-        ])
+        build = self._make_build_with_cves(
+            tmp_path,
+            [
+                {"id": f"CVE-2024-{i:04d}", "status": "Unpatched", "scorev3": "9.8"}
+                for i in range(10)
+            ],
+        )
         check = CVECheck()
         result = check.run(build, {})
 
@@ -849,9 +859,12 @@ class TestCVECheckScoring:
 
     def test_scoring_single_high_cve(self, tmp_path: Path) -> None:
         """One high CVE: 50 - 10 = 40."""
-        build = self._make_build_with_cves(tmp_path, [
-            {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "7.5"},
-        ])
+        build = self._make_build_with_cves(
+            tmp_path,
+            [
+                {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "7.5"},
+            ],
+        )
         check = CVECheck()
         result = check.run(build, {})
 
@@ -859,9 +872,12 @@ class TestCVECheckScoring:
 
     def test_scoring_single_medium_cve(self, tmp_path: Path) -> None:
         """One medium CVE: 50 - 5 = 45."""
-        build = self._make_build_with_cves(tmp_path, [
-            {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "5.0"},
-        ])
+        build = self._make_build_with_cves(
+            tmp_path,
+            [
+                {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "5.0"},
+            ],
+        )
         check = CVECheck()
         result = check.run(build, {})
 
@@ -869,9 +885,12 @@ class TestCVECheckScoring:
 
     def test_scoring_single_low_cve(self, tmp_path: Path) -> None:
         """One low CVE: 50 - 2 = 48."""
-        build = self._make_build_with_cves(tmp_path, [
-            {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "3.0"},
-        ])
+        build = self._make_build_with_cves(
+            tmp_path,
+            [
+                {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "3.0"},
+            ],
+        )
         check = CVECheck()
         result = check.run(build, {})
 
@@ -879,9 +898,12 @@ class TestCVECheckScoring:
 
     def test_scoring_missing_cvss_treated_as_high(self, tmp_path: Path) -> None:
         """CVE with no CVSS score is treated as high: 50 - 10 = 40."""
-        build = self._make_build_with_cves(tmp_path, [
-            {"id": "CVE-2024-0001", "status": "Unpatched"},
-        ])
+        build = self._make_build_with_cves(
+            tmp_path,
+            [
+                {"id": "CVE-2024-0001", "status": "Unpatched"},
+            ],
+        )
         check = CVECheck()
         result = check.run(build, {})
 
@@ -889,12 +911,15 @@ class TestCVECheckScoring:
 
     def test_scoring_mixed_severities(self, tmp_path: Path) -> None:
         """Mixed: 1 critical(-15) + 1 high(-10) + 1 medium(-5) + 1 low(-2) = 50-32 = 18."""
-        build = self._make_build_with_cves(tmp_path, [
-            {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "9.8"},
-            {"id": "CVE-2024-0002", "status": "Unpatched", "scorev3": "7.5"},
-            {"id": "CVE-2024-0003", "status": "Unpatched", "scorev3": "5.0"},
-            {"id": "CVE-2024-0004", "status": "Unpatched", "scorev3": "3.0"},
-        ])
+        build = self._make_build_with_cves(
+            tmp_path,
+            [
+                {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "9.8"},
+                {"id": "CVE-2024-0002", "status": "Unpatched", "scorev3": "7.5"},
+                {"id": "CVE-2024-0003", "status": "Unpatched", "scorev3": "5.0"},
+                {"id": "CVE-2024-0004", "status": "Unpatched", "scorev3": "3.0"},
+            ],
+        )
         check = CVECheck()
         result = check.run(build, {})
 
@@ -902,10 +927,13 @@ class TestCVECheckScoring:
 
     def test_scoring_suppressed_cves_not_deducted(self, tmp_path: Path) -> None:
         """Suppressed CVEs do not affect the score."""
-        build = self._make_build_with_cves(tmp_path, [
-            {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "9.8"},
-            {"id": "CVE-2024-0002", "status": "Unpatched", "scorev3": "7.5"},
-        ])
+        build = self._make_build_with_cves(
+            tmp_path,
+            [
+                {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "9.8"},
+                {"id": "CVE-2024-0002", "status": "Unpatched", "scorev3": "7.5"},
+            ],
+        )
         check = CVECheck()
         result = check.run(build, {"suppress": ["CVE-2024-0001"]})
 

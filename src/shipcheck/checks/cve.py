@@ -80,11 +80,13 @@ def _build_findings(
             cvss = _extract_cvss_score(issue)
             cve_id = issue["id"]
             if cve_id in suppress_ids:
-                suppressed.append({
-                    "cve_id": cve_id,
-                    "package": pkg_name,
-                    "cvss": cvss,
-                })
+                suppressed.append(
+                    {
+                        "cve_id": cve_id,
+                        "package": pkg_name,
+                        "cvss": cvss,
+                    }
+                )
                 continue
             severity = _classify_severity(cvss)
             summary = issue.get("summary", cve_id)
@@ -240,8 +242,7 @@ class CVECheck(BaseCheck):
                         message=f"Failed to parse CVE output: {cve_file.name}",
                         severity="critical",
                         remediation=(
-                            "Verify the CVE JSON file is valid and matches"
-                            " the expected format."
+                            "Verify the CVE JSON file is valid and matches the expected format."
                         ),
                     )
                 ],

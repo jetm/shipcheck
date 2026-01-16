@@ -880,9 +880,7 @@ class TestValidationWithFixtures:
         shutil.copy(fixtures_dir / "missing-checksum.json", spdx_dir / "image.spdx.json")
         result = sbom_check.run(tmp_path, {})
         assert result.status == CheckStatus.WARN
-        assert any(
-            f.severity == "low" and "checksum" in f.message.lower() for f in result.findings
-        )
+        assert any(f.severity == "low" and "checksum" in f.message.lower() for f in result.findings)
 
 
 # --- Scoring tests (task 2.5) ---

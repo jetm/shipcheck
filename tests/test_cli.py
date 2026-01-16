@@ -60,16 +60,22 @@ class TestCheckCommand:
         assert result.exit_code == 0
         assert "Readiness score" in result.output
 
-    def test_check_writes_markdown_by_default(self, build_dir_with_spdx: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_check_writes_markdown_by_default(
+        self, build_dir_with_spdx: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
         result = runner.invoke(app, ["check", "--build-dir", str(build_dir_with_spdx)])
         assert result.exit_code == 0
         report_path = tmp_path / "shipcheck-report.md"
         assert report_path.exists(), f"Expected {report_path} to be written"
 
-    def test_check_writes_json_report(self, build_dir_with_spdx: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_check_writes_json_report(
+        self, build_dir_with_spdx: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
-        result = runner.invoke(app, ["check", "--build-dir", str(build_dir_with_spdx), "--format", "json"])
+        result = runner.invoke(
+            app, ["check", "--build-dir", str(build_dir_with_spdx), "--format", "json"]
+        )
         assert result.exit_code == 0
         report_path = tmp_path / "shipcheck-report.json"
         assert report_path.exists()
@@ -77,38 +83,54 @@ class TestCheckCommand:
         assert "readiness_score" in data
         assert "score" in data["readiness_score"]
 
-    def test_check_writes_html_report(self, build_dir_with_spdx: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_check_writes_html_report(
+        self, build_dir_with_spdx: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
-        result = runner.invoke(app, ["check", "--build-dir", str(build_dir_with_spdx), "--format", "html"])
+        result = runner.invoke(
+            app, ["check", "--build-dir", str(build_dir_with_spdx), "--format", "html"]
+        )
         assert result.exit_code == 0
         report_path = tmp_path / "shipcheck-report.html"
         assert report_path.exists()
         content = report_path.read_text()
         assert "<html" in content
 
-    def test_check_terminal_output_always_produced_with_json_format(self, build_dir_with_spdx: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_check_terminal_output_always_produced_with_json_format(
+        self, build_dir_with_spdx: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
-        result = runner.invoke(app, ["check", "--build-dir", str(build_dir_with_spdx), "--format", "json"])
+        result = runner.invoke(
+            app, ["check", "--build-dir", str(build_dir_with_spdx), "--format", "json"]
+        )
         assert result.exit_code == 0
         assert "Readiness score" in result.output
 
     def test_check_filters_checks(self, build_dir_with_spdx: Path) -> None:
-        result = runner.invoke(app, ["check", "--build-dir", str(build_dir_with_spdx), "--checks", "sbom-generation"])
+        result = runner.invoke(
+            app, ["check", "--build-dir", str(build_dir_with_spdx), "--checks", "sbom-generation"]
+        )
         assert result.exit_code == 0
         assert "SBOM" in result.output
 
-    def test_check_loads_config_file(self, build_dir_with_spdx: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_check_loads_config_file(
+        self, build_dir_with_spdx: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
         config_file = tmp_path / ".shipcheck.yaml"
         config_file.write_text(f"build_dir: {build_dir_with_spdx}\nreport:\n  format: json\n")
         result = runner.invoke(app, ["check", "--build-dir", str(build_dir_with_spdx)])
         assert result.exit_code == 0
 
-    def test_check_cli_overrides_config(self, build_dir_with_spdx: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_check_cli_overrides_config(
+        self, build_dir_with_spdx: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
         config_file = tmp_path / ".shipcheck.yaml"
         config_file.write_text(f"build_dir: {build_dir_with_spdx}\nreport:\n  format: json\n")
-        result = runner.invoke(app, ["check", "--build-dir", str(build_dir_with_spdx), "--format", "html"])
+        result = runner.invoke(
+            app, ["check", "--build-dir", str(build_dir_with_spdx), "--format", "html"]
+        )
         assert result.exit_code == 0
         assert (tmp_path / "shipcheck-report.html").exists()
 
@@ -121,51 +143,78 @@ class TestFailOn:
         assert result.exit_code == 0
 
     def test_fail_on_critical_exits_one_when_critical_findings(self, build_dir_empty: Path) -> None:
-        result = runner.invoke(app, ["check", "--build-dir", str(build_dir_empty), "--fail-on", "critical"])
+        result = runner.invoke(
+            app, ["check", "--build-dir", str(build_dir_empty), "--fail-on", "critical"]
+        )
         assert result.exit_code == 1
 
     def test_fail_on_critical_exits_zero_when_no_critical(self, build_dir_with_spdx: Path) -> None:
-        result = runner.invoke(app, ["check", "--build-dir", str(build_dir_with_spdx), "--checks", "sbom-generation", "--fail-on", "critical"])
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--build-dir",
+                str(build_dir_with_spdx),
+                "--checks",
+                "sbom-generation",
+                "--fail-on",
+                "critical",
+            ],
+        )
         # With valid SPDX, SBOM check should not have critical findings
         assert result.exit_code == 0
 
     def test_fail_on_low_exits_one_when_any_finding(self, build_dir_empty: Path) -> None:
-        result = runner.invoke(app, ["check", "--build-dir", str(build_dir_empty), "--fail-on", "low"])
+        result = runner.invoke(
+            app, ["check", "--build-dir", str(build_dir_empty), "--fail-on", "low"]
+        )
         assert result.exit_code == 1
 
     def test_fail_on_high_exits_one_when_critical_exists(self, build_dir_empty: Path) -> None:
-        result = runner.invoke(app, ["check", "--build-dir", str(build_dir_empty), "--fail-on", "high"])
+        result = runner.invoke(
+            app, ["check", "--build-dir", str(build_dir_empty), "--fail-on", "high"]
+        )
         assert result.exit_code == 1
 
 
 class TestCheckErrors:
     """Tests for error handling in check command."""
 
-    def test_missing_build_dir_arg_without_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_missing_build_dir_arg_without_config(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
         result = runner.invoke(app, ["check"])
         assert result.exit_code != 0
 
     def test_invalid_format(self, build_dir_empty: Path) -> None:
-        result = runner.invoke(app, ["check", "--build-dir", str(build_dir_empty), "--format", "xml"])
+        result = runner.invoke(
+            app, ["check", "--build-dir", str(build_dir_empty), "--format", "xml"]
+        )
         assert result.exit_code != 0
 
     def test_unknown_check_id(self, build_dir_empty: Path) -> None:
-        result = runner.invoke(app, ["check", "--build-dir", str(build_dir_empty), "--checks", "nonexistent"])
+        result = runner.invoke(
+            app, ["check", "--build-dir", str(build_dir_empty), "--checks", "nonexistent"]
+        )
         assert result.exit_code != 0
 
 
 class TestInitCommand:
     """Tests for `shipcheck init`."""
 
-    def test_init_creates_config_file(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_init_creates_config_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
         result = runner.invoke(app, ["init"])
         assert result.exit_code == 0
         config_path = tmp_path / ".shipcheck.yaml"
         assert config_path.exists(), "Expected .shipcheck.yaml to be created"
 
-    def test_init_scaffold_contains_all_config_sections(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_init_scaffold_contains_all_config_sections(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
         runner.invoke(app, ["init"])
         content = (tmp_path / ".shipcheck.yaml").read_text()
@@ -176,7 +225,9 @@ class TestInitCommand:
         assert "cve" in content
         assert "report" in content
 
-    def test_init_scaffold_is_commented(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_init_scaffold_is_commented(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
         runner.invoke(app, ["init"])
         content = (tmp_path / ".shipcheck.yaml").read_text()
@@ -194,12 +245,16 @@ class TestInitCommand:
         assert "already exists" in result.output
         assert existing.read_text() == original_content, "File content should not be modified"
 
-    def test_init_prints_success_message(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_init_prints_success_message(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
         result = runner.invoke(app, ["init"])
         assert ".shipcheck.yaml" in result.output
 
-    def test_init_scaffold_contains_sbom_fields(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_init_scaffold_contains_sbom_fields(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
         runner.invoke(app, ["init"])
         content = (tmp_path / ".shipcheck.yaml").read_text()
@@ -207,13 +262,17 @@ class TestInitCommand:
         assert "supplier" in content
         assert "checksum" in content
 
-    def test_init_scaffold_contains_cve_fields(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_init_scaffold_contains_cve_fields(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
         runner.invoke(app, ["init"])
         content = (tmp_path / ".shipcheck.yaml").read_text()
         assert "suppress" in content
 
-    def test_init_scaffold_contains_report_fields(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_init_scaffold_contains_report_fields(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.chdir(tmp_path)
         runner.invoke(app, ["init"])
         content = (tmp_path / ".shipcheck.yaml").read_text()

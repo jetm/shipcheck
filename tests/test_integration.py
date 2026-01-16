@@ -109,14 +109,16 @@ class TestCheckCommandBasic:
         assert "CVE" in result.output
 
     def test_terminal_output_contains_readiness_score(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ):
         build_dir = _setup_build_dir(tmp_path)
         result = _invoke_check(build_dir)
         assert "Readiness score:" in result.output
 
     def test_terminal_output_contains_version_header(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ):
         build_dir = _setup_build_dir(tmp_path)
         result = _invoke_check(build_dir)
@@ -133,7 +135,9 @@ class TestMarkdownReportOutput:
     """Verify default markdown report file is written."""
 
     def test_markdown_report_created(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
@@ -143,7 +147,9 @@ class TestMarkdownReportOutput:
         assert report.exists(), f"Expected {report} to exist"
 
     def test_markdown_report_contains_check_results(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
@@ -153,7 +159,9 @@ class TestMarkdownReportOutput:
         assert "CVE" in content
 
     def test_markdown_report_contains_framework_metadata(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
@@ -163,7 +171,9 @@ class TestMarkdownReportOutput:
         assert "TR-03183-2" in content
 
     def test_terminal_mentions_report_path(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
@@ -180,7 +190,9 @@ class TestJsonReportOutput:
     """Verify JSON report format via --format json."""
 
     def test_json_report_created(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
@@ -189,7 +201,9 @@ class TestJsonReportOutput:
         assert (tmp_path / "shipcheck-report.json").exists()
 
     def test_json_report_is_valid_json(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
@@ -198,7 +212,9 @@ class TestJsonReportOutput:
         assert isinstance(data, dict)
 
     def test_json_report_has_required_metadata(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
@@ -211,7 +227,9 @@ class TestJsonReportOutput:
         assert "timestamp" in data
 
     def test_json_report_has_readiness_score(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
@@ -224,7 +242,9 @@ class TestJsonReportOutput:
         assert score["max_score"] == 100
 
     def test_json_report_has_checks_array(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
@@ -237,7 +257,9 @@ class TestJsonReportOutput:
         assert "cve-tracking" in check_ids
 
     def test_terminal_output_still_produced_with_json(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
@@ -254,7 +276,9 @@ class TestHtmlReportOutput:
     """Verify HTML report format via --format html."""
 
     def test_html_report_created(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
@@ -263,7 +287,9 @@ class TestHtmlReportOutput:
         assert (tmp_path / "shipcheck-report.html").exists()
 
     def test_html_report_is_self_contained(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
@@ -288,7 +314,9 @@ class TestFailOnExitCode:
         assert result.exit_code == 0
 
     def test_fail_on_critical_missing_spdx(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         """Missing SPDX directory -> critical finding -> exit 1."""
         build_dir = _setup_build_dir(tmp_path, include_sbom=False)
@@ -297,7 +325,9 @@ class TestFailOnExitCode:
         assert result.exit_code == 1
 
     def test_fail_on_critical_missing_cve(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         """Missing CVE output -> critical finding -> exit 1."""
         build_dir = _setup_build_dir(tmp_path, include_cve=False)
@@ -306,22 +336,30 @@ class TestFailOnExitCode:
         assert result.exit_code == 1
 
     def test_fail_on_low_missing_artifacts(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         """--fail-on low exits 1 when critical findings exist."""
         build_dir = _setup_build_dir(
-            tmp_path, include_sbom=False, include_cve=False,
+            tmp_path,
+            include_sbom=False,
+            include_cve=False,
         )
         monkeypatch.chdir(tmp_path)
         result = _invoke_check(build_dir, fail_on="low")
         assert result.exit_code == 1
 
     def test_no_fail_on_exits_zero_with_failures(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         """Without --fail-on, exit 0 even with FAIL status checks."""
         build_dir = _setup_build_dir(
-            tmp_path, include_sbom=False, include_cve=False,
+            tmp_path,
+            include_sbom=False,
+            include_cve=False,
         )
         monkeypatch.chdir(tmp_path)
         result = _invoke_check(build_dir)
@@ -337,7 +375,9 @@ class TestChecksFilter:
     """Verify --checks flag filters which checks run."""
 
     def test_only_sbom_check_runs(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
@@ -346,36 +386,48 @@ class TestChecksFilter:
         assert "SBOM" in result.output
 
     def test_only_sbom_in_json_report(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
         _invoke_check(
-            build_dir, checks="sbom-generation", fmt="json",
+            build_dir,
+            checks="sbom-generation",
+            fmt="json",
         )
         data = _read_json_report(tmp_path)
         assert len(data["checks"]) == 1
         assert data["checks"][0]["check_id"] == "sbom-generation"
 
     def test_only_cve_check_runs(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
         _invoke_check(
-            build_dir, checks="cve-tracking", fmt="json",
+            build_dir,
+            checks="cve-tracking",
+            fmt="json",
         )
         data = _read_json_report(tmp_path)
         assert len(data["checks"]) == 1
         assert data["checks"][0]["check_id"] == "cve-tracking"
 
     def test_filtered_score_max_is_50(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
         _invoke_check(
-            build_dir, checks="sbom-generation", fmt="json",
+            build_dir,
+            checks="sbom-generation",
+            fmt="json",
         )
         data = _read_json_report(tmp_path)
         assert data["readiness_score"]["max_score"] == 50
@@ -390,38 +442,40 @@ class TestMissingArtifacts:
     """Verify behavior when build artifacts are missing."""
 
     def test_missing_spdx_dir_produces_fail(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path, include_sbom=False)
         monkeypatch.chdir(tmp_path)
         _invoke_check(build_dir, fmt="json")
         data = _read_json_report(tmp_path)
-        sbom = next(
-            c for c in data["checks"]
-            if c["check_id"] == "sbom-generation"
-        )
+        sbom = next(c for c in data["checks"] if c["check_id"] == "sbom-generation")
         assert sbom["status"] == "fail"
         assert sbom["score"] == 0
 
     def test_missing_cve_output_produces_fail(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path, include_cve=False)
         monkeypatch.chdir(tmp_path)
         _invoke_check(build_dir, fmt="json")
         data = _read_json_report(tmp_path)
-        cve = next(
-            c for c in data["checks"]
-            if c["check_id"] == "cve-tracking"
-        )
+        cve = next(c for c in data["checks"] if c["check_id"] == "cve-tracking")
         assert cve["status"] == "fail"
         assert cve["score"] == 0
 
     def test_missing_both_score_zero(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(
-            tmp_path, include_sbom=False, include_cve=False,
+            tmp_path,
+            include_sbom=False,
+            include_cve=False,
         )
         monkeypatch.chdir(tmp_path)
         _invoke_check(build_dir, fmt="json")
@@ -429,20 +483,28 @@ class TestMissingArtifacts:
         assert data["readiness_score"]["score"] == 0
 
     def test_terminal_shows_fail(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(
-            tmp_path, include_sbom=False, include_cve=False,
+            tmp_path,
+            include_sbom=False,
+            include_cve=False,
         )
         monkeypatch.chdir(tmp_path)
         result = _invoke_check(build_dir)
         assert "FAIL" in result.output
 
     def test_findings_have_remediation(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(
-            tmp_path, include_sbom=False, include_cve=False,
+            tmp_path,
+            include_sbom=False,
+            include_cve=False,
         )
         monkeypatch.chdir(tmp_path)
         _invoke_check(build_dir, fmt="json")
@@ -462,7 +524,9 @@ class TestReadinessScore:
     """Verify readiness score reflects check results."""
 
     def test_max_score_is_100(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
@@ -471,7 +535,9 @@ class TestReadinessScore:
         assert data["readiness_score"]["max_score"] == 100
 
     def test_score_between_zero_and_max(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
@@ -496,7 +562,9 @@ class TestInvalidBuildDir:
     """Verify error handling for nonexistent build directory."""
 
     def test_nonexistent_dir_reports_failures(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         """Nonexistent dir doesn't crash - checks find nothing."""
         monkeypatch.chdir(tmp_path)
@@ -514,7 +582,9 @@ class TestReportContentIntegrity:
     """Cross-format consistency: terminal and JSON report agree."""
 
     def test_json_and_terminal_show_same_checks(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
@@ -524,7 +594,9 @@ class TestReportContentIntegrity:
             assert check_data["check_name"] in result.output
 
     def test_json_build_dir_matches_cli_arg(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
@@ -533,7 +605,9 @@ class TestReportContentIntegrity:
         assert str(build_dir) in data["build_dir"]
 
     def test_json_timestamp_is_iso8601(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         from datetime import datetime
 
@@ -544,7 +618,9 @@ class TestReportContentIntegrity:
         datetime.fromisoformat(data["timestamp"])
 
     def test_json_checks_have_expected_fields(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)

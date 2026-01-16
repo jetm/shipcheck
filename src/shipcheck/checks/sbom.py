@@ -118,8 +118,7 @@ def _validate_spdx2_metadata(doc: dict) -> list[Finding]:
             findings.append(
                 Finding(
                     message=(
-                        "Missing or empty creationInfo.creators"
-                        " — at least one creator required"
+                        "Missing or empty creationInfo.creators — at least one creator required"
                     ),
                     severity="medium",
                 )
@@ -279,8 +278,7 @@ class SBOMCheck(BaseCheck):
             findings.append(
                 Finding(
                     message=(
-                        "SBOM format not recognized"
-                        " (expected SPDX 2.x, SPDX 3.0, or CycloneDX)"
+                        "SBOM format not recognized (expected SPDX 2.x, SPDX 3.0, or CycloneDX)"
                     ),
                     severity="high",
                     remediation=_REMEDIATION_SPDX,
@@ -322,9 +320,7 @@ class SBOMCheck(BaseCheck):
         # Scoring: 10 (format) + 5 (metadata) + 5 (DESCRIBES) + 30 (per-package)
         score = 10
         metadata_ok = not any(
-            f.severity == "medium"
-            and "DESCRIBES" not in f.message
-            for f in findings
+            f.severity == "medium" and "DESCRIBES" not in f.message for f in findings
         )
         describes_ok = _has_describes(doc)
 
