@@ -1,6 +1,6 @@
 [project]
 name = "shipcheck"
-version = "0.0.1"
+version = "0.0.2"
 description = "Embedded Linux compliance auditor — CRA, Secure Boot, SBOM, CVE tracking"
 authors = [{name = "Javier Tia"}]
 license = "Apache-2.0"
@@ -91,7 +91,7 @@ not-subscriptable = "ignore"
 unresolved-attribute = "ignore"
 
 [tool.bumpversion]
-current_version = "0.0.1"
+current_version = "0.0.2"
 commit = true
 tag = true
 tag_name = "v{new_version}"
