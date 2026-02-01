@@ -34,6 +34,21 @@ class CveConfig:
 
 
 @dataclass
+class SecureBootConfig:
+    """Secure Boot check configuration."""
+
+    known_test_keys: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ImageSigningConfig:
+    """Image Signing check configuration."""
+
+    expect_fit: bool = True
+    expect_verity: bool = True
+
+
+@dataclass
 class ReportConfig:
     """Report output configuration."""
 
@@ -51,6 +66,8 @@ class ShipcheckConfig:
     checks: list[str] | None = None
     sbom: SbomConfig = field(default_factory=SbomConfig)
     cve: CveConfig = field(default_factory=CveConfig)
+    secure_boot: SecureBootConfig = field(default_factory=SecureBootConfig)
+    image_signing: ImageSigningConfig = field(default_factory=ImageSigningConfig)
     report: ReportConfig = field(default_factory=ReportConfig)
 
     @classmethod
@@ -76,12 +93,25 @@ class ShipcheckConfig:
             fail_on=report_data.get("fail_on"),
         )
 
+        secure_boot_data = data.get("secure_boot", {})
+        secure_boot = SecureBootConfig(
+            known_test_keys=secure_boot_data.get("known_test_keys", []),
+        )
+
+        image_signing_data = data.get("image_signing", {})
+        image_signing = ImageSigningConfig(
+            expect_fit=image_signing_data.get("expect_fit", True),
+            expect_verity=image_signing_data.get("expect_verity", True),
+        )
+
         return cls(
             build_dir=build_dir,
             framework=data.get("framework", "CRA"),
             checks=data.get("checks"),
             sbom=sbom,
             cve=cve,
+            secure_boot=secure_boot,
+            image_signing=image_signing,
             report=report,
         )
 
