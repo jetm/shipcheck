@@ -282,3 +282,60 @@ class TestInitCommand:
         assert "format" in content
         assert "output" in content
         assert "fail_on" in content
+
+    def test_init_scaffold_contains_secure_boot_section(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        runner.invoke(app, ["init"])
+        content = (tmp_path / ".shipcheck.yaml").read_text()
+        assert "secure_boot" in content
+        assert "known_test_keys" in content
+
+    def test_init_scaffold_contains_image_signing_section(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        runner.invoke(app, ["init"])
+        content = (tmp_path / ".shipcheck.yaml").read_text()
+        assert "image_signing" in content
+        assert "expect_fit" in content
+        assert "expect_verity" in content
+
+    def test_init_scaffold_checks_list_includes_new_check_ids(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        runner.invoke(app, ["init"])
+        content = (tmp_path / ".shipcheck.yaml").read_text()
+        assert "secure-boot" in content
+        assert "image-signing" in content
+
+
+class TestBuildCheckConfig:
+    """Tests for `_build_check_config()` mapping new check IDs."""
+
+    def test_build_check_config_includes_secure_boot(self) -> None:
+        from shipcheck.cli import _build_check_config
+        from shipcheck.config import ShipcheckConfig
+
+        config = ShipcheckConfig()
+        result = _build_check_config(config)
+        assert "secure-boot" in result
+
+    def test_build_check_config_includes_image_signing(self) -> None:
+        from shipcheck.cli import _build_check_config
+        from shipcheck.config import ShipcheckConfig
+
+        config = ShipcheckConfig()
+        result = _build_check_config(config)
+        assert "image-signing" in result
+
+    def test_build_check_config_preserves_existing_checks(self) -> None:
+        from shipcheck.cli import _build_check_config
+        from shipcheck.config import ShipcheckConfig
+
+        config = ShipcheckConfig()
+        result = _build_check_config(config)
+        assert "sbom-generation" in result
+        assert "cve-tracking" in result

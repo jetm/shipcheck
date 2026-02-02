@@ -30,6 +30,8 @@ def _build_check_config(config) -> dict:
     return {
         "sbom-generation": asdict(config.sbom),
         "cve-tracking": asdict(config.cve),
+        "secure-boot": asdict(config.secure_boot),
+        "image-signing": asdict(config.image_signing),
     }
 
 
@@ -147,6 +149,8 @@ def init() -> None:
 # checks:
 #   - sbom-generation
 #   - cve-tracking
+#   - secure-boot
+#   - image-signing
 
 # SBOM check configuration
 # sbom:
@@ -161,6 +165,15 @@ def init() -> None:
 # cve:
 #   suppress:
 #     - CVE-2023-1234
+
+# Secure Boot check configuration
+# secure_boot:
+#   known_test_keys: []
+
+# Image Signing check configuration
+# image_signing:
+#   expect_fit: true
+#   expect_verity: true
 
 # Report output options
 # report:
