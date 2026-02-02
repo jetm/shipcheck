@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from shipcheck.config import ShipcheckConfig, load_config
+from shipcheck.config import ImageSigningConfig, SecureBootConfig, ShipcheckConfig, load_config
 
 FIXTURES = Path(__file__).parent / "fixtures" / "config"
 
@@ -197,3 +197,179 @@ class TestDefaultConfig:
         assert config.report.format == "markdown"
         assert config.report.output == "shipcheck-report"
         assert config.report.fail_on is None
+
+
+class TestSecureBootConfigDefaults:
+    """Tests for SecureBootConfig default values."""
+
+    def test_default_known_test_keys_is_empty_list(self):
+        config = SecureBootConfig()
+
+        assert config.known_test_keys == []
+
+    def test_default_instances_are_independent(self):
+        config_a = SecureBootConfig()
+        config_b = SecureBootConfig()
+
+        config_a.known_test_keys.append("test-key-pattern")
+
+        assert config_b.known_test_keys == []
+
+    def test_custom_known_test_keys(self):
+        config = SecureBootConfig(known_test_keys=["*test*", "dev-key-*"])
+
+        assert config.known_test_keys == ["*test*", "dev-key-*"]
+
+
+class TestImageSigningConfigDefaults:
+    """Tests for ImageSigningConfig default values."""
+
+    def test_default_expect_fit_is_true(self):
+        config = ImageSigningConfig()
+
+        assert config.expect_fit is True
+
+    def test_default_expect_verity_is_true(self):
+        config = ImageSigningConfig()
+
+        assert config.expect_verity is True
+
+    def test_custom_expect_fit_false(self):
+        config = ImageSigningConfig(expect_fit=False)
+
+        assert config.expect_fit is False
+        assert config.expect_verity is True
+
+    def test_custom_expect_verity_false(self):
+        config = ImageSigningConfig(expect_verity=False)
+
+        assert config.expect_fit is True
+        assert config.expect_verity is False
+
+    def test_both_disabled(self):
+        config = ImageSigningConfig(expect_fit=False, expect_verity=False)
+
+        assert config.expect_fit is False
+        assert config.expect_verity is False
+
+
+class TestShipcheckConfigSecureBootSection:
+    """Tests for ShipcheckConfig parsing of secure_boot section."""
+
+    def test_missing_secure_boot_section_uses_defaults(self):
+        config = ShipcheckConfig.from_dict({})
+
+        assert config.secure_boot.known_test_keys == []
+
+    def test_secure_boot_custom_test_keys(self):
+        config = ShipcheckConfig.from_dict(
+            {
+                "secure_boot": {"known_test_keys": ["*development*", "ovmf-test-pk"]},
+            }
+        )
+
+        assert config.secure_boot.known_test_keys == ["*development*", "ovmf-test-pk"]
+
+    def test_secure_boot_empty_section_uses_defaults(self):
+        config = ShipcheckConfig.from_dict({"secure_boot": {}})
+
+        assert config.secure_boot.known_test_keys == []
+
+    def test_load_secureboot_config_fixture(self):
+        config = load_config(FIXTURES / "secureboot-config.yaml")
+
+        assert isinstance(config.secure_boot, SecureBootConfig)
+        assert isinstance(config.secure_boot.known_test_keys, list)
+        assert len(config.secure_boot.known_test_keys) > 0
+
+
+class TestShipcheckConfigImageSigningSection:
+    """Tests for ShipcheckConfig parsing of image_signing section."""
+
+    def test_missing_image_signing_section_uses_defaults(self):
+        config = ShipcheckConfig.from_dict({})
+
+        assert config.image_signing.expect_fit is True
+        assert config.image_signing.expect_verity is True
+
+    def test_image_signing_expect_fit_false(self):
+        config = ShipcheckConfig.from_dict(
+            {
+                "image_signing": {"expect_fit": False},
+            }
+        )
+
+        assert config.image_signing.expect_fit is False
+        assert config.image_signing.expect_verity is True
+
+    def test_image_signing_expect_verity_false(self):
+        config = ShipcheckConfig.from_dict(
+            {
+                "image_signing": {"expect_verity": False},
+            }
+        )
+
+        assert config.image_signing.expect_fit is True
+        assert config.image_signing.expect_verity is False
+
+    def test_image_signing_both_disabled(self):
+        config = ShipcheckConfig.from_dict(
+            {
+                "image_signing": {"expect_fit": False, "expect_verity": False},
+            }
+        )
+
+        assert config.image_signing.expect_fit is False
+        assert config.image_signing.expect_verity is False
+
+    def test_image_signing_empty_section_uses_defaults(self):
+        config = ShipcheckConfig.from_dict({"image_signing": {}})
+
+        assert config.image_signing.expect_fit is True
+        assert config.image_signing.expect_verity is True
+
+    def test_load_imagesigning_config_fixture(self):
+        config = load_config(FIXTURES / "imagesigning-config.yaml")
+
+        assert isinstance(config.image_signing, ImageSigningConfig)
+
+
+class TestShipcheckConfigAllNewSections:
+    """Tests for ShipcheckConfig with all new sections together."""
+
+    def test_from_dict_with_both_new_sections(self):
+        config = ShipcheckConfig.from_dict(
+            {
+                "secure_boot": {"known_test_keys": ["*test*"]},
+                "image_signing": {"expect_fit": True, "expect_verity": False},
+            }
+        )
+
+        assert config.secure_boot.known_test_keys == ["*test*"]
+        assert config.image_signing.expect_fit is True
+        assert config.image_signing.expect_verity is False
+
+    def test_default_config_includes_new_sections(self):
+        config = ShipcheckConfig.default()
+
+        assert isinstance(config.secure_boot, SecureBootConfig)
+        assert isinstance(config.image_signing, ImageSigningConfig)
+        assert config.secure_boot.known_test_keys == []
+        assert config.image_signing.expect_fit is True
+        assert config.image_signing.expect_verity is True
+
+    def test_new_sections_coexist_with_existing_sections(self):
+        config = ShipcheckConfig.from_dict(
+            {
+                "build_dir": "./build",
+                "cve": {"suppress": ["CVE-2025-0001"]},
+                "secure_boot": {"known_test_keys": ["dev-*"]},
+                "image_signing": {"expect_fit": False},
+            }
+        )
+
+        assert config.build_dir == Path("./build")
+        assert config.cve.suppress == ["CVE-2025-0001"]
+        assert config.secure_boot.known_test_keys == ["dev-*"]
+        assert config.image_signing.expect_fit is False
+        assert config.image_signing.expect_verity is True
