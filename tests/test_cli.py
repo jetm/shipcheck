@@ -116,6 +116,20 @@ class TestCheckCommand:
         assert result.exit_code == 0
         assert "SBOM" in result.output
 
+    def test_check_filters_secure_boot(self, build_dir_with_spdx: Path) -> None:
+        result = runner.invoke(
+            app, ["check", "--build-dir", str(build_dir_with_spdx), "--checks", "secure-boot"]
+        )
+        assert result.exit_code == 0
+        assert "Secure Boot" in result.output
+
+    def test_check_filters_image_signing(self, build_dir_with_spdx: Path) -> None:
+        result = runner.invoke(
+            app, ["check", "--build-dir", str(build_dir_with_spdx), "--checks", "image-signing"]
+        )
+        assert result.exit_code == 0
+        assert "Image Signing" in result.output
+
     def test_check_loads_config_file(
         self, build_dir_with_spdx: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

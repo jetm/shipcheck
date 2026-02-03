@@ -264,6 +264,13 @@ class TestCheckRegistryFiltering:
 class TestDefaultRegistry:
     """Tests for the default registry with built-in checks."""
 
+    def test_default_registry_has_four_checks(self) -> None:
+        from shipcheck.checks.registry import get_default_registry
+
+        registry = get_default_registry()
+
+        assert len(registry.checks) == 4
+
     def test_default_registry_has_builtin_checks(self) -> None:
         from shipcheck.checks.registry import get_default_registry
 
@@ -272,14 +279,18 @@ class TestDefaultRegistry:
 
         assert "sbom-generation" in check_ids
         assert "cve-tracking" in check_ids
+        assert "secure-boot" in check_ids
+        assert "image-signing" in check_ids
 
-    def test_default_registry_order_sbom_before_cve(self) -> None:
+    def test_default_registry_order(self) -> None:
         from shipcheck.checks.registry import get_default_registry
 
         registry = get_default_registry()
         check_ids = [c.id for c in registry.checks]
 
         assert check_ids.index("sbom-generation") < check_ids.index("cve-tracking")
+        assert check_ids.index("cve-tracking") < check_ids.index("secure-boot")
+        assert check_ids.index("secure-boot") < check_ids.index("image-signing")
 
     def test_default_registry_returns_fresh_instance(self) -> None:
         from shipcheck.checks.registry import get_default_registry
