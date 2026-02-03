@@ -239,7 +239,7 @@ class TestJsonReportOutput:
         score = data["readiness_score"]
         assert "score" in score
         assert "max_score" in score
-        assert score["max_score"] == 100
+        assert score["max_score"] == 200
 
     def test_json_report_has_checks_array(
         self,
@@ -251,10 +251,12 @@ class TestJsonReportOutput:
         _invoke_check(build_dir, fmt="json")
         data = _read_json_report(tmp_path)
         assert isinstance(data["checks"], list)
-        assert len(data["checks"]) == 2
+        assert len(data["checks"]) == 4
         check_ids = {c["check_id"] for c in data["checks"]}
         assert "sbom-generation" in check_ids
         assert "cve-tracking" in check_ids
+        assert "secure-boot" in check_ids
+        assert "image-signing" in check_ids
 
     def test_terminal_output_still_produced_with_json(
         self,
@@ -523,7 +525,7 @@ class TestMissingArtifacts:
 class TestReadinessScore:
     """Verify readiness score reflects check results."""
 
-    def test_max_score_is_100(
+    def test_max_score_is_200(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -532,7 +534,7 @@ class TestReadinessScore:
         monkeypatch.chdir(tmp_path)
         _invoke_check(build_dir, fmt="json")
         data = _read_json_report(tmp_path)
-        assert data["readiness_score"]["max_score"] == 100
+        assert data["readiness_score"]["max_score"] == 200
 
     def test_score_between_zero_and_max(
         self,
@@ -550,7 +552,7 @@ class TestReadinessScore:
     def test_score_in_terminal_output(self, tmp_path: Path):
         build_dir = _setup_build_dir(tmp_path)
         result = _invoke_check(build_dir)
-        assert "/100" in result.output
+        assert "/200" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -634,3 +636,282 @@ class TestReportContentIntegrity:
             assert "max_score" in check_data
             assert "findings" in check_data
             assert "summary" in check_data
+
+
+# ---------------------------------------------------------------------------
+# Secure Boot check via CLI
+# ---------------------------------------------------------------------------
+
+
+def _add_secureboot_config(build_dir: Path) -> None:
+    """Add Secure Boot configuration files to a mock build directory."""
+    conf_dir = build_dir / "conf"
+    conf_dir.mkdir(exist_ok=True)
+    keys_dir = build_dir / "keys"
+    keys_dir.mkdir(exist_ok=True)
+
+    (keys_dir / "db.key").write_text("fake-key-data")
+    (keys_dir / "db.crt").write_text("fake-cert-data")
+
+    (conf_dir / "local.conf").write_text(
+        'MACHINE = "genericx86-64"\n'
+        'DISTRO = "poky"\n'
+        'IMAGE_CLASSES += "uefi-sign"\n'
+        'SECURE_BOOT_SIGNING_KEY = "${TOPDIR}/keys/db.key"\n'
+        'SECURE_BOOT_SIGNING_CERT = "${TOPDIR}/keys/db.crt"\n'
+    )
+
+
+def _add_efi_artifacts(build_dir: Path) -> None:
+    """Add EFI artifacts to the deploy directory."""
+    efi_dir = build_dir / "tmp" / "deploy" / "images" / "genericx86-64"
+    efi_dir.mkdir(parents=True, exist_ok=True)
+    (efi_dir / "bootx64.efi").write_bytes(b"\x00" * 64)
+
+
+def _add_verity_config(build_dir: Path) -> None:
+    """Add dm-verity configuration to a mock build directory."""
+    conf_dir = build_dir / "conf"
+    conf_dir.mkdir(exist_ok=True)
+    (conf_dir / "local.conf").write_text(
+        'MACHINE = "qemuarm64"\n'
+        'DISTRO = "poky"\n'
+        'IMAGE_CLASSES += "dm-verity-img"\n'
+        'DM_VERITY_IMAGE = "core-image-minimal"\n'
+        'DM_VERITY_IMAGE_TYPE = "ext4"\n'
+    )
+
+
+def _add_signed_fit(build_dir: Path) -> None:
+    """Add a signed FIT image stub to the deploy directory."""
+    images_dir = build_dir / "tmp" / "deploy" / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+    src = FIXTURES_DIR / "imagesigning" / "signed.itb"
+    shutil.copy(src, images_dir / "fitImage.itb")
+
+
+class TestSecureBootCheckViaCLI:
+    """Verify Secure Boot check appears in CLI output and reports."""
+
+    def test_terminal_output_contains_secure_boot(self, tmp_path: Path):
+        build_dir = _setup_build_dir(tmp_path)
+        result = _invoke_check(build_dir)
+        assert "Secure Boot" in result.output
+
+    def test_json_report_includes_secure_boot_check(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(tmp_path)
+        check_ids = {c["check_id"] for c in data["checks"]}
+        assert "secure-boot" in check_ids
+
+    def test_secure_boot_with_signing_config_scores_points(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_build_dir(tmp_path)
+        _add_secureboot_config(build_dir)
+        _add_efi_artifacts(build_dir)
+        monkeypatch.chdir(tmp_path)
+        _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(tmp_path)
+        sb = next(c for c in data["checks"] if c["check_id"] == "secure-boot")
+        assert sb["score"] > 0
+        assert sb["max_score"] == 50
+
+    def test_secure_boot_without_config_scores_zero(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(tmp_path)
+        sb = next(c for c in data["checks"] if c["check_id"] == "secure-boot")
+        assert sb["score"] == 0
+
+    def test_filter_secure_boot_only(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_build_dir(tmp_path)
+        _add_secureboot_config(build_dir)
+        monkeypatch.chdir(tmp_path)
+        _invoke_check(build_dir, checks="secure-boot", fmt="json")
+        data = _read_json_report(tmp_path)
+        assert len(data["checks"]) == 1
+        assert data["checks"][0]["check_id"] == "secure-boot"
+        assert data["readiness_score"]["max_score"] == 50
+
+
+# ---------------------------------------------------------------------------
+# Image Signing check via CLI
+# ---------------------------------------------------------------------------
+
+
+class TestImageSigningCheckViaCLI:
+    """Verify Image Signing check appears in CLI output and reports."""
+
+    def test_terminal_output_contains_image_signing(self, tmp_path: Path):
+        build_dir = _setup_build_dir(tmp_path)
+        result = _invoke_check(build_dir)
+        assert "Image Signing" in result.output
+
+    def test_json_report_includes_image_signing_check(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(tmp_path)
+        check_ids = {c["check_id"] for c in data["checks"]}
+        assert "image-signing" in check_ids
+
+    def test_image_signing_with_verity_config_scores_points(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_build_dir(tmp_path)
+        _add_verity_config(build_dir)
+        monkeypatch.chdir(tmp_path)
+        _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(tmp_path)
+        isig = next(c for c in data["checks"] if c["check_id"] == "image-signing")
+        assert isig["score"] > 0
+        assert isig["max_score"] == 50
+
+    def test_image_signing_with_signed_fit_scores_points(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_build_dir(tmp_path)
+        _add_signed_fit(build_dir)
+        monkeypatch.chdir(tmp_path)
+        _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(tmp_path)
+        isig = next(c for c in data["checks"] if c["check_id"] == "image-signing")
+        assert isig["score"] > 0
+
+    def test_image_signing_without_artifacts_has_findings(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(tmp_path)
+        isig = next(c for c in data["checks"] if c["check_id"] == "image-signing")
+        assert len(isig["findings"]) > 0
+
+    def test_filter_image_signing_only(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _invoke_check(build_dir, checks="image-signing", fmt="json")
+        data = _read_json_report(tmp_path)
+        assert len(data["checks"]) == 1
+        assert data["checks"][0]["check_id"] == "image-signing"
+        assert data["readiness_score"]["max_score"] == 50
+
+
+# ---------------------------------------------------------------------------
+# Score aggregation with all 4 checks
+# ---------------------------------------------------------------------------
+
+
+class TestScoreAggregationAllChecks:
+    """Verify score aggregation across all 4 checks."""
+
+    def test_all_checks_contribute_to_total_score(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_build_dir(tmp_path)
+        _add_secureboot_config(build_dir)
+        _add_efi_artifacts(build_dir)
+        _add_signed_fit(build_dir)
+        _add_verity_config(build_dir)
+        monkeypatch.chdir(tmp_path)
+        _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(tmp_path)
+        total = sum(c["score"] for c in data["checks"])
+        assert data["readiness_score"]["score"] == total
+        assert data["readiness_score"]["max_score"] == 200
+
+    def test_max_score_scales_with_filtered_checks(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Filtering to 2 checks yields max_score=100."""
+        build_dir = _setup_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _invoke_check(
+            build_dir,
+            checks="sbom-generation,cve-tracking",
+            fmt="json",
+        )
+        data = _read_json_report(tmp_path)
+        assert data["readiness_score"]["max_score"] == 100
+
+    def test_terminal_score_shows_out_of_200(self, tmp_path: Path):
+        build_dir = _setup_build_dir(tmp_path)
+        result = _invoke_check(build_dir)
+        assert "/200" in result.output
+
+    def test_markdown_report_includes_all_four_checks(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _invoke_check(build_dir, fmt="markdown")
+        content = (tmp_path / "shipcheck-report.md").read_text()
+        assert "SBOM" in content
+        assert "CVE" in content
+        assert "Secure Boot" in content
+        assert "Image Signing" in content
+
+    def test_html_report_includes_all_four_checks(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _invoke_check(build_dir, fmt="html")
+        content = (tmp_path / "shipcheck-report.html").read_text()
+        assert "Secure Boot" in content
+        assert "Image Signing" in content
+
+    def test_missing_all_artifacts_max_score_still_200(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_build_dir(
+            tmp_path, include_sbom=False, include_cve=False
+        )
+        monkeypatch.chdir(tmp_path)
+        _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(tmp_path)
+        assert data["readiness_score"]["max_score"] == 200
+        assert data["readiness_score"]["score"] == 0
