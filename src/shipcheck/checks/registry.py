@@ -83,9 +83,13 @@ def get_default_registry() -> CheckRegistry:
     Returns a fresh instance each call so callers cannot pollute each other.
     """
     from shipcheck.checks.cve import CVECheck
+    from shipcheck.checks.image_signing import ImageSigningCheck
     from shipcheck.checks.sbom import SBOMCheck
+    from shipcheck.checks.secureboot import SecureBootCheck
 
     registry = CheckRegistry()
     registry.register(SBOMCheck())
     registry.register(CVECheck())
+    registry.register(SecureBootCheck())
+    registry.register(ImageSigningCheck())
     return registry
