@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- Secure Boot audit check: detects signing class configuration, flags test/development keys, catches EFI artifacts without signing enabled
+- Image Signing check: detects FIT image signatures (U-Boot) and dm-verity configuration
+- `secure_boot` and `image_signing` configuration sections in `.shipcheck.yaml`
+- Readiness score now includes Secure Boot (50pts) and Image Signing (50pts), total max 200
+
 ## [0.0.2] - 2026-04-01
 
 ### Added
