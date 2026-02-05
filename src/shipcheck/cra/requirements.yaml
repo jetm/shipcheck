@@ -1,0 +1,322 @@
+# CRA (Cyber Resilience Act) requirement catalog
+# Source: Regulation (EU) 2024/2847, Official Journal OJ L, 20.11.2024
+# ELI: http://data.europa.eu/eli/reg/2024/2847/oj
+# Transcribed verbatim from docs/references/cra-regulation-2024-2847.pdf
+# pages 68-75 (Annex I, Annex II, Annex VII).
+#
+# ID scheme (per design Decision 1):
+#   <Annex>.<Part>.<Item>
+#   - Annex I Part I items (a)-(m)  -> I.P1.a .. I.P1.m
+#   - Annex I Part II items (1)-(8) -> I.P2.1 .. I.P2.8
+#   - Annex II items (1)-(9)        -> II.1   .. II.9
+#   - Annex VII items (1)-(8)       -> VII.1  .. VII.8
+
+source_version: "OJ L, 20.11.2024"
+
+requirements:
+  # ----------------------------------------------------------------
+  # Annex I, Part I - Cybersecurity requirements relating to the
+  # properties of products with digital elements.
+  # Items (a)-(m) are the sub-points of Part I, paragraph (2), applied
+  # "on the basis of the cybersecurity risk assessment referred to in
+  # Article 13(2) and where applicable".
+  # ----------------------------------------------------------------
+
+  - id: I.P1.a
+    annex: I
+    part: "1"
+    item: a
+    title: "No known exploitable vulnerabilities"
+    text: "be made available on the market without known exploitable vulnerabilities;"
+
+  - id: I.P1.b
+    annex: I
+    part: "1"
+    item: b
+    title: "Secure by default configuration"
+    text: "be made available on the market with a secure by default configuration, unless otherwise agreed between manufacturer and business user in relation to a tailor-made product with digital elements, including the possibility to reset the product to its original state;"
+
+  - id: I.P1.c
+    annex: I
+    part: "1"
+    item: c
+    title: "Security updates"
+    text: "ensure that vulnerabilities can be addressed through security updates, including, where applicable, through automatic security updates that are installed within an appropriate timeframe enabled as a default setting, with a clear and easy-to-use opt-out mechanism, through the notification of available updates to users, and the option to temporarily postpone them;"
+
+  - id: I.P1.d
+    annex: I
+    part: "1"
+    item: d
+    title: "Protection from unauthorised access"
+    text: "ensure protection from unauthorised access by appropriate control mechanisms, including but not limited to authentication, identity or access management systems, and report on possible unauthorised access;"
+
+  - id: I.P1.e
+    annex: I
+    part: "1"
+    item: e
+    title: "Confidentiality of data"
+    text: "protect the confidentiality of stored, transmitted or otherwise processed data, personal or other, such as by encrypting relevant data at rest or in transit by state of the art mechanisms, and by using other technical means;"
+
+  - id: I.P1.f
+    annex: I
+    part: "1"
+    item: f
+    title: "Integrity of data"
+    text: "protect the integrity of stored, transmitted or otherwise processed data, personal or other, commands, programs and configuration against any manipulation or modification not authorised by the user, and report on corruptions;"
+
+  - id: I.P1.g
+    annex: I
+    part: "1"
+    item: g
+    title: "Data minimisation"
+    text: "process only data, personal or other, that are adequate, relevant and limited to what is necessary in relation to the intended purpose of the product with digital elements (data minimisation);"
+
+  - id: I.P1.h
+    annex: I
+    part: "1"
+    item: h
+    title: "Availability of essential functions"
+    text: "protect the availability of essential and basic functions, also after an incident, including through resilience and mitigation measures against denial-of-service attacks;"
+
+  - id: I.P1.i
+    annex: I
+    part: "1"
+    item: i
+    title: "Minimise impact on other devices/networks"
+    text: "minimise the negative impact by the products themselves or connected devices on the availability of services provided by other devices or networks;"
+
+  - id: I.P1.j
+    annex: I
+    part: "1"
+    item: j
+    title: "Limit attack surfaces"
+    text: "be designed, developed and produced to limit attack surfaces, including external interfaces;"
+
+  - id: I.P1.k
+    annex: I
+    part: "1"
+    item: k
+    title: "Reduce incident impact"
+    text: "be designed, developed and produced to reduce the impact of an incident using appropriate exploitation mitigation mechanisms and techniques;"
+
+  - id: I.P1.l
+    annex: I
+    part: "1"
+    item: l
+    title: "Security logging and monitoring"
+    text: "provide security related information by recording and monitoring relevant internal activity, including the access to or modification of data, services or functions, with an opt-out mechanism for the user;"
+
+  - id: I.P1.m
+    annex: I
+    part: "1"
+    item: m
+    title: "Secure data and settings removal"
+    text: "provide the possibility for users to securely and easily remove on a permanent basis all data and settings and, where such data can be transferred to other products or systems, ensure that this is done in a secure manner."
+
+  # ----------------------------------------------------------------
+  # Annex I, Part II - Vulnerability handling requirements.
+  # "Manufacturers of products with digital elements shall:"
+  # ----------------------------------------------------------------
+
+  - id: I.P2.1
+    annex: I
+    part: "2"
+    item: "1"
+    title: "Identify and document vulnerabilities and components (SBOM)"
+    text: "identify and document vulnerabilities and components contained in products with digital elements, including by drawing up a software bill of materials in a commonly used and machine-readable format covering at the very least the top-level dependencies of the products;"
+
+  - id: I.P2.2
+    annex: I
+    part: "2"
+    item: "2"
+    title: "Address and remediate vulnerabilities without delay"
+    text: "in relation to the risks posed to products with digital elements, address and remediate vulnerabilities without delay, including by providing security updates; where technically feasible, new security updates shall be provided separately from functionality updates;"
+
+  - id: I.P2.3
+    annex: I
+    part: "2"
+    item: "3"
+    title: "Regular security tests and reviews"
+    text: "apply effective and regular tests and reviews of the security of the product with digital elements;"
+
+  - id: I.P2.4
+    annex: I
+    part: "2"
+    item: "4"
+    title: "Public disclosure of fixed vulnerabilities"
+    text: "once a security update has been made available, share and publicly disclose information about fixed vulnerabilities, including a description of the vulnerabilities, information allowing users to identify the product with digital elements affected, the impacts of the vulnerabilities, their severity and clear and accessible information helping users to remediate the vulnerabilities; in duly justified cases, where manufacturers consider the security risks of publication to outweigh the security benefits, they may delay making public information regarding a fixed vulnerability until after users have been given the possibility to apply the relevant patch;"
+
+  - id: I.P2.5
+    annex: I
+    part: "2"
+    item: "5"
+    title: "Coordinated vulnerability disclosure policy"
+    text: "put in place and enforce a policy on coordinated vulnerability disclosure;"
+
+  - id: I.P2.6
+    annex: I
+    part: "2"
+    item: "6"
+    title: "Facilitate vulnerability information sharing"
+    text: "take measures to facilitate the sharing of information about potential vulnerabilities in their product with digital elements as well as in third-party components contained in that product, including by providing a contact address for the reporting of the vulnerabilities discovered in the product with digital elements;"
+
+  - id: I.P2.7
+    annex: I
+    part: "2"
+    item: "7"
+    title: "Secure update distribution mechanisms"
+    text: "provide for mechanisms to securely distribute updates for products with digital elements to ensure that vulnerabilities are fixed or mitigated in a timely manner and, where applicable for security updates, in an automatic manner;"
+
+  - id: I.P2.8
+    annex: I
+    part: "2"
+    item: "8"
+    title: "Timely, free dissemination of security updates"
+    text: "ensure that, where security updates are available to address identified security issues, they are disseminated without delay and, unless otherwise agreed between a manufacturer and a business user in relation to a tailor-made product with digital elements, free of charge, accompanied by advisory messages providing users with the relevant information, including on potential action to be taken."
+
+  # ----------------------------------------------------------------
+  # Annex II - Information and instructions to the user.
+  # "At minimum, the product with digital elements shall be accompanied by:"
+  # ----------------------------------------------------------------
+
+  - id: II.1
+    annex: II
+    part: ""
+    item: "1"
+    title: "Manufacturer identification and contact"
+    text: "the name, registered trade name or registered trademark of the manufacturer, and the postal address, the email address or other digital contact as well as, where available, the website at which the manufacturer can be contacted;"
+
+  - id: II.2
+    annex: II
+    part: ""
+    item: "2"
+    title: "Single point of contact for vulnerability reporting"
+    text: "the single point of contact where information about vulnerabilities of the product with digital elements can be reported and received, and where the manufacturer's policy on coordinated vulnerability disclosure can be found;"
+
+  - id: II.3
+    annex: II
+    part: ""
+    item: "3"
+    title: "Unique product identification"
+    text: "name and type and any additional information enabling the unique identification of the product with digital elements;"
+
+  - id: II.4
+    annex: II
+    part: ""
+    item: "4"
+    title: "Intended purpose and security properties"
+    text: "the intended purpose of the product with digital elements, including the security environment provided by the manufacturer, as well as the product's essential functionalities and information about the security properties;"
+
+  - id: II.5
+    annex: II
+    part: ""
+    item: "5"
+    title: "Foreseeable misuse risks"
+    text: "any known or foreseeable circumstance, related to the use of the product with digital elements in accordance with its intended purpose or under conditions of reasonably foreseeable misuse, which may lead to significant cybersecurity risks;"
+
+  - id: II.6
+    annex: II
+    part: ""
+    item: "6"
+    title: "EU declaration of conformity address"
+    text: "where applicable, the internet address at which the EU declaration of conformity can be accessed;"
+
+  - id: II.7
+    annex: II
+    part: ""
+    item: "7"
+    title: "Technical security support and support period end-date"
+    text: "the type of technical security support offered by the manufacturer and the end-date of the support period during which users can expect vulnerabilities to be handled and to receive security updates;"
+
+  - id: II.8
+    annex: II
+    part: ""
+    item: "8"
+    title: "Detailed instructions for secure use"
+    text: |-
+      detailed instructions or an internet address referring to such detailed instructions and information on:
+      (a) the necessary measures during initial commissioning and throughout the lifetime of the product with digital elements to ensure its secure use;
+      (b) how changes to the product with digital elements can affect the security of data;
+      (c) how security-relevant updates can be installed;
+      (d) the secure decommissioning of the product with digital elements, including information on how user data can be securely removed;
+      (e) how the default setting enabling the automatic installation of security updates, as required by Part I, point (2)(c), of Annex I, can be turned off;
+      (f) where the product with digital elements is intended for integration into other products with digital elements, the information necessary for the integrator to comply with the essential cybersecurity requirements set out in Annex I and the documentation requirements set out in Annex VII.
+
+  - id: II.9
+    annex: II
+    part: ""
+    item: "9"
+    title: "SBOM availability (optional disclosure)"
+    text: "If the manufacturer decides to make available the software bill of materials to the user, information on where the software bill of materials can be accessed."
+
+  # ----------------------------------------------------------------
+  # Annex VII - Content of the technical documentation.
+  # "The technical documentation referred to in Article 31 shall
+  # contain at least the following information, as applicable to the
+  # relevant product with digital elements:"
+  # ----------------------------------------------------------------
+
+  - id: VII.1
+    annex: VII
+    part: ""
+    item: "1"
+    title: "General product description"
+    text: |-
+      a general description of the product with digital elements, including:
+      (a) its intended purpose;
+      (b) versions of software affecting compliance with essential cybersecurity requirements;
+      (c) where the product with digital elements is a hardware product, photographs or illustrations showing external features, marking and internal layout;
+      (d) user information and instructions as set out in Annex II;
+
+  - id: VII.2
+    annex: VII
+    part: ""
+    item: "2"
+    title: "Design, development, production and vulnerability handling"
+    text: |-
+      a description of the design, development and production of the product with digital elements and vulnerability handling processes, including:
+      (a) necessary information on the design and development of the product with digital elements, including, where applicable, drawings and schemes and a description of the system architecture explaining how software components build on or feed into each other and integrate into the overall processing;
+      (b) necessary information and specifications of the vulnerability handling processes put in place by the manufacturer, including the software bill of materials, the coordinated vulnerability disclosure policy, evidence of the provision of a contact address for the reporting of the vulnerabilities and a description of the technical solutions chosen for the secure distribution of updates;
+      (c) necessary information and specifications of the production and monitoring processes of the product with digital elements and the validation of those processes;
+
+  - id: VII.3
+    annex: VII
+    part: ""
+    item: "3"
+    title: "Cybersecurity risk assessment"
+    text: "an assessment of the cybersecurity risks against which the product with digital elements is designed, developed, produced, delivered and maintained pursuant to Article 13, including how the essential cybersecurity requirements set out in Part I of Annex I are applicable;"
+
+  - id: VII.4
+    annex: VII
+    part: ""
+    item: "4"
+    title: "Support period determination"
+    text: "relevant information that was taken into account to determine the support period pursuant to Article 13(8) of the product with digital elements;"
+
+  - id: VII.5
+    annex: VII
+    part: ""
+    item: "5"
+    title: "Harmonised standards and specifications applied"
+    text: "a list of the harmonised standards applied in full or in part the references of which have been published in the Official Journal of the European Union, common specifications as set out in Article 27 of this Regulation or European cybersecurity certification schemes adopted pursuant to Regulation (EU) 2019/881 pursuant to Article 27(8) of this Regulation, and, where those harmonised standards, common specifications or European cybersecurity certification schemes have not been applied, descriptions of the solutions adopted to meet the essential cybersecurity requirements set out in Parts I and II of Annex I, including a list of other relevant technical specifications applied. In the event of partly applied harmonised standards, common specifications or European cybersecurity certification schemes, the technical documentation shall specify the parts which have been applied;"
+
+  - id: VII.6
+    annex: VII
+    part: ""
+    item: "6"
+    title: "Conformity test reports"
+    text: "reports of the tests carried out to verify the conformity of the product with digital elements and of the vulnerability handling processes with the applicable essential cybersecurity requirements as set out in Parts I and II of Annex I;"
+
+  - id: VII.7
+    annex: VII
+    part: ""
+    item: "7"
+    title: "Copy of EU declaration of conformity"
+    text: "a copy of the EU declaration of conformity;"
+
+  - id: VII.8
+    annex: VII
+    part: ""
+    item: "8"
+    title: "SBOM on market surveillance request"
+    text: "where applicable, the software bill of materials, further to a reasoned request from a market surveillance authority provided that it is necessary in order for that authority to be able to check compliance with the essential cybersecurity requirements set out in Annex I."
