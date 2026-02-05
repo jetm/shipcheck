@@ -1,0 +1,2 @@
+# Binary files - suppress diff, disable EOL conversion, disable text-based merge
+*.pdf binary
