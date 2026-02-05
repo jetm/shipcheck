@@ -907,9 +907,7 @@ class TestScoreAggregationAllChecks:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ):
-        build_dir = _setup_build_dir(
-            tmp_path, include_sbom=False, include_cve=False
-        )
+        build_dir = _setup_build_dir(tmp_path, include_sbom=False, include_cve=False)
         monkeypatch.chdir(tmp_path)
         _invoke_check(build_dir, fmt="json")
         data = _read_json_report(tmp_path)
