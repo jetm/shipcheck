@@ -358,3 +358,228 @@ class TestBaseCheck:
                 severity = "low"
 
             BadCheck()
+
+
+class TestFindingCraMapping:
+    """Finding.cra_mapping field (added for v0.3 CRA evidence layer)."""
+
+    def test_cra_mapping_defaults_to_empty_list(self):
+        f = Finding(message="x", severity="low")
+        assert f.cra_mapping == []
+
+    def test_cra_mapping_accepts_single_id(self):
+        f = Finding(message="x", severity="low", cra_mapping=["I.P2.1"])
+        assert f.cra_mapping == ["I.P2.1"]
+
+    def test_cra_mapping_accepts_multiple_ids(self):
+        f = Finding(
+            message="x",
+            severity="high",
+            cra_mapping=["I.P1.d", "I.P1.f", "VII.2.b"],
+        )
+        assert f.cra_mapping == ["I.P1.d", "I.P1.f", "VII.2.b"]
+
+    def test_cra_mapping_is_list_type(self):
+        f = Finding(message="x", severity="low")
+        assert isinstance(f.cra_mapping, list)
+
+    def test_cra_mapping_default_is_independent_per_instance(self):
+        """default_factory=list must not share the same list across instances."""
+        f1 = Finding(message="a", severity="low")
+        f2 = Finding(message="b", severity="low")
+        f1.cra_mapping.append("I.P2.1")
+        assert f2.cra_mapping == []
+
+
+class TestFindingSources:
+    """Finding.sources field (added for reconciliation per design Decision 8)."""
+
+    def test_sources_defaults_to_empty_list(self):
+        f = Finding(message="x", severity="low")
+        assert f.sources == []
+
+    def test_sources_accepts_single_source(self):
+        f = Finding(message="x", severity="low", sources=["cve-scan"])
+        assert f.sources == ["cve-scan"]
+
+    def test_sources_accepts_multiple_sources(self):
+        f = Finding(
+            message="x",
+            severity="high",
+            sources=["cve-scan", "yocto-cve-check"],
+        )
+        assert f.sources == ["cve-scan", "yocto-cve-check"]
+
+    def test_sources_is_list_type(self):
+        f = Finding(message="x", severity="low")
+        assert isinstance(f.sources, list)
+
+    def test_sources_default_is_independent_per_instance(self):
+        """default_factory=list must not share the same list across instances."""
+        f1 = Finding(message="a", severity="low")
+        f2 = Finding(message="b", severity="low")
+        f1.sources.append("cve-scan")
+        assert f2.sources == []
+
+
+class TestCheckResultCraMapping:
+    """CheckResult.cra_mapping field (added for v0.3 CRA evidence layer)."""
+
+    def test_cra_mapping_defaults_to_empty_list(self):
+        r = CheckResult(
+            check_id="sbom",
+            check_name="SBOM",
+            status=CheckStatus.PASS,
+            score=50,
+            max_score=50,
+            findings=[],
+            summary="ok",
+        )
+        assert r.cra_mapping == []
+
+    def test_cra_mapping_accepts_single_id(self):
+        r = CheckResult(
+            check_id="sbom",
+            check_name="SBOM",
+            status=CheckStatus.PASS,
+            score=50,
+            max_score=50,
+            findings=[],
+            summary="ok",
+            cra_mapping=["I.P2.1"],
+        )
+        assert r.cra_mapping == ["I.P2.1"]
+
+    def test_cra_mapping_accepts_multiple_ids(self):
+        r = CheckResult(
+            check_id="sbom",
+            check_name="SBOM",
+            status=CheckStatus.PASS,
+            score=50,
+            max_score=50,
+            findings=[],
+            summary="ok",
+            cra_mapping=["I.P2.1", "VII.2.b"],
+        )
+        assert r.cra_mapping == ["I.P2.1", "VII.2.b"]
+
+    def test_cra_mapping_is_list_type(self):
+        r = CheckResult(
+            check_id="sbom",
+            check_name="SBOM",
+            status=CheckStatus.PASS,
+            score=50,
+            max_score=50,
+            findings=[],
+            summary="ok",
+        )
+        assert isinstance(r.cra_mapping, list)
+
+    def test_cra_mapping_default_is_independent_per_instance(self):
+        r1 = CheckResult(
+            check_id="a",
+            check_name="A",
+            status=CheckStatus.PASS,
+            score=0,
+            max_score=50,
+            findings=[],
+            summary="",
+        )
+        r2 = CheckResult(
+            check_id="b",
+            check_name="B",
+            status=CheckStatus.PASS,
+            score=0,
+            max_score=50,
+            findings=[],
+            summary="",
+        )
+        r1.cra_mapping.append("I.P2.1")
+        assert r2.cra_mapping == []
+
+
+class TestRoundTripSerialization:
+    """asdict/reconstruction preserves cra_mapping and sources."""
+
+    def test_finding_asdict_contains_cra_mapping(self):
+        from dataclasses import asdict
+
+        f = Finding(
+            message="x",
+            severity="high",
+            cra_mapping=["I.P1.d", "I.P1.f"],
+        )
+        d = asdict(f)
+        assert d["cra_mapping"] == ["I.P1.d", "I.P1.f"]
+
+    def test_finding_asdict_contains_sources(self):
+        from dataclasses import asdict
+
+        f = Finding(
+            message="x",
+            severity="high",
+            sources=["cve-scan", "yocto-cve-check"],
+        )
+        d = asdict(f)
+        assert d["sources"] == ["cve-scan", "yocto-cve-check"]
+
+    def test_finding_round_trip_preserves_cra_mapping_and_sources(self):
+        from dataclasses import asdict
+
+        original = Finding(
+            message="CVE-2024-1234 affects openssl",
+            severity="high",
+            remediation="Upgrade to 3.0.12",
+            details={"cve": "CVE-2024-1234", "package": "openssl"},
+            cra_mapping=["I.P2.2", "I.P2.3"],
+            sources=["cve-scan", "yocto-cve-check"],
+        )
+        d = asdict(original)
+        reconstructed = Finding(**d)
+        assert reconstructed == original
+        assert reconstructed.cra_mapping == ["I.P2.2", "I.P2.3"]
+        assert reconstructed.sources == ["cve-scan", "yocto-cve-check"]
+
+    def test_check_result_asdict_contains_cra_mapping(self):
+        from dataclasses import asdict
+
+        r = CheckResult(
+            check_id="sbom",
+            check_name="SBOM",
+            status=CheckStatus.PASS,
+            score=50,
+            max_score=50,
+            findings=[],
+            summary="ok",
+            cra_mapping=["I.P2.1", "VII.2.b"],
+        )
+        d = asdict(r)
+        assert d["cra_mapping"] == ["I.P2.1", "VII.2.b"]
+
+    def test_check_result_round_trip_preserves_cra_mapping(self):
+        from dataclasses import asdict
+
+        finding = Finding(
+            message="missing SBOM",
+            severity="high",
+            cra_mapping=["I.P2.1"],
+            sources=["sbom"],
+        )
+        original = CheckResult(
+            check_id="sbom",
+            check_name="SBOM",
+            status=CheckStatus.FAIL,
+            score=0,
+            max_score=50,
+            findings=[finding],
+            summary="no SBOM found",
+            cra_mapping=["I.P2.1", "VII.2.b"],
+        )
+        d = asdict(original)
+        # Rebuild nested Finding objects from their dicts.
+        d["findings"] = [Finding(**fd) for fd in d["findings"]]
+        reconstructed = CheckResult(**d)
+        assert reconstructed == original
+        assert reconstructed.cra_mapping == ["I.P2.1", "VII.2.b"]
+        assert reconstructed.findings[0].cra_mapping == ["I.P2.1"]
+        assert reconstructed.findings[0].sources == ["sbom"]
