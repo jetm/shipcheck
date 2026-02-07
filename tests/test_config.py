@@ -373,3 +373,236 @@ class TestShipcheckConfigAllNewSections:
         assert config.secure_boot.known_test_keys == ["dev-*"]
         assert config.image_signing.expect_fit is False
         assert config.image_signing.expect_verity is True
+
+
+
+DEFAULT_SBOM_REQUIRED_FIELDS_FOR_TEST = [
+    "name",
+    "version",
+    "supplier",
+    "license",
+    "checksum",
+]
+
+
+class TestLicenseAuditConfigSection:
+    """Tests for new ShipcheckConfig parsing of license_audit section."""
+
+    def test_missing_license_audit_section_uses_defaults(self):
+        config = ShipcheckConfig.from_dict({})
+
+        assert config.license_audit is not None
+        assert config.license_audit.allowlist == []
+        assert config.license_audit.denylist == []
+        assert config.license_audit.expected_licenses == []
+
+    def test_license_audit_empty_section_uses_defaults(self):
+        config = ShipcheckConfig.from_dict({"license_audit": {}})
+
+        assert config.license_audit.allowlist == []
+        assert config.license_audit.denylist == []
+        assert config.license_audit.expected_licenses == []
+
+    def test_license_audit_custom_values(self):
+        config = ShipcheckConfig.from_dict(
+            {
+                "license_audit": {
+                    "allowlist": ["MIT", "Apache-2.0"],
+                    "denylist": ["AGPL-3.0-only"],
+                    "expected_licenses": ["MIT", "BSD-3-Clause"],
+                }
+            }
+        )
+
+        assert config.license_audit.allowlist == ["MIT", "Apache-2.0"]
+        assert config.license_audit.denylist == ["AGPL-3.0-only"]
+        assert config.license_audit.expected_licenses == ["MIT", "BSD-3-Clause"]
+
+    def test_license_audit_unknown_keys_do_not_crash(self):
+        config = ShipcheckConfig.from_dict(
+            {
+                "license_audit": {
+                    "allowlist": ["MIT"],
+                    "future_field": "ignored",
+                }
+            }
+        )
+
+        assert config.license_audit.allowlist == ["MIT"]
+
+
+class TestYoctoCveConfigSection:
+    """Tests for new ShipcheckConfig parsing of yocto_cve section."""
+
+    def test_missing_yocto_cve_section_uses_defaults(self):
+        config = ShipcheckConfig.from_dict({})
+
+        assert config.yocto_cve is not None
+        assert config.yocto_cve.treat_ignored_as_patched is False
+        assert config.yocto_cve.summary_path is None
+
+    def test_yocto_cve_empty_section_uses_defaults(self):
+        config = ShipcheckConfig.from_dict({"yocto_cve": {}})
+
+        assert config.yocto_cve.treat_ignored_as_patched is False
+        assert config.yocto_cve.summary_path is None
+
+    @pytest.mark.parametrize("value", [True, False])
+    def test_yocto_cve_treat_ignored_as_patched_boolean(self, value):
+        config = ShipcheckConfig.from_dict(
+            {"yocto_cve": {"treat_ignored_as_patched": value}}
+        )
+
+        assert config.yocto_cve.treat_ignored_as_patched is value
+
+    def test_yocto_cve_summary_path_custom(self):
+        config = ShipcheckConfig.from_dict(
+            {"yocto_cve": {"summary_path": "tmp/log/cve/cve-summary.json"}}
+        )
+
+        assert config.yocto_cve.summary_path == "tmp/log/cve/cve-summary.json"
+
+    def test_yocto_cve_unknown_keys_do_not_crash(self):
+        config = ShipcheckConfig.from_dict(
+            {
+                "yocto_cve": {
+                    "treat_ignored_as_patched": True,
+                    "future_key": 42,
+                }
+            }
+        )
+
+        assert config.yocto_cve.treat_ignored_as_patched is True
+
+
+class TestHistoryConfigSection:
+    """Tests for new ShipcheckConfig parsing of history_config section."""
+
+    def test_missing_history_config_section_uses_defaults(self):
+        config = ShipcheckConfig.from_dict({})
+
+        assert config.history is not None
+        assert config.history.enabled is True
+        assert config.history.path == ".shipcheck/history.db"
+
+    def test_history_config_empty_section_uses_defaults(self):
+        config = ShipcheckConfig.from_dict({"history": {}})
+
+        assert config.history.enabled is True
+        assert config.history.path == ".shipcheck/history.db"
+
+    @pytest.mark.parametrize("enabled", [True, False])
+    def test_history_config_enabled_boolean(self, enabled):
+        config = ShipcheckConfig.from_dict({"history": {"enabled": enabled}})
+
+        assert config.history.enabled is enabled
+
+    def test_history_config_custom_path(self):
+        config = ShipcheckConfig.from_dict(
+            {"history": {"path": "/var/lib/shipcheck/history.db"}}
+        )
+
+        assert config.history.path == "/var/lib/shipcheck/history.db"
+
+    def test_history_config_full_section(self):
+        config = ShipcheckConfig.from_dict(
+            {"history": {"enabled": False, "path": "custom/path.db"}}
+        )
+
+        assert config.history.enabled is False
+        assert config.history.path == "custom/path.db"
+
+    def test_history_config_unknown_keys_do_not_crash(self):
+        config = ShipcheckConfig.from_dict(
+            {"history": {"enabled": True, "retention_days": 365}}
+        )
+
+        assert config.history.enabled is True
+
+
+class TestVulnReportingConfigSection:
+    """Tests for new ShipcheckConfig parsing of vuln_reporting section."""
+
+    def test_missing_vuln_reporting_section_uses_defaults(self):
+        config = ShipcheckConfig.from_dict({})
+
+        assert config.vuln_reporting is not None
+
+    def test_vuln_reporting_empty_section_uses_defaults(self):
+        config = ShipcheckConfig.from_dict({"vuln_reporting": {}})
+
+        assert config.vuln_reporting is not None
+
+    def test_vuln_reporting_unknown_keys_do_not_crash(self):
+        config = ShipcheckConfig.from_dict(
+            {"vuln_reporting": {"future_key": "ignored"}}
+        )
+
+        assert config.vuln_reporting is not None
+
+
+class TestProductConfigPathField:
+    """Tests for new top-level product_config_path field."""
+
+    def test_missing_product_config_path_uses_default(self):
+        config = ShipcheckConfig.from_dict({})
+
+        assert config.product_config_path == "product.yaml"
+
+    def test_product_config_path_custom(self):
+        config = ShipcheckConfig.from_dict(
+            {"product_config_path": "configs/my-product.yaml"}
+        )
+
+        assert config.product_config_path == "configs/my-product.yaml"
+
+    def test_default_includes_product_config_path(self):
+        config = ShipcheckConfig.default()
+
+        assert config.product_config_path == "product.yaml"
+
+
+class TestNewConfigSectionsIntegration:
+    """Integration tests for new_config_sections coexisting with existing ones."""
+
+    def test_new_config_sections_coexist_with_defaults(self):
+        config = ShipcheckConfig.from_dict({})
+
+        assert config.license_audit is not None
+        assert config.yocto_cve is not None
+        assert config.history is not None
+        assert config.vuln_reporting is not None
+        assert config.product_config_path == "product.yaml"
+        assert config.sbom.required_fields == DEFAULT_SBOM_REQUIRED_FIELDS_FOR_TEST
+
+    def test_new_config_sections_custom_values(self):
+        config = ShipcheckConfig.from_dict(
+            {
+                "build_dir": "./build",
+                "license_audit": {"denylist": ["AGPL-3.0-only"]},
+                "yocto_cve": {
+                    "treat_ignored_as_patched": True,
+                    "summary_path": "custom.json",
+                },
+                "history": {"enabled": False, "path": "/tmp/history.db"},
+                "vuln_reporting": {},
+                "product_config_path": "my-product.yaml",
+            }
+        )
+
+        assert config.build_dir == Path("./build")
+        assert config.license_audit.denylist == ["AGPL-3.0-only"]
+        assert config.yocto_cve.treat_ignored_as_patched is True
+        assert config.yocto_cve.summary_path == "custom.json"
+        assert config.history.enabled is False
+        assert config.history.path == "/tmp/history.db"
+        assert config.product_config_path == "my-product.yaml"
+
+    def test_new_config_sections_in_default(self):
+        config = ShipcheckConfig.default()
+
+        assert config.license_audit is not None
+        assert config.yocto_cve is not None
+        assert config.history is not None
+        assert config.vuln_reporting is not None
+        assert config.product_config_path == "product.yaml"
