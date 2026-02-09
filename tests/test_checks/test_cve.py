@@ -939,3 +939,65 @@ class TestCVECheckScoring:
 
         # Only the high CVE counts: 50 - 10 = 40
         assert result.score == 40
+
+
+# --- CRA mapping tests ---
+
+
+class TestCVECheckCRAMapping:
+    """Tests asserting CVE findings and CheckResult carry CRA Annex I Part II mappings."""
+
+    def _make_build_with_unpatched(self, tmp_path: Path) -> Path:
+        """Create a build dir with a mix of unpatched CVEs to guarantee findings."""
+        data = {
+            "version": 1,
+            "package": [
+                {
+                    "name": "openssl",
+                    "version": "3.1.4",
+                    "issue": [
+                        {"id": "CVE-2024-0001", "status": "Unpatched", "scorev3": "9.8"},
+                        {"id": "CVE-2024-0002", "status": "Unpatched", "scorev3": "7.5"},
+                        {"id": "CVE-2024-0003", "status": "Unpatched", "scorev3": "5.0"},
+                    ],
+                },
+                {
+                    "name": "busybox",
+                    "version": "1.36.1",
+                    "issue": [
+                        {"id": "CVE-2024-0010", "status": "Unpatched", "scorev3": "3.0"},
+                    ],
+                },
+            ],
+        }
+        images_dir = tmp_path / "tmp" / "deploy" / "images"
+        _write_cve_json(images_dir / "test.sbom-cve-check.yocto.json", data)
+        return tmp_path
+
+    def test_cra_mapping_every_finding_has_p2_2_or_p2_3(self, tmp_path: Path) -> None:
+        """Every CVE finding's cra_mapping contains at least one of I.P2.2 or I.P2.3."""
+        build = self._make_build_with_unpatched(tmp_path)
+
+        check = CVECheck()
+        result = check.run(build, {})
+
+        assert len(result.findings) > 0, "precondition: unpatched CVEs must yield findings"
+        for finding in result.findings:
+            assert "I.P2.2" in finding.cra_mapping or "I.P2.3" in finding.cra_mapping, (
+                f"finding {finding.details} missing Annex I Part II §2/§3 mapping; "
+                f"got cra_mapping={finding.cra_mapping!r}"
+            )
+
+    def test_cra_mapping_check_result_contains_both(self, tmp_path: Path) -> None:
+        """CheckResult.cra_mapping contains both I.P2.2 and I.P2.3."""
+        build = self._make_build_with_unpatched(tmp_path)
+
+        check = CVECheck()
+        result = check.run(build, {})
+
+        assert "I.P2.2" in result.cra_mapping, (
+            f"CheckResult.cra_mapping missing I.P2.2; got {result.cra_mapping!r}"
+        )
+        assert "I.P2.3" in result.cra_mapping, (
+            f"CheckResult.cra_mapping missing I.P2.3; got {result.cra_mapping!r}"
+        )
