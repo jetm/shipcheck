@@ -49,6 +49,39 @@ class ImageSigningConfig:
 
 
 @dataclass
+class LicenseAuditConfig:
+    """License audit check configuration."""
+
+    allowlist: list[str] = field(default_factory=list)
+    denylist: list[str] = field(default_factory=list)
+    expected_licenses: list[str] = field(default_factory=list)
+
+
+@dataclass
+class YoctoCVEConfig:
+    """Yocto cve-check.bbclass integration configuration."""
+
+    treat_ignored_as_patched: bool = False
+    summary_path: str | None = None
+
+
+@dataclass
+class HistoryConfig:
+    """Scan history store configuration."""
+
+    enabled: bool = True
+    path: str = ".shipcheck/history.db"
+
+
+@dataclass
+class VulnReportingConfig:
+    """Vulnerability reporting check configuration.
+
+    Reserved for future fields; the check reads from product.yaml today.
+    """
+
+
+@dataclass
 class ReportConfig:
     """Report output configuration."""
 
@@ -68,7 +101,12 @@ class ShipcheckConfig:
     cve: CveConfig = field(default_factory=CveConfig)
     secure_boot: SecureBootConfig = field(default_factory=SecureBootConfig)
     image_signing: ImageSigningConfig = field(default_factory=ImageSigningConfig)
+    license_audit: LicenseAuditConfig = field(default_factory=LicenseAuditConfig)
+    yocto_cve: YoctoCVEConfig = field(default_factory=YoctoCVEConfig)
+    history: HistoryConfig = field(default_factory=HistoryConfig)
+    vuln_reporting: VulnReportingConfig = field(default_factory=VulnReportingConfig)
     report: ReportConfig = field(default_factory=ReportConfig)
+    product_config_path: str = "product.yaml"
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ShipcheckConfig:
@@ -104,6 +142,30 @@ class ShipcheckConfig:
             expect_verity=image_signing_data.get("expect_verity", True),
         )
 
+        license_audit_data = data.get("license_audit", {})
+        license_audit = LicenseAuditConfig(
+            allowlist=license_audit_data.get("allowlist", []),
+            denylist=license_audit_data.get("denylist", []),
+            expected_licenses=license_audit_data.get("expected_licenses", []),
+        )
+
+        yocto_cve_data = data.get("yocto_cve", {})
+        yocto_cve = YoctoCVEConfig(
+            treat_ignored_as_patched=yocto_cve_data.get("treat_ignored_as_patched", False),
+            summary_path=yocto_cve_data.get("summary_path"),
+        )
+
+        history_data = data.get("history", {})
+        history = HistoryConfig(
+            enabled=history_data.get("enabled", True),
+            path=history_data.get("path", ".shipcheck/history.db"),
+        )
+
+        # VulnReportingConfig has no fields yet; tolerate the section's absence
+        # and any unknown keys without crashing.
+        data.get("vuln_reporting", {})
+        vuln_reporting = VulnReportingConfig()
+
         return cls(
             build_dir=build_dir,
             framework=data.get("framework", "CRA"),
@@ -112,7 +174,12 @@ class ShipcheckConfig:
             cve=cve,
             secure_boot=secure_boot,
             image_signing=image_signing,
+            license_audit=license_audit,
+            yocto_cve=yocto_cve,
+            history=history,
+            vuln_reporting=vuln_reporting,
             report=report,
+            product_config_path=data.get("product_config_path", "product.yaml"),
         )
 
     @classmethod
