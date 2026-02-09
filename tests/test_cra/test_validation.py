@@ -115,7 +115,7 @@ class TestValidateCraMappingsAcceptsValidIds:
             severity="high",
             cra_mapping=["I.P2.1"],
         )
-        report = _report_with_findings([finding], result_mapping=["I.P2.1", "VII.2.b"])
+        report = _report_with_findings([finding], result_mapping=["I.P2.1", "VII.2"])
 
         # Should not raise.
         validate_cra_mappings(report)

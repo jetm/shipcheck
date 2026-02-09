@@ -28,6 +28,8 @@ import yaml
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from shipcheck.models import ReportData
+
 PINNED_SOURCE_VERSION = "OJ L, 20.11.2024"
 
 _CATALOG_PATH = Path(__file__).parent / "requirements.yaml"
@@ -175,3 +177,41 @@ def is_valid_id(id: str) -> bool:  # noqa: A002 - matches documented API
     if not id:
         return False
     return id in load_catalog().requirements
+
+
+def validate_cra_mappings(report: ReportData) -> None:
+    """Validate every ``cra_mapping`` entry against the loaded CRA catalog.
+
+    Walks each :class:`~shipcheck.models.CheckResult` in ``report.checks``
+    and every :class:`~shipcheck.models.Finding` contained within, checking
+    that every string in the ``cra_mapping`` lists resolves to a known
+    catalog ID via :func:`is_valid_id`. Raises on the first invalid entry
+    so the report pipeline never cites a phantom requirement.
+
+    The catalog lookup is O(1) per ID (backed by the ``load_catalog``
+    singleton), so overall cost is O(n) in the total number of mapping
+    entries across the report.
+
+    Args:
+        report: Fully populated report about to be handed to a renderer.
+
+    Raises:
+        ValueError: If any ``cra_mapping`` entry is not a catalog ID. The
+            message names both the offending ID and the enclosing finding's
+            ``message`` (for check-level mappings, the check's ``check_id``
+            is used instead).
+    """
+    for result in report.checks:
+        for mapping_id in result.cra_mapping:
+            if not is_valid_id(mapping_id):
+                raise ValueError(
+                    f"unknown CRA requirement id {mapping_id!r} on "
+                    f"check {result.check_id!r}"
+                )
+        for finding in result.findings:
+            for mapping_id in finding.cra_mapping:
+                if not is_valid_id(mapping_id):
+                    raise ValueError(
+                        f"unknown CRA requirement id {mapping_id!r} on "
+                        f"finding {finding.message!r}"
+                    )
