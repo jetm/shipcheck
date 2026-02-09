@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import abc
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -28,6 +28,8 @@ class Finding:
     severity: str  # "critical" | "high" | "medium" | "low"
     remediation: str | None = None
     details: dict | None = None
+    cra_mapping: list[str] = field(default_factory=list)
+    sources: list[str] = field(default_factory=list)
 
 
 def determine_status(findings: list[Finding]) -> CheckStatus:
@@ -57,6 +59,7 @@ class CheckResult:
     max_score: int
     findings: list[Finding]
     summary: str
+    cra_mapping: list[str] = field(default_factory=list)
 
 
 @dataclass
