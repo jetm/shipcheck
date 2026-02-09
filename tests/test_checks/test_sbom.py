@@ -1087,3 +1087,165 @@ class TestScoringEdgeCases:
         _write_spdx(spdx_dir / "image.spdx.json", doc)
         result = sbom_check.run(tmp_path, {})
         assert result.max_score == 50
+
+
+
+class TestCraMappingOnFindings:
+    """Every Finding returned by SBOMCheck.run() carries `I.P2.1` in `cra_mapping`.
+
+    CRA mapping comes from spec `cra-requirement-mapping/spec.md` → "Existing checks emit
+    mappings": SBOM findings evidence Annex I Part II §1 (`I.P2.1` - SBOM provision).
+    """
+
+    def test_cra_mapping_missing_spdx_dir(self, tmp_path: Path, sbom_check: SBOMCheck):
+        result = sbom_check.run(tmp_path, {})
+        assert result.findings
+        for finding in result.findings:
+            assert "I.P2.1" in finding.cra_mapping
+
+    def test_cra_mapping_empty_spdx_dir(self, tmp_path: Path, sbom_check: SBOMCheck):
+        (tmp_path / "tmp" / "deploy" / "spdx").mkdir(parents=True)
+        result = sbom_check.run(tmp_path, {})
+        assert result.findings
+        for finding in result.findings:
+            assert "I.P2.1" in finding.cra_mapping
+
+    def test_cra_mapping_all_invalid_json(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        spdx_dir.mkdir(parents=True)
+        (spdx_dir / "broken.spdx.json").write_text("{not valid json")
+        result = sbom_check.run(tmp_path, {})
+        assert result.findings
+        for finding in result.findings:
+            assert "I.P2.1" in finding.cra_mapping
+
+    def test_cra_mapping_unrecognized_format(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", {"unknown": "format"})
+        result = sbom_check.run(tmp_path, {})
+        assert result.findings
+        for finding in result.findings:
+            assert "I.P2.1" in finding.cra_mapping
+
+    def test_cra_mapping_missing_metadata_findings(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        doc = _make_spdx_doc(has_describes=True)
+        del doc["creationInfo"]
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        assert result.findings
+        for finding in result.findings:
+            assert "I.P2.1" in finding.cra_mapping
+
+    def test_cra_mapping_per_package_findings(self, tmp_path: Path, sbom_check: SBOMCheck):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        bad_pkg = _make_compliant_package("bad")
+        bad_pkg["supplier"] = "NOASSERTION"
+        bad_pkg["licenseDeclared"] = "NOASSERTION"
+        doc = _make_spdx_doc(packages=[bad_pkg], has_describes=True)
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        assert result.findings
+        for finding in result.findings:
+            assert "I.P2.1" in finding.cra_mapping
+
+
+class TestCraMappingOnCheckResult:
+    """CheckResult.cra_mapping contains `I.P2.1` for every SBOMCheck.run() path."""
+
+    def test_cra_mapping_check_result_missing_spdx_dir(
+        self, tmp_path: Path, sbom_check: SBOMCheck
+    ):
+        result = sbom_check.run(tmp_path, {})
+        assert "I.P2.1" in result.cra_mapping
+
+    def test_cra_mapping_check_result_empty_spdx_dir(
+        self, tmp_path: Path, sbom_check: SBOMCheck
+    ):
+        (tmp_path / "tmp" / "deploy" / "spdx").mkdir(parents=True)
+        result = sbom_check.run(tmp_path, {})
+        assert "I.P2.1" in result.cra_mapping
+
+    def test_cra_mapping_check_result_unrecognized_format(
+        self, tmp_path: Path, sbom_check: SBOMCheck
+    ):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", {"unknown": "format"})
+        result = sbom_check.run(tmp_path, {})
+        assert "I.P2.1" in result.cra_mapping
+
+    def test_cra_mapping_check_result_spdx3_detection_only(
+        self, tmp_path: Path, sbom_check: SBOMCheck
+    ):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", _make_spdx3_doc())
+        result = sbom_check.run(tmp_path, {})
+        assert "I.P2.1" in result.cra_mapping
+
+    def test_cra_mapping_check_result_cyclonedx_detection_only(
+        self, tmp_path: Path, sbom_check: SBOMCheck
+    ):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", _make_cyclonedx_doc())
+        result = sbom_check.run(tmp_path, {})
+        assert "I.P2.1" in result.cra_mapping
+
+    def test_cra_mapping_check_result_fully_compliant_spdx2(
+        self, tmp_path: Path, sbom_check: SBOMCheck
+    ):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        doc = _make_spdx_doc(
+            packages=[_make_compliant_package("pkg1")],
+            has_describes=True,
+        )
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        assert "I.P2.1" in result.cra_mapping
+
+
+class TestCraMappingFormatValidation:
+    """Findings about SBOM format validation additionally cite Annex VII §2.
+
+    The catalog stores only top-level Annex VII IDs (`VII.2`), not sub-items like
+    `VII.2.b`, so mappings use `VII.2`. Format-validation findings are those about
+    the SPDX/CycloneDX format itself and the field-level compliance required by
+    BSI TR-03183-2 (document metadata and per-package fields).
+    """
+
+    def test_cra_mapping_unrecognized_format_cites_vii_2(
+        self, tmp_path: Path, sbom_check: SBOMCheck
+    ):
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", {"unknown": "format"})
+        result = sbom_check.run(tmp_path, {})
+        format_findings = [f for f in result.findings if "format" in f.message.lower()]
+        assert format_findings, "expected at least one finding about SBOM format"
+        for finding in format_findings:
+            assert "VII.2" in finding.cra_mapping
+
+    def test_cra_mapping_metadata_field_findings_cite_vii_2(
+        self, tmp_path: Path, sbom_check: SBOMCheck
+    ):
+        """Missing creationInfo fields are SPDX format-validation issues."""
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        doc = _make_spdx_doc(has_describes=True)
+        del doc["creationInfo"]
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        assert result.findings
+        for finding in result.findings:
+            assert "VII.2" in finding.cra_mapping
+
+    def test_cra_mapping_per_package_field_findings_cite_vii_2(
+        self, tmp_path: Path, sbom_check: SBOMCheck
+    ):
+        """Missing per-package BSI-required fields are format-validation issues."""
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        bad_pkg = _make_compliant_package("bad")
+        bad_pkg["supplier"] = "NOASSERTION"
+        doc = _make_spdx_doc(packages=[bad_pkg], has_describes=True)
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        assert result.findings
+        for finding in result.findings:
+            assert "VII.2" in finding.cra_mapping
