@@ -468,3 +468,138 @@ class TestEdgeCases:
             CheckStatus.FAIL,
             CheckStatus.WARN,
         )
+
+
+# --- TestCRAMapping ---
+
+
+class TestCRAMappingOnCheckResult:
+    """CheckResult.cra_mapping must contain both `I.P1.d` and `I.P1.f`.
+
+    CRA mapping comes from spec `cra-requirement-mapping/spec.md` -> "Existing
+    checks emit mappings": Secure Boot evidences Annex I Part I (d) protection
+    from unauthorised access and (f) protection of integrity.
+    """
+
+    def test_cra_mapping_empty_build_dir(self, tmp_path: Path, check: SecureBootCheck) -> None:
+        result = check.run(tmp_path, {})
+        assert "I.P1.d" in result.cra_mapping
+        assert "I.P1.f" in result.cra_mapping
+
+    def test_cra_mapping_missing_conf_dir(self, tmp_path: Path, check: SecureBootCheck) -> None:
+        (tmp_path / "tmp").mkdir()
+        result = check.run(tmp_path, {})
+        assert "I.P1.d" in result.cra_mapping
+        assert "I.P1.f" in result.cra_mapping
+
+    def test_cra_mapping_no_signing_class(self, tmp_path: Path, check: SecureBootCheck) -> None:
+        _write_conf(tmp_path, "local.conf", 'MACHINE = "qemux86-64"\n')
+        result = check.run(tmp_path, {})
+        assert "I.P1.d" in result.cra_mapping
+        assert "I.P1.f" in result.cra_mapping
+
+    def test_cra_mapping_signing_without_keys(
+        self, tmp_path: Path, check: SecureBootCheck
+    ) -> None:
+        _write_conf(tmp_path, "local.conf", 'IMAGE_CLASSES += "uefi-sign"\n')
+        result = check.run(tmp_path, {})
+        assert "I.P1.d" in result.cra_mapping
+        assert "I.P1.f" in result.cra_mapping
+
+    def test_cra_mapping_test_key(self, tmp_path: Path, check: SecureBootCheck) -> None:
+        keys = _create_key_files(tmp_path, "test-signing.key")
+        _write_conf(
+            tmp_path,
+            "local.conf",
+            (f'IMAGE_CLASSES += "uefi-sign"\nSECURE_BOOT_SIGNING_KEY = "{keys[0]}"\n'),
+        )
+        result = check.run(tmp_path, {})
+        assert "I.P1.d" in result.cra_mapping
+        assert "I.P1.f" in result.cra_mapping
+
+    def test_cra_mapping_fully_configured(self, tmp_path: Path, check: SecureBootCheck) -> None:
+        keys = _create_key_files(tmp_path, "production.key")
+        _write_conf(
+            tmp_path,
+            "local.conf",
+            (f'IMAGE_CLASSES += "uefi-sign"\nSECURE_BOOT_SIGNING_KEY = "{keys[0]}"\n'),
+        )
+        result = check.run(tmp_path, {})
+        assert "I.P1.d" in result.cra_mapping
+        assert "I.P1.f" in result.cra_mapping
+
+    def test_cra_mapping_efi_without_signing(
+        self, tmp_path: Path, check: SecureBootCheck
+    ) -> None:
+        _create_efi_artifacts(tmp_path)
+        _write_conf(tmp_path, "local.conf", 'MACHINE = "qemux86-64"\n')
+        result = check.run(tmp_path, {})
+        assert "I.P1.d" in result.cra_mapping
+        assert "I.P1.f" in result.cra_mapping
+
+
+class TestCRAMappingOnFindings:
+    """Every Secure Boot finding must carry `cra_mapping` including at least one
+    of `I.P1.d` or `I.P1.f`.
+    """
+
+    def _assert_mapping(self, findings: list) -> None:
+        assert findings, "expected at least one finding"
+        for finding in findings:
+            assert finding.cra_mapping, (
+                f"Finding '{finding.message}' has empty cra_mapping"
+            )
+            assert "I.P1.d" in finding.cra_mapping or "I.P1.f" in finding.cra_mapping, (
+                f"Finding '{finding.message}' missing both I.P1.d and I.P1.f "
+                f"(got {finding.cra_mapping!r})"
+            )
+
+    def test_cra_mapping_no_configs(self, tmp_path: Path, check: SecureBootCheck) -> None:
+        result = check.run(tmp_path, {})
+        self._assert_mapping(result.findings)
+
+    def test_cra_mapping_no_configs_with_efi(
+        self, tmp_path: Path, check: SecureBootCheck
+    ) -> None:
+        _create_efi_artifacts(tmp_path)
+        result = check.run(tmp_path, {})
+        self._assert_mapping(result.findings)
+
+    def test_cra_mapping_no_signing_class(self, tmp_path: Path, check: SecureBootCheck) -> None:
+        _write_conf(tmp_path, "local.conf", 'MACHINE = "qemux86-64"\n')
+        result = check.run(tmp_path, {})
+        self._assert_mapping(result.findings)
+
+    def test_cra_mapping_signing_without_keys(
+        self, tmp_path: Path, check: SecureBootCheck
+    ) -> None:
+        _write_conf(tmp_path, "local.conf", 'IMAGE_CLASSES += "uefi-sign"\n')
+        result = check.run(tmp_path, {})
+        self._assert_mapping(result.findings)
+
+    def test_cra_mapping_missing_key_file(self, tmp_path: Path, check: SecureBootCheck) -> None:
+        _write_conf(
+            tmp_path,
+            "local.conf",
+            ('IMAGE_CLASSES += "uefi-sign"\nSECURE_BOOT_SIGNING_KEY = "/nonexistent/key.pem"\n'),
+        )
+        result = check.run(tmp_path, {})
+        self._assert_mapping(result.findings)
+
+    def test_cra_mapping_test_key(self, tmp_path: Path, check: SecureBootCheck) -> None:
+        keys = _create_key_files(tmp_path, "test-signing.key")
+        _write_conf(
+            tmp_path,
+            "local.conf",
+            (f'IMAGE_CLASSES += "uefi-sign"\nSECURE_BOOT_SIGNING_KEY = "{keys[0]}"\n'),
+        )
+        result = check.run(tmp_path, {})
+        self._assert_mapping(result.findings)
+
+    def test_cra_mapping_efi_without_signing(
+        self, tmp_path: Path, check: SecureBootCheck
+    ) -> None:
+        _create_efi_artifacts(tmp_path)
+        _write_conf(tmp_path, "local.conf", 'MACHINE = "qemux86-64"\n')
+        result = check.run(tmp_path, {})
+        self._assert_mapping(result.findings)
