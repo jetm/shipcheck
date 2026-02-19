@@ -377,3 +377,102 @@ class TestEdgeCases:
         config = {"expect_fit": False, "expect_verity": True}
         result = check.run(tmp_path, config)
         assert result.score == 0
+
+
+class TestCRAMapping:
+    """Tests for CRA requirement mappings on image-signing findings and result."""
+
+    def test_result_cra_mapping_contains_ip1f(self, check: ImageSigningCheck, tmp_path: Path):
+        """CheckResult.cra_mapping must contain 'I.P1.f' (integrity)."""
+        _deploy_dir(tmp_path)
+        config = {"expect_fit": True, "expect_verity": True}
+        result = check.run(tmp_path, config)
+        assert "I.P1.f" in result.cra_mapping
+
+    def test_result_cra_mapping_present_fit_only(self, check: ImageSigningCheck, tmp_path: Path):
+        """CheckResult.cra_mapping must contain 'I.P1.f' when only FIT expected."""
+        _deploy_dir(tmp_path)
+        config = {"expect_fit": True, "expect_verity": False}
+        result = check.run(tmp_path, config)
+        assert "I.P1.f" in result.cra_mapping
+
+    def test_result_cra_mapping_present_verity_only(self, check: ImageSigningCheck, tmp_path: Path):
+        """CheckResult.cra_mapping must contain 'I.P1.f' when only verity expected."""
+        _deploy_dir(tmp_path)
+        config = {"expect_fit": False, "expect_verity": True}
+        result = check.run(tmp_path, config)
+        assert "I.P1.f" in result.cra_mapping
+
+    def test_every_finding_cra_mapping_has_ip1f(self, check: ImageSigningCheck, tmp_path: Path):
+        """Every image-signing finding must carry 'I.P1.f' in its cra_mapping."""
+        _deploy_dir(tmp_path)
+        config = {"expect_fit": True, "expect_verity": True}
+        result = check.run(tmp_path, config)
+        assert len(result.findings) > 0, "Expected findings when nothing is present"
+        for finding in result.findings:
+            assert "I.P1.f" in finding.cra_mapping, (
+                f"Finding '{finding.message}' missing I.P1.f mapping"
+            )
+
+    def test_unsigned_fit_finding_cra_mapping_has_ip1f(
+        self, check: ImageSigningCheck, tmp_path: Path
+    ):
+        """Unsigned FIT finding must carry 'I.P1.f'."""
+        deploy = _deploy_dir(tmp_path)
+        (deploy / "fitImage.itb").write_bytes(FIT_UNSIGNED_CONTENT)
+        config = {"expect_fit": True, "expect_verity": False}
+        result = check.run(tmp_path, config)
+        unsigned_findings = [f for f in result.findings if "Unsigned FIT" in f.message]
+        assert unsigned_findings, "Expected an Unsigned FIT finding"
+        for finding in unsigned_findings:
+            assert "I.P1.f" in finding.cra_mapping
+
+    def test_missing_fit_finding_cra_mapping_has_ip1f(
+        self, check: ImageSigningCheck, tmp_path: Path
+    ):
+        """Missing FIT finding must carry 'I.P1.f'."""
+        _deploy_dir(tmp_path)
+        config = {"expect_fit": True, "expect_verity": False}
+        result = check.run(tmp_path, config)
+        fit_findings = [f for f in result.findings if "FIT" in f.message]
+        assert fit_findings, "Expected a FIT-related finding"
+        for finding in fit_findings:
+            assert "I.P1.f" in finding.cra_mapping
+
+    def test_verity_finding_cra_mapping_has_ip1f_and_ip1k(
+        self, check: ImageSigningCheck, tmp_path: Path
+    ):
+        """dm-verity-specific findings must include both 'I.P1.f' and 'I.P1.k'."""
+        _deploy_dir(tmp_path)
+        config = {"expect_fit": False, "expect_verity": True}
+        result = check.run(tmp_path, config)
+        verity_findings = [
+            f
+            for f in result.findings
+            if "verity" in f.message.lower() or "dm-verity" in f.message.lower()
+        ]
+        assert verity_findings, "Expected a dm-verity-related finding"
+        for finding in verity_findings:
+            assert "I.P1.f" in finding.cra_mapping, (
+                f"verity finding '{finding.message}' missing I.P1.f"
+            )
+            assert "I.P1.k" in finding.cra_mapping, (
+                f"verity finding '{finding.message}' missing I.P1.k"
+            )
+
+    def test_non_verity_finding_cra_mapping_does_not_require_ip1k(
+        self, check: ImageSigningCheck, tmp_path: Path
+    ):
+        """FIT-only findings need I.P1.f but not necessarily I.P1.k."""
+        deploy = _deploy_dir(tmp_path)
+        (deploy / "fitImage.itb").write_bytes(FIT_UNSIGNED_CONTENT)
+        config = {"expect_fit": True, "expect_verity": False}
+        result = check.run(tmp_path, config)
+        fit_findings = [
+            f
+            for f in result.findings
+            if "verity" not in f.message.lower() and "dm-verity" not in f.message.lower()
+        ]
+        assert fit_findings, "Expected at least one non-verity finding"
+        for finding in fit_findings:
+            assert "I.P1.f" in finding.cra_mapping
