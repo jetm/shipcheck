@@ -1,0 +1,24 @@
+PACKAGE NAME: busybox
+PACKAGE VERSION: 1.36.1
+RECIPE NAME: busybox
+LICENSE: MIT
+
+PACKAGE NAME: zlib
+PACKAGE VERSION: 1.3.1
+RECIPE NAME: zlib
+LICENSE: BSD-3-Clause
+
+PACKAGE NAME: acme-sensor-daemon
+PACKAGE VERSION: 4.2.0
+RECIPE NAME: acme-sensor-daemon
+LICENSE: Acme-Closed-1.0
+
+PACKAGE NAME: openssl
+PACKAGE VERSION: 3.2.1
+RECIPE NAME: openssl
+LICENSE: Apache-2.0
+
+PACKAGE NAME: acme-bootloader-shim
+PACKAGE VERSION: 1.0.3
+RECIPE NAME: acme-bootloader-shim
+LICENSE: Acme-Closed-1.0
