@@ -1,0 +1,47 @@
+# Canonical SPDX-ID to license category mapping for LicenseAuditCheck.
+#
+# Each top-level key is a category bucket; the list contains the SPDX license
+# identifiers that belong to that bucket. Identifiers not listed here are
+# classified as `unknown` by the LicenseAuditCheck.
+#
+# Categories:
+#   permissive        - Minimal restrictions; allow proprietary redistribution.
+#   weak-copyleft     - Copyleft limited to the licensed files or library.
+#   strong-copyleft   - Copyleft extends to derivative works.
+#   network-copyleft  - Copyleft triggered by network interaction (SaaS).
+#   proprietary       - Closed-source or commercial licenses.
+
+permissive:
+  - MIT
+  - BSD-2-Clause
+  - BSD-3-Clause
+  - Apache-2.0
+  - ISC
+  - Zlib
+  - X11
+  - Unlicense
+
+weak-copyleft:
+  - LGPL-2.0-only
+  - LGPL-2.0-or-later
+  - LGPL-2.1-only
+  - LGPL-2.1-or-later
+  - LGPL-3.0-only
+  - LGPL-3.0-or-later
+  - MPL-2.0
+  - EPL-2.0
+
+strong-copyleft:
+  - GPL-2.0-only
+  - GPL-2.0-or-later
+  - GPL-3.0-only
+  - GPL-3.0-or-later
+
+network-copyleft:
+  - AGPL-3.0-only
+  - AGPL-3.0-or-later
+
+proprietary:
+  - Proprietary
+  - CLOSED
+  - Commercial
