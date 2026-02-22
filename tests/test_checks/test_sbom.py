@@ -1089,7 +1089,6 @@ class TestScoringEdgeCases:
         assert result.max_score == 50
 
 
-
 class TestCraMappingOnFindings:
     """Every Finding returned by SBOMCheck.run() carries `I.P2.1` in `cra_mapping`.
 
@@ -1153,15 +1152,11 @@ class TestCraMappingOnFindings:
 class TestCraMappingOnCheckResult:
     """CheckResult.cra_mapping contains `I.P2.1` for every SBOMCheck.run() path."""
 
-    def test_cra_mapping_check_result_missing_spdx_dir(
-        self, tmp_path: Path, sbom_check: SBOMCheck
-    ):
+    def test_cra_mapping_check_result_missing_spdx_dir(self, tmp_path: Path, sbom_check: SBOMCheck):
         result = sbom_check.run(tmp_path, {})
         assert "I.P2.1" in result.cra_mapping
 
-    def test_cra_mapping_check_result_empty_spdx_dir(
-        self, tmp_path: Path, sbom_check: SBOMCheck
-    ):
+    def test_cra_mapping_check_result_empty_spdx_dir(self, tmp_path: Path, sbom_check: SBOMCheck):
         (tmp_path / "tmp" / "deploy" / "spdx").mkdir(parents=True)
         result = sbom_check.run(tmp_path, {})
         assert "I.P2.1" in result.cra_mapping

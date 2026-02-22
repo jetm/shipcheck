@@ -77,9 +77,7 @@ class CraCatalog:
             transcribed from (e.g. ``"OJ L, 20.11.2024"``).
     """
 
-    requirements: Mapping[str, CraRequirement] = field(
-        default_factory=lambda: MappingProxyType({})
-    )
+    requirements: Mapping[str, CraRequirement] = field(default_factory=lambda: MappingProxyType({}))
     source_version: str = ""
 
 
@@ -92,9 +90,7 @@ def _build_catalog(raw: object) -> CraCatalog:
     to ``"1"``/``"2"`` rather than ``1``/``2``.
     """
     if not isinstance(raw, dict):
-        raise CraCatalogError(
-            "requirements.yaml must contain a top-level mapping"
-        )
+        raise CraCatalogError("requirements.yaml must contain a top-level mapping")
 
     source_version = raw.get("source_version")
     if source_version != PINNED_SOURCE_VERSION:
@@ -105,9 +101,7 @@ def _build_catalog(raw: object) -> CraCatalog:
 
     entries = raw.get("requirements")
     if not isinstance(entries, list) or not entries:
-        raise CraCatalogError(
-            "requirements.yaml must define a non-empty 'requirements' list"
-        )
+        raise CraCatalogError("requirements.yaml must define a non-empty 'requirements' list")
 
     built: dict[str, CraRequirement] = {}
     for index, entry in enumerate(entries):
@@ -157,13 +151,9 @@ def load_catalog() -> CraCatalog:
         with _CATALOG_PATH.open("r", encoding="utf-8") as fh:
             raw = yaml.safe_load(fh)
     except FileNotFoundError as exc:
-        raise CraCatalogError(
-            f"CRA catalog file not found at {_CATALOG_PATH}"
-        ) from exc
+        raise CraCatalogError(f"CRA catalog file not found at {_CATALOG_PATH}") from exc
     except yaml.YAMLError as exc:
-        raise CraCatalogError(
-            f"failed to parse {_CATALOG_PATH}: {exc}"
-        ) from exc
+        raise CraCatalogError(f"failed to parse {_CATALOG_PATH}: {exc}") from exc
 
     return _build_catalog(raw)
 
@@ -205,13 +195,11 @@ def validate_cra_mappings(report: ReportData) -> None:
         for mapping_id in result.cra_mapping:
             if not is_valid_id(mapping_id):
                 raise ValueError(
-                    f"unknown CRA requirement id {mapping_id!r} on "
-                    f"check {result.check_id!r}"
+                    f"unknown CRA requirement id {mapping_id!r} on check {result.check_id!r}"
                 )
         for finding in result.findings:
             for mapping_id in finding.cra_mapping:
                 if not is_valid_id(mapping_id):
                     raise ValueError(
-                        f"unknown CRA requirement id {mapping_id!r} on "
-                        f"finding {finding.message!r}"
+                        f"unknown CRA requirement id {mapping_id!r} on finding {finding.message!r}"
                     )

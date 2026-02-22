@@ -20,7 +20,9 @@ FIXTURES_DIR = Path(__file__).resolve().parent.parent / "fixtures" / "yocto_cve"
 _DEFAULT_SUMMARY_RELPATH = Path("tmp") / "log" / "cve" / "cve-summary.json"
 
 
-def _place_summary(build_dir: Path, fixture_name: str, relpath: Path = _DEFAULT_SUMMARY_RELPATH) -> Path:
+def _place_summary(
+    build_dir: Path, fixture_name: str, relpath: Path = _DEFAULT_SUMMARY_RELPATH
+) -> Path:
     """Copy a fixture summary file into ``build_dir`` at ``relpath``."""
     src = FIXTURES_DIR / fixture_name
     dst = build_dir / relpath
@@ -76,9 +78,9 @@ class TestMalformedSummary:
         detail_text = " ".join(
             [result.summary or ""] + [f.message or "" for f in result.findings]
         ).lower()
-        assert any(
-            token in detail_text for token in ("parse", "json", "decode", "malformed")
-        ), f"finding does not describe a parse error: {detail_text!r}"
+        assert any(token in detail_text for token in ("parse", "json", "decode", "malformed")), (
+            f"finding does not describe a parse error: {detail_text!r}"
+        )
 
 
 # --- (c)+(d) schema tolerance: Kirkstone nested and Scarthgap flat ----------
@@ -156,9 +158,7 @@ class TestIgnoredHandling:
                 blob += " " + json.dumps(f.details)
             for token in blob.replace(",", " ").split():
                 if token.startswith("CVE-"):
-                    ids_by_severity.setdefault(f.severity.lower(), set()).add(
-                        token.strip(":.,);")
-                    )
+                    ids_by_severity.setdefault(f.severity.lower(), set()).add(token.strip(":.,);"))
 
         info_ids = ids_by_severity.get("info", set())
         assert "CVE-2023-0465" in info_ids, (
@@ -190,7 +190,9 @@ class TestIgnoredHandling:
 class TestCraMapping:
     """Each finding carries an Annex I Part II §2 / §3 reference."""
 
-    @pytest.mark.parametrize("fixture", ["cve-summary-kirkstone.json", "cve-summary-scarthgap.json"])
+    @pytest.mark.parametrize(
+        "fixture", ["cve-summary-kirkstone.json", "cve-summary-scarthgap.json"]
+    )
     def test_every_finding_maps_to_annex_i_part_ii(self, tmp_path: Path, fixture: str) -> None:
         _place_summary(tmp_path, fixture)
 

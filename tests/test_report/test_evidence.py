@@ -172,10 +172,7 @@ class TestGapsSection:
         check = _check_with(findings, cra_mapping=all_ids)
         output = render(_make_report(checks=[check]))
 
-        assert (
-            "All CRA requirements have at least one evidence mapping"
-            in output
-        )
+        assert "All CRA requirements have at least one evidence mapping" in output
 
 
 @pytest.mark.timeout(15)

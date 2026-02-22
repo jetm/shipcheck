@@ -375,7 +375,6 @@ class TestShipcheckConfigAllNewSections:
         assert config.image_signing.expect_verity is True
 
 
-
 DEFAULT_SBOM_REQUIRED_FIELDS_FOR_TEST = [
     "name",
     "version",
@@ -449,9 +448,7 @@ class TestYoctoCveConfigSection:
 
     @pytest.mark.parametrize("value", [True, False])
     def test_yocto_cve_treat_ignored_as_patched_boolean(self, value):
-        config = ShipcheckConfig.from_dict(
-            {"yocto_cve": {"treat_ignored_as_patched": value}}
-        )
+        config = ShipcheckConfig.from_dict({"yocto_cve": {"treat_ignored_as_patched": value}})
 
         assert config.yocto_cve.treat_ignored_as_patched is value
 
@@ -498,9 +495,7 @@ class TestHistoryConfigSection:
         assert config.history.enabled is enabled
 
     def test_history_config_custom_path(self):
-        config = ShipcheckConfig.from_dict(
-            {"history": {"path": "/var/lib/shipcheck/history.db"}}
-        )
+        config = ShipcheckConfig.from_dict({"history": {"path": "/var/lib/shipcheck/history.db"}})
 
         assert config.history.path == "/var/lib/shipcheck/history.db"
 
@@ -513,9 +508,7 @@ class TestHistoryConfigSection:
         assert config.history.path == "custom/path.db"
 
     def test_history_config_unknown_keys_do_not_crash(self):
-        config = ShipcheckConfig.from_dict(
-            {"history": {"enabled": True, "retention_days": 365}}
-        )
+        config = ShipcheckConfig.from_dict({"history": {"enabled": True, "retention_days": 365}})
 
         assert config.history.enabled is True
 
@@ -534,9 +527,7 @@ class TestVulnReportingConfigSection:
         assert config.vuln_reporting is not None
 
     def test_vuln_reporting_unknown_keys_do_not_crash(self):
-        config = ShipcheckConfig.from_dict(
-            {"vuln_reporting": {"future_key": "ignored"}}
-        )
+        config = ShipcheckConfig.from_dict({"vuln_reporting": {"future_key": "ignored"}})
 
         assert config.vuln_reporting is not None
 
@@ -550,9 +541,7 @@ class TestProductConfigPathField:
         assert config.product_config_path == "product.yaml"
 
     def test_product_config_path_custom(self):
-        config = ShipcheckConfig.from_dict(
-            {"product_config_path": "configs/my-product.yaml"}
-        )
+        config = ShipcheckConfig.from_dict({"product_config_path": "configs/my-product.yaml"})
 
         assert config.product_config_path == "configs/my-product.yaml"
 

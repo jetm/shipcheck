@@ -88,9 +88,7 @@ class TestDiscoverySkipWhenMissing:
 
 
 class TestDiscoveryPicksMostRecent:
-    def test_selects_newer_image_when_two_exist(
-        self, tmp_path: Path, check: LicenseAuditCheck
-    ):
+    def test_selects_newer_image_when_two_exist(self, tmp_path: Path, check: LicenseAuditCheck):
         older = _copy_image("core-image-minimal", tmp_path, image_name="core-image-minimal")
         newer = _copy_image("core-image-mixed", tmp_path, image_name="core-image-mixed")
 
@@ -112,9 +110,7 @@ class TestDiscoveryPicksMostRecent:
         # Make the alphabetically-earlier one OLDER; discovery must still pick
         # the newer, alphabetically-later one.
         agpl = _copy_image("core-image-agpl", tmp_path, image_name="core-image-agpl")
-        minimal = _copy_image(
-            "core-image-minimal", tmp_path, image_name="core-image-minimal"
-        )
+        minimal = _copy_image("core-image-minimal", tmp_path, image_name="core-image-minimal")
 
         _set_mtime(agpl, 1_600_000_000.0)
         _set_mtime(minimal, 1_900_000_000.0)
@@ -138,29 +134,17 @@ class TestClassification:
         assert "network-copyleft" not in blob and "network_copyleft" not in blob
         assert result.status != CheckStatus.FAIL
 
-    def test_gpl_2_only_is_strong_copyleft(
-        self, tmp_path: Path, check: LicenseAuditCheck
-    ):
+    def test_gpl_2_only_is_strong_copyleft(self, tmp_path: Path, check: LicenseAuditCheck):
         _copy_image("core-image-mixed", tmp_path)
         result = check.run(tmp_path, {})
         blob = _collect_text(result)
-        assert (
-            "strong-copyleft" in blob
-            or "strong_copyleft" in blob
-            or "GPL-2.0-only" in blob
-        )
+        assert "strong-copyleft" in blob or "strong_copyleft" in blob or "GPL-2.0-only" in blob
 
-    def test_agpl_3_only_is_network_copyleft(
-        self, tmp_path: Path, check: LicenseAuditCheck
-    ):
+    def test_agpl_3_only_is_network_copyleft(self, tmp_path: Path, check: LicenseAuditCheck):
         _copy_image("core-image-agpl", tmp_path)
         result = check.run(tmp_path, {})
         blob = _collect_text(result)
-        assert (
-            "network-copyleft" in blob
-            or "network_copyleft" in blob
-            or "AGPL-3.0-only" in blob
-        )
+        assert "network-copyleft" in blob or "network_copyleft" in blob or "AGPL-3.0-only" in blob
 
     def test_apache_2_is_permissive(self, tmp_path: Path, check: LicenseAuditCheck):
         # Apache-2.0 appears in core-image-minimal alongside MIT/BSD-3-Clause.
@@ -170,9 +154,7 @@ class TestClassification:
         blob = _collect_text(result).lower()
         assert "copyleft" not in blob
 
-    def test_lgpl_2_1_only_is_weak_copyleft(
-        self, tmp_path: Path, check: LicenseAuditCheck
-    ):
+    def test_lgpl_2_1_only_is_weak_copyleft(self, tmp_path: Path, check: LicenseAuditCheck):
         # No fixture covers LGPL-2.1-only on its own, so synthesise one inline.
         image_dir = tmp_path / LICENSE_SUBDIR / "core-image-lgpl"
         image_dir.mkdir(parents=True)
@@ -184,11 +166,7 @@ class TestClassification:
         )
         result = check.run(tmp_path, {})
         blob = _collect_text(result)
-        assert (
-            "weak-copyleft" in blob
-            or "weak_copyleft" in blob
-            or "LGPL-2.1-only" in blob
-        )
+        assert "weak-copyleft" in blob or "weak_copyleft" in blob or "LGPL-2.1-only" in blob
 
 
 # --- (d) Unknown licence produces a WARN-severity finding ---
@@ -204,18 +182,14 @@ def _unknown_findings(findings: list[Finding]) -> list[Finding]:
 
 
 class TestUnknownLicenseWarns:
-    def test_unknown_license_emits_finding(
-        self, tmp_path: Path, check: LicenseAuditCheck
-    ):
+    def test_unknown_license_emits_finding(self, tmp_path: Path, check: LicenseAuditCheck):
         _copy_image("core-image-unknown", tmp_path)
         result = check.run(tmp_path, {})
         assert _unknown_findings(result.findings), (
             "expected at least one 'unknown' finding for core-image-unknown fixture"
         )
 
-    def test_unknown_license_severity_is_warn_level(
-        self, tmp_path: Path, check: LicenseAuditCheck
-    ):
+    def test_unknown_license_severity_is_warn_level(self, tmp_path: Path, check: LicenseAuditCheck):
         _copy_image("core-image-unknown", tmp_path)
         result = check.run(tmp_path, {})
         findings = _unknown_findings(result.findings)
@@ -223,9 +197,7 @@ class TestUnknownLicenseWarns:
         # WARN status requires severities below critical/high - use medium or low.
         assert all(f.severity in {"medium", "low"} for f in findings)
 
-    def test_check_status_is_warn_on_unknown(
-        self, tmp_path: Path, check: LicenseAuditCheck
-    ):
+    def test_check_status_is_warn_on_unknown(self, tmp_path: Path, check: LicenseAuditCheck):
         _copy_image("core-image-unknown", tmp_path)
         result = check.run(tmp_path, {})
         assert result.status == CheckStatus.WARN
@@ -250,13 +222,10 @@ class TestCopyleftBoundary:
         _copy_image("core-image-gpl-proprietary", tmp_path)
         result = check.run(tmp_path, {})
         assert _boundary_findings(result.findings), (
-            "expected a copyleft-boundary finding when strong-copyleft and "
-            "proprietary coexist"
+            "expected a copyleft-boundary finding when strong-copyleft and proprietary coexist"
         )
 
-    def test_boundary_finding_is_warn_severity(
-        self, tmp_path: Path, check: LicenseAuditCheck
-    ):
+    def test_boundary_finding_is_warn_severity(self, tmp_path: Path, check: LicenseAuditCheck):
         _copy_image("core-image-gpl-proprietary", tmp_path)
         result = check.run(tmp_path, {})
         findings = _boundary_findings(result.findings)
@@ -268,9 +237,7 @@ class TestCopyleftBoundary:
 
 
 class TestNoBoundaryWithoutProprietary:
-    def test_no_boundary_in_mixed_gpl_mit(
-        self, tmp_path: Path, check: LicenseAuditCheck
-    ):
+    def test_no_boundary_in_mixed_gpl_mit(self, tmp_path: Path, check: LicenseAuditCheck):
         # core-image-mixed: GPL-2.0-only + MIT + Apache-2.0; no proprietary.
         _copy_image("core-image-mixed", tmp_path)
         result = check.run(tmp_path, {})
@@ -315,9 +282,7 @@ class TestCraMappingOnEveryFinding:
                 f"{sorted(self.EXPECTED)}"
             )
 
-    def test_check_result_level_mapping_present(
-        self, tmp_path: Path, check: LicenseAuditCheck
-    ):
+    def test_check_result_level_mapping_present(self, tmp_path: Path, check: LicenseAuditCheck):
         _copy_image("core-image-mixed", tmp_path)
         result = check.run(tmp_path, {})
         assert result.cra_mapping, "CheckResult.cra_mapping must be non-empty"
