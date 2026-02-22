@@ -131,6 +131,7 @@ class ImageSigningCheck(BaseCheck):
                 max_score=max_score,
                 findings=[],
                 summary="Image signing checks skipped (neither FIT nor verity expected)",
+                cra_mapping=["I.P1.f"],
             )
 
         findings: list[Finding] = []
@@ -168,6 +169,7 @@ class ImageSigningCheck(BaseCheck):
                                 "Sign FIT images with a private key using"
                                 " mkimage -F -k <keydir> -r <image>"
                             ),
+                            cra_mapping=["I.P1.f"],
                         )
                     )
             elif fit_config:
@@ -177,6 +179,7 @@ class ImageSigningCheck(BaseCheck):
                     Finding(
                         message="No FIT image files (.itb, .fit) found in deploy directory",
                         severity="medium",
+                        cra_mapping=["I.P1.f"],
                     )
                 )
 
@@ -191,6 +194,7 @@ class ImageSigningCheck(BaseCheck):
                     Finding(
                         message="No dm-verity configuration or hash files found",
                         severity="medium",
+                        cra_mapping=["I.P1.f", "I.P1.k"],
                     )
                 )
 
@@ -211,4 +215,5 @@ class ImageSigningCheck(BaseCheck):
             max_score=max_score,
             findings=findings,
             summary=summary,
+            cra_mapping=["I.P1.f"],
         )
