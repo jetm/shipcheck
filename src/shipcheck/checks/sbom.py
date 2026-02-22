@@ -103,6 +103,7 @@ def _validate_spdx2_metadata(doc: dict) -> list[Finding]:
             Finding(
                 message="Missing creationInfo — no creation timestamp or creator contact",
                 severity="medium",
+                cra_mapping=["I.P2.1", "VII.2"],
             )
         )
     else:
@@ -111,6 +112,7 @@ def _validate_spdx2_metadata(doc: dict) -> list[Finding]:
                 Finding(
                     message="Missing creationInfo.created timestamp",
                     severity="medium",
+                    cra_mapping=["I.P2.1", "VII.2"],
                 )
             )
         creators = creation_info.get("creators")
@@ -121,6 +123,7 @@ def _validate_spdx2_metadata(doc: dict) -> list[Finding]:
                         "Missing or empty creationInfo.creators — at least one creator required"
                     ),
                     severity="medium",
+                    cra_mapping=["I.P2.1", "VII.2"],
                 )
             )
 
@@ -130,6 +133,7 @@ def _validate_spdx2_metadata(doc: dict) -> list[Finding]:
             Finding(
                 message="No packages listed in SBOM document",
                 severity="medium",
+                cra_mapping=["I.P2.1", "VII.2"],
             )
         )
 
@@ -141,6 +145,7 @@ def _validate_spdx2_metadata(doc: dict) -> list[Finding]:
                     " — document should describe at least one package"
                 ),
                 severity="medium",
+                cra_mapping=["I.P2.1", "VII.2"],
             )
         )
 
@@ -187,6 +192,7 @@ def _validate_spdx2_packages(packages: list[dict]) -> tuple[list[Finding], int]:
                     Finding(
                         message=f"Package '{pkg_name}': missing or invalid {field}",
                         severity="low",
+                        cra_mapping=["I.P2.1", "VII.2"],
                     )
                 )
         else:
@@ -213,6 +219,7 @@ class SBOMCheck(BaseCheck):
                     message="SPDX directory not found at tmp/deploy/spdx/",
                     severity="critical",
                     remediation=_REMEDIATION_SPDX,
+                    cra_mapping=["I.P2.1"],
                 )
             )
             return CheckResult(
@@ -223,6 +230,7 @@ class SBOMCheck(BaseCheck):
                 max_score=50,
                 findings=findings,
                 summary="No SPDX directory found",
+                cra_mapping=["I.P2.1", "VII.2"],
             )
 
         spdx_files = _discover_spdx_files(build_dir)
@@ -238,6 +246,7 @@ class SBOMCheck(BaseCheck):
                     message=f"{msg} in tmp/deploy/spdx/",
                     severity="critical",
                     remediation=_REMEDIATION_SPDX,
+                    cra_mapping=["I.P2.1"],
                 )
             )
             return CheckResult(
@@ -248,6 +257,7 @@ class SBOMCheck(BaseCheck):
                 max_score=50,
                 findings=findings,
                 summary=msg,
+                cra_mapping=["I.P2.1", "VII.2"],
             )
 
         selected = _select_document(docs)
@@ -257,6 +267,7 @@ class SBOMCheck(BaseCheck):
                     message="No suitable SPDX document found",
                     severity="critical",
                     remediation=_REMEDIATION_SPDX,
+                    cra_mapping=["I.P2.1"],
                 )
             )
             return CheckResult(
@@ -267,6 +278,7 @@ class SBOMCheck(BaseCheck):
                 max_score=50,
                 findings=findings,
                 summary="No suitable SPDX document found",
+                cra_mapping=["I.P2.1", "VII.2"],
             )
 
         path, doc = selected
@@ -282,6 +294,7 @@ class SBOMCheck(BaseCheck):
                     ),
                     severity="high",
                     remediation=_REMEDIATION_SPDX,
+                    cra_mapping=["I.P2.1", "VII.2"],
                 )
             )
             return CheckResult(
@@ -292,6 +305,7 @@ class SBOMCheck(BaseCheck):
                 max_score=50,
                 findings=findings,
                 summary="Unrecognized SBOM format",
+                cra_mapping=["I.P2.1", "VII.2"],
             )
 
         if fmt in ("spdx-3", "cyclonedx"):
@@ -305,6 +319,7 @@ class SBOMCheck(BaseCheck):
                 max_score=50,
                 findings=findings,
                 summary=summary,
+                cra_mapping=["I.P2.1", "VII.2"],
             )
 
         # SPDX 2.x — full field validation
@@ -340,4 +355,5 @@ class SBOMCheck(BaseCheck):
             max_score=50,
             findings=findings,
             summary=summary,
+            cra_mapping=["I.P2.1", "VII.2"],
         )
