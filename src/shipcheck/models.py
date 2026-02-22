@@ -18,6 +18,7 @@ class CheckStatus(StrEnum):
     FAIL = "fail"
     WARN = "warn"
     SKIP = "skip"
+    ERROR = "error"
 
 
 @dataclass

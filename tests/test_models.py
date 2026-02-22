@@ -24,15 +24,14 @@ class TestCheckStatus:
     def test_skip_value(self):
         assert CheckStatus.SKIP == "skip"
 
+    def test_error_value(self):
+        assert CheckStatus.ERROR == "error"
+
     def test_is_str_enum(self):
         assert isinstance(CheckStatus.PASS, str)
 
-    def test_exactly_four_members(self):
-        assert len(CheckStatus) == 4
-
-    def test_no_error_member(self):
-        with pytest.raises(KeyError):
-            CheckStatus["ERROR"]
+    def test_exactly_five_members(self):
+        assert len(CheckStatus) == 5
 
 
 class TestFinding:
