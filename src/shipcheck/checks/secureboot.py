@@ -117,6 +117,7 @@ def _validate_keys(key_paths: dict[str, str], build_dir: Path) -> tuple[int, lis
                     message=f"Key file not found: {var} = {raw_path}",
                     severity="high",
                     remediation=_REMEDIATION_MISSING_KEY.format(var=var),
+                    cra_mapping=["I.P1.d", "I.P1.f", "I.P1.c"],
                 )
             )
     return valid, findings
@@ -172,6 +173,7 @@ def _check_test_keys(
                     message=(f"Test/development key detected: {var} = {raw_path}"),
                     severity="high",
                     remediation=_REMEDIATION_TEST_KEY,
+                    cra_mapping=["I.P1.d", "I.P1.f", "I.P1.c"],
                 )
             )
     return findings
@@ -207,6 +209,7 @@ class SecureBootCheck(BaseCheck):
                     message=("No Yocto config files found (conf/local.conf, conf/auto.conf)"),
                     severity="medium",
                     remediation=_REMEDIATION_NO_SIGNING,
+                    cra_mapping=["I.P1.d", "I.P1.f"],
                 )
             )
             efi_files = _find_efi_artifacts(build_dir)
@@ -219,6 +222,7 @@ class SecureBootCheck(BaseCheck):
                         ),
                         severity="high",
                         remediation=_REMEDIATION_MISCONFIGURATION,
+                        cra_mapping=["I.P1.d", "I.P1.f"],
                     )
                 )
             return CheckResult(
@@ -229,6 +233,7 @@ class SecureBootCheck(BaseCheck):
                 max_score=max_score,
                 findings=findings,
                 summary="No configuration files found",
+                cra_mapping=["I.P1.d", "I.P1.f"],
             )
 
         # 1. Signing class detection (20 pts)
@@ -242,6 +247,7 @@ class SecureBootCheck(BaseCheck):
                     message=("No Secure Boot signing class found in IMAGE_CLASSES"),
                     severity="medium",
                     remediation=_REMEDIATION_NO_SIGNING,
+                    cra_mapping=["I.P1.d", "I.P1.f"],
                 )
             )
 
@@ -262,6 +268,7 @@ class SecureBootCheck(BaseCheck):
                     message=("Signing class configured but no key variables found"),
                     severity="high",
                     remediation=_REMEDIATION_MISSING_KEY.format(var="SECURE_BOOT_SIGNING_KEY"),
+                    cra_mapping=["I.P1.d", "I.P1.f", "I.P1.c"],
                 )
             )
 
@@ -287,6 +294,7 @@ class SecureBootCheck(BaseCheck):
                     ),
                     severity="high",
                     remediation=_REMEDIATION_MISCONFIGURATION,
+                    cra_mapping=["I.P1.d", "I.P1.f"],
                 )
             )
             misconfigured = True
@@ -316,4 +324,5 @@ class SecureBootCheck(BaseCheck):
             max_score=max_score,
             findings=findings,
             summary=summary,
+            cra_mapping=["I.P1.d", "I.P1.f"],
         )
