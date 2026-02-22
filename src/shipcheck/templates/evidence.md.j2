@@ -1,0 +1,37 @@
+# CRA Evidence Report
+
+**Version:** {{ report.shipcheck_version }}
+**Build directory:** {{ report.build_dir }}
+**Timestamp:** {{ report.timestamp }}
+**Framework:** {{ report.framework }} ({{ report.framework_version }})
+
+{% for req in mapped_requirements %}
+## {{ req.id }} - {{ req.title }}
+
+**Annex {{ req.annex }}{% if req.part %}, Part {{ req.part }}{% endif %}, item {{ req.item }}**
+
+> {{ req.text }}
+
+{% for entry in findings_by_requirement[req.id] %}
+- **[{{ entry.severity }}]** ({{ entry.check_id }}) {{ entry.message }}
+{% endfor %}
+
+{% endfor %}
+## Gaps
+
+{% if unmapped_requirements %}
+The following CRA requirements have no mapped evidence in this scan:
+
+{% for req in unmapped_requirements %}
+### {{ req.id }} - {{ req.title }}
+
+**Annex {{ req.annex }}{% if req.part %}, Part {{ req.part }}{% endif %}, item {{ req.item }}**
+
+> {{ req.text }}
+
+_Status: no evidence_
+
+{% endfor %}
+{% else %}
+All CRA requirements have at least one evidence mapping.
+{% endif %}
