@@ -103,6 +103,7 @@ def _build_findings(
                         "cvss": cvss,
                         "package": pkg_name,
                     },
+                    cra_mapping=["I.P2.2", "I.P2.3"],
                 )
             )
     return findings, suppressed
@@ -220,9 +221,11 @@ class CVECheck(BaseCheck):
                         message="No CVE scan output found in build directory.",
                         severity="critical",
                         remediation=_REMEDIATION_NO_OUTPUT,
+                        cra_mapping=["I.P2.2", "I.P2.3"],
                     )
                 ],
                 summary="No CVE scan output found",
+                cra_mapping=["I.P2.2", "I.P2.3"],
             )
             result.suppressed = []  # type: ignore[attr-defined]
             return result
@@ -244,9 +247,11 @@ class CVECheck(BaseCheck):
                         remediation=(
                             "Verify the CVE JSON file is valid and matches the expected format."
                         ),
+                        cra_mapping=["I.P2.2", "I.P2.3"],
                     )
                 ],
                 summary=f"Failed to parse CVE output: {cve_file.name}",
+                cra_mapping=["I.P2.2", "I.P2.3"],
             )
             result.suppressed = []  # type: ignore[attr-defined]
             return result
@@ -282,6 +287,7 @@ class CVECheck(BaseCheck):
             max_score=50,
             findings=findings,
             summary=summary,
+            cra_mapping=["I.P2.2", "I.P2.3"],
         )
         result.suppressed = suppressed  # type: ignore[attr-defined]
         return result
