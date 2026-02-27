@@ -1,0 +1,49 @@
+# Compliance Dossier
+
+{% if dossier.is_empty %}
+_No scans recorded{% if dossier.since %} since {{ dossier.since }}{% endif %}{% if dossier.build_dir %} for build directory `{{ dossier.build_dir }}`{% endif %}._
+
+The history store contains no scan evidence matching the supplied
+filters. Run `shipcheck check` at least once against the target build
+directory to seed the dossier before requesting a report.
+{% else %}
+{% if dossier.since or dossier.build_dir %}
+**Filters applied:**
+{% if dossier.since %}- Since: `{{ dossier.since }}`
+{% endif %}
+{% if dossier.build_dir %}- Build directory: `{{ dossier.build_dir }}`
+{% endif %}
+{% endif %}
+
+## Scan cadence
+
+| Timestamp | Build directory | Findings | Score |
+|-----------|-----------------|----------|-------|
+{% for scan in dossier.scan_cadence %}
+| {{ scan.timestamp }} | `{{ scan.build_dir }}` | {{ scan.finding_count }} | {{ scan.score }} |
+{% endfor %}
+
+## Score trend
+
+{% for entry in dossier.score_trend %}
+- {{ entry[0] }}: {{ entry[1] }}
+{% endfor %}
+
+## CVE velocity
+
+- CVEs introduced across scans: {{ dossier.cve_velocity.cves_introduced }}
+- CVEs resolved across scans: {{ dossier.cve_velocity.cves_resolved }}
+- CVEs open at latest scan: {{ dossier.cve_velocity.cves_open }}
+
+## Licence drift
+
+{% if dossier.license_drift %}
+| Timestamp | Build directory | License audit present |
+|-----------|-----------------|-----------------------|
+{% for entry in dossier.license_drift %}
+| {{ entry.timestamp }} | `{{ entry.build_dir }}` | {{ entry.has_license_audit }} |
+{% endfor %}
+{% else %}
+_No scans in the filtered window recorded a `license-audit` check. Enable the check to begin capturing licence drift across releases._
+{% endif %}
+{% endif %}
