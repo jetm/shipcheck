@@ -10,14 +10,11 @@ from __future__ import annotations
 import json
 import shutil
 from pathlib import Path
-from typing import TYPE_CHECKING
 
+import pytest
 from typer.testing import CliRunner
 
 from shipcheck.cli import app
-
-if TYPE_CHECKING:
-    import pytest
 
 runner = CliRunner()
 
@@ -913,3 +910,260 @@ class TestScoreAggregationAllChecks:
         data = _read_json_report(tmp_path)
         assert data["readiness_score"]["max_score"] == 200
         assert data["readiness_score"]["score"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Evidence dossier end-to-end (task 10.10)
+# ---------------------------------------------------------------------------
+
+
+def _setup_evidence_build_dir(tmp_path: Path) -> Path:
+    """Create a mock Yocto build directory populated for the evidence dossier.
+
+    Lays down:
+      - tmp/deploy/licenses/core-image-test/license.manifest (from permissive fixture)
+      - tmp/deploy/images/core-image-test/core-image-test-qemux86-64.spdx.json
+        (from SPDX 2.3 fixture)
+      - tmp/deploy/spdx/core-image-test.spdx.json (mirror of the SPDX doc so
+        the SBOM discovery path matches)
+      - tmp/log/cve/cve-summary.json (from Yocto scarthgap cve-summary fixture)
+      - product.yaml (from the complete product fixture)
+    """
+    build_dir = tmp_path / "build"
+    build_dir.mkdir()
+
+    licenses_src = FIXTURES_DIR / "licenses" / "core-image-minimal" / "license.manifest"
+    sbom_src = FIXTURES_DIR / "sbom" / "valid-spdx-2.3.json"
+    cve_src = FIXTURES_DIR / "yocto_cve" / "cve-summary-scarthgap.json"
+    product_src = FIXTURES_DIR / "product" / "complete.yaml"
+
+    for src in (licenses_src, sbom_src, cve_src, product_src):
+        if not src.exists():
+            pytest.skip(f"required fixture missing: {src}")
+
+    licenses_dir = build_dir / "tmp" / "deploy" / "licenses" / "core-image-test"
+    licenses_dir.mkdir(parents=True)
+    shutil.copy(licenses_src, licenses_dir / "license.manifest")
+
+    images_dir = build_dir / "tmp" / "deploy" / "images" / "core-image-test"
+    images_dir.mkdir(parents=True)
+    shutil.copy(
+        sbom_src,
+        images_dir / "core-image-test-qemux86-64.spdx.json",
+    )
+    # Mirror into tmp/deploy/spdx/ so the existing SBOM check can discover it.
+    spdx_dir = build_dir / "tmp" / "deploy" / "spdx"
+    spdx_dir.mkdir(parents=True)
+    shutil.copy(sbom_src, spdx_dir / "core-image-test.spdx.json")
+
+    cve_dir = build_dir / "tmp" / "log" / "cve"
+    cve_dir.mkdir(parents=True)
+    shutil.copy(cve_src, cve_dir / "cve-summary.json")
+
+    shutil.copy(product_src, build_dir / "product.yaml")
+
+    return build_dir
+
+
+def _write_evidence_shipcheck_config(build_dir: Path) -> Path:
+    """Write a `.shipcheck.yaml` enabling history and pointing at product.yaml.
+
+    Returns the path the config was written to (current working directory).
+    """
+    config_path = Path(".shipcheck.yaml")
+    config_path.write_text(
+        "history:\n"
+        "  enabled: true\n"
+        f"  path: {build_dir}/.shipcheck/history.db\n"
+        f"product_config_path: {build_dir}/product.yaml\n"
+    )
+    return config_path
+
+
+@pytest.mark.integration
+class TestEvidenceDossierEndToEnd:
+    """End-to-end dossier generation (RED until CLI wiring in 10.4-10.9 lands).
+
+    These tests exercise `shipcheck check --format evidence --out <dir>/` against
+    a fixture build dir containing every evidence input: license.manifest, SBOM,
+    yocto cve-summary.json, and product.yaml. They verify the dossier directory
+    is populated with every expected artifact, the scan row is persisted to the
+    history store, the CRA mapping validator ran cleanly, and the command exits
+    zero. Until tasks 10.4 (--out), 10.5 (dossier cmd), 10.6 (docs), 10.7 (doc
+    declaration), 10.8 (history hook), and 10.9 (CRA mapping validation hook)
+    land, the assertions fail at runtime rather than collection time.
+    """
+
+    def test_dossier_directory_is_populated(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_evidence_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _write_evidence_shipcheck_config(build_dir)
+        dossier_dir = tmp_path / "dossier"
+
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--build-dir",
+                str(build_dir),
+                "--format",
+                "evidence",
+                "--out",
+                str(dossier_dir),
+            ],
+        )
+
+        assert result.exit_code == 0, (
+            f"shipcheck check exited non-zero:\n{result.output}"
+        )
+        assert dossier_dir.is_dir(), (
+            f"expected dossier output dir at {dossier_dir}"
+        )
+        # Core evidence artifacts: emitted whenever --format evidence --out is used.
+        assert (dossier_dir / "evidence-report.md").exists()
+        assert (dossier_dir / "scan.json").exists()
+        assert (dossier_dir / "cve-report.md").exists()
+
+    def test_dossier_contains_license_audit(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_evidence_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _write_evidence_shipcheck_config(build_dir)
+        dossier_dir = tmp_path / "dossier"
+
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--build-dir",
+                str(build_dir),
+                "--format",
+                "evidence",
+                "--out",
+                str(dossier_dir),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        # license-audit check enabled by default once registered → license-audit.md emitted.
+        assert (dossier_dir / "license-audit.md").exists()
+
+    def test_dossier_contains_product_paperwork(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_evidence_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _write_evidence_shipcheck_config(build_dir)
+        dossier_dir = tmp_path / "dossier"
+
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--build-dir",
+                str(build_dir),
+                "--format",
+                "evidence",
+                "--out",
+                str(dossier_dir),
+                "--product-config",
+                str(build_dir / "product.yaml"),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        # product.yaml present → Annex VII draft and DoC must be emitted.
+        assert (dossier_dir / "technical-documentation.md").exists()
+        assert (dossier_dir / "declaration-of-conformity.md").exists()
+
+    def test_history_row_persisted(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_evidence_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _write_evidence_shipcheck_config(build_dir)
+        dossier_dir = tmp_path / "dossier"
+
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--build-dir",
+                str(build_dir),
+                "--format",
+                "evidence",
+                "--out",
+                str(dossier_dir),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        db_path = build_dir / ".shipcheck" / "history.db"
+        assert db_path.exists(), f"expected history DB at {db_path}"
+
+        import sqlite3
+
+        with sqlite3.connect(db_path) as conn:
+            # The schema names are defined by group 6; any table holding scan rows
+            # must contain at least one row after a successful check run.
+            tables = [
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+            ]
+            assert tables, "history DB has no tables"
+            scan_tables = [t for t in tables if "scan" in t.lower()]
+            assert scan_tables, f"no scan table found in history DB: {tables}"
+            rows_total = 0
+            for table in scan_tables:
+                rows_total += conn.execute(
+                    f"SELECT COUNT(*) FROM {table}"  # noqa: S608 - table name from controlled schema
+                ).fetchone()[0]
+            assert rows_total >= 1, (
+                f"expected at least one scan row across {scan_tables}"
+            )
+
+    def test_cra_mapping_validation_passed(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """CRA mapping validation must run and not raise during the pipeline.
+
+        Task 10.9 wires `validate_cra_mappings(report)` in before rendering; any
+        invalid mapping would exit ERROR-status non-zero. A clean exit on the
+        full-evidence fixture is the signal the validator ran and passed.
+        """
+        build_dir = _setup_evidence_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _write_evidence_shipcheck_config(build_dir)
+        dossier_dir = tmp_path / "dossier"
+
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--build-dir",
+                str(build_dir),
+                "--format",
+                "evidence",
+                "--out",
+                str(dossier_dir),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "invalid CRA mapping" not in result.output.lower()
+        assert "unknown cra" not in result.output.lower()
