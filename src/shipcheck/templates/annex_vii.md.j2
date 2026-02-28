@@ -1,0 +1,186 @@
+# Annex VII - Technical Documentation
+
+> **DRAFT - FOR MANUFACTURER REVIEW**
+>
+> This document is an auto-generated draft produced by shipcheck from scan
+> evidence and the supplied `product.yaml`. It is **not** a finished
+> technical file. The manufacturer is responsible for reviewing every
+> section, filling in any `[TO BE FILLED BY MANUFACTURER: <field>]`
+> placeholders, and obtaining legal and engineering sign-off before the
+> document is filed as the Annex VII technical documentation required by
+> Regulation (EU) 2024/2847.
+
+**Product:** {{ product.product_name }}
+**Type:** {{ product.product_type }}
+**Version:** {{ product.product_version }}
+**Manufacturer:** {{ product.manufacturer_name }}
+**Generated:** {{ report.timestamp }}
+**Shipcheck version:** {{ report.shipcheck_version }}
+**Regulation:** {{ report.framework }} {{ report.framework_version }}
+
+---
+
+## Item 1 - {{ items[1].title }}
+
+> {{ items[1].text }}
+
+**Product name:** {{ product.product_name }}
+
+**Product type:** {{ product.product_type }}
+
+**Product version:** {{ product.product_version }}
+
+**Intended purpose:** [TO BE FILLED BY MANUFACTURER: intended purpose and
+essential functionalities of the product]
+
+**Manufacturer:**
+
+- Name: {{ product.manufacturer_name }}
+- Address: {{ product.manufacturer_address }}
+- Contact: {{ product.manufacturer_contact }}
+
+**Photographs, drawings, schematics:** [TO BE FILLED BY MANUFACTURER:
+photographs, drawings or schematics illustrating the product]
+
+---
+
+## Item 2 - {{ items[2].title }}
+
+> {{ items[2].text }}
+
+### Software Bill of Materials (SBOM)
+
+The following SBOM-related evidence was collected during the most recent
+shipcheck scan. Findings are drawn from checks whose `cra_mapping`
+includes `I.P2.1` (Annex I Part II §1 SBOM requirement) or `VII.2`
+(Annex VII §2 design, development and vulnerability handling).
+
+{% if sbom_findings %}
+| check | finding title | severity | cra_mapping | timestamp |
+|-------|---------------|----------|-------------|-----------|
+{% for entry in sbom_findings %}
+| {{ entry.check_id }} | {{ entry.message }} | {{ entry.severity }} | {{ entry.cra_mapping }} | {{ entry.timestamp }} |
+{% endfor %}
+{% else %}
+_N/A - no SBOM-related findings were produced by this scan. Re-run
+`shipcheck check` with the SBOM check enabled to populate this table._
+{% endif %}
+
+### Vulnerability handling processes
+
+[TO BE FILLED BY MANUFACTURER: describe the vulnerability handling
+processes used during the design, development and production phases,
+including the coordinated vulnerability disclosure policy and the
+contact address below.]
+
+- **CVD policy URL:** {{ product.cvd_policy_url }}
+- **CVD contact:** {{ product.cvd_contact }}
+{% if product.update_distribution_mechanism %}
+- **Update distribution mechanism:** {{ product.update_distribution_mechanism }}
+{% else %}
+- **Update distribution mechanism:** [TO BE FILLED BY MANUFACTURER: update distribution mechanism]
+{% endif %}
+
+---
+
+## Item 3 - {{ items[3].title }}
+
+> {{ items[3].text }}
+
+The cybersecurity risk assessment maps every Annex I Part I essential
+requirement to the evidence collected by shipcheck. Requirements with no
+mapped finding must be addressed in the manufacturer narrative below.
+
+{% for req in part_i_requirements %}
+### {{ req.id }} - {{ req.title }}
+
+> {{ req.text }}
+
+{% if findings_by_requirement[req.id] %}
+Mapped findings:
+
+{% for entry in findings_by_requirement[req.id] %}
+- **[{{ entry.severity }}]** ({{ entry.check_id }}) {{ entry.message }}
+{% endfor %}
+{% else %}
+_N/A - no mapped findings. [TO BE FILLED BY MANUFACTURER: describe how
+this requirement is addressed for {{ product.product_name }}.]_
+{% endif %}
+
+{% endfor %}
+
+---
+
+## Item 4 - {{ items[4].title }}
+
+> {{ items[4].text }}
+
+**Declared support period end date:** {{ product.support_period_end_date }}
+
+**Rationale:** [TO BE FILLED BY MANUFACTURER: relevant information taken
+into account to determine the support period pursuant to Article 13(8),
+including expected product lifetime, user expectations, nature of the
+digital elements, and any applicable legal or regulatory constraints.]
+
+---
+
+## Item 5 - {{ items[5].title }}
+
+> {{ items[5].text }}
+
+_N/A - harmonised standards under Regulation (EU) 2024/2847 are pending
+publication (EU Commission mandate M/596). [TO BE FILLED BY
+MANUFACTURER: list applicable harmonised standards, common
+specifications or cybersecurity certification schemes applied once
+published.]_
+
+---
+
+## Item 6 - {{ items[6].title }}
+
+> {{ items[6].text }}
+
+{% if check_summaries %}
+The following shipcheck checks were executed against the build directory
+and contribute evidence of conformity testing:
+
+| Check | Status | Score | Findings | CRA mapping |
+|-------|--------|-------|----------|-------------|
+{% for check in check_summaries %}
+| {{ check.check_name }} ({{ check.check_id }}) | {{ check.status }} | {{ check.score }}/{{ check.max_score }} | {{ check.finding_count }} | {{ check.cra_mapping }} |
+{% endfor %}
+
+[TO BE FILLED BY MANUFACTURER: include reports of any additional tests
+performed outside shipcheck, such as penetration testing, static
+analysis, fuzzing, or third-party audits.]
+{% else %}
+_N/A - no shipcheck results available to cite as conformity test
+reports. [TO BE FILLED BY MANUFACTURER: attach reports of the tests
+carried out to verify the conformity of the product and its
+vulnerability handling processes.]_
+{% endif %}
+
+---
+
+## Item 7 - {{ items[7].title }}
+
+> {{ items[7].text }}
+
+_N/A - the EU Declaration of Conformity is generated separately via
+`shipcheck doc declaration`. [TO BE FILLED BY MANUFACTURER: attach a
+copy of the signed EU declaration of conformity drawn up in accordance
+with Annex V.]_
+
+---
+
+## Item 8 - {{ items[8].title }}
+
+> {{ items[8].text }}
+
+The machine-readable Software Bill of Materials referenced in Item 2 is
+made available on request from a market surveillance authority. See the
+SBOM evidence table above for the findings collected from the current
+scan.
+
+[TO BE FILLED BY MANUFACTURER: confirm the SBOM distribution channel
+used to respond to reasoned market surveillance requests.]
