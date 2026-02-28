@@ -10,7 +10,7 @@ from rich.console import Console
 
 from shipcheck.checks.registry import get_default_registry
 from shipcheck.config import load_config
-from shipcheck.report import html, json_report, markdown, terminal
+from shipcheck.report import evidence, html, json_report, markdown, terminal
 from shipcheck.report.score import build_report_data
 
 app = typer.Typer(
@@ -19,8 +19,8 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
-_VALID_FORMATS = {"markdown", "json", "html"}
-_FORMAT_EXT = {"markdown": "md", "json": "json", "html": "html"}
+_VALID_FORMATS = {"markdown", "json", "html", "evidence"}
+_FORMAT_EXT = {"markdown": "md", "json": "json", "html": "html", "evidence": "md"}
 
 _SEVERITY_ORDER = ["critical", "high", "medium", "low"]
 
@@ -56,6 +56,8 @@ def _render_file_report(report_data, fmt: str) -> str:
         return json_report.render(report_data)
     if fmt == "html":
         return html.render(report_data)
+    if fmt == "evidence":
+        return evidence.render(report_data)
     return markdown.render(report_data)
 
 
@@ -69,7 +71,7 @@ def check(
     format: str = typer.Option(
         "markdown",
         "--format",
-        help="Output format (markdown, json, html).",
+        help="Output format (markdown, json, html, evidence).",
     ),
     checks: str | None = typer.Option(
         None,
@@ -118,10 +120,15 @@ def check(
     terminal.render(report_data, console=console)
 
     content = _render_file_report(report_data, fmt)
-    ext = _FORMAT_EXT[fmt]
-    output_name = f"{config.report.output}.{ext}"
-    Path(output_name).write_text(content)
-    console.print(f"\nFull report saved to: {output_name}")
+    if fmt == "evidence":
+        # Evidence pivot prints to stdout so CI pipelines can capture it;
+        # file/dossier emission is deferred to the `--out DIR` option.
+        typer.echo(content)
+    else:
+        ext = _FORMAT_EXT[fmt]
+        output_name = f"{config.report.output}.{ext}"
+        Path(output_name).write_text(content)
+        console.print(f"\nFull report saved to: {output_name}")
 
     if _should_fail(results, config.report.fail_on):
         raise typer.Exit(code=1)

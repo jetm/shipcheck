@@ -194,6 +194,40 @@ class TestFailOn:
         assert result.exit_code == 1
 
 
+class TestEvidenceFormat:
+    """Tests for `shipcheck check --format evidence`."""
+
+    def test_evidence_format_exits_zero(self, build_dir_empty: Path) -> None:
+        result = runner.invoke(
+            app, ["check", "--build-dir", str(build_dir_empty), "--format", "evidence"]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_evidence_format_emits_heading(self, build_dir_empty: Path) -> None:
+        result = runner.invoke(
+            app, ["check", "--build-dir", str(build_dir_empty), "--format", "evidence"]
+        )
+        assert result.exit_code == 0, result.output
+        assert "CRA Evidence Report" in result.output
+
+    def test_evidence_format_emits_per_requirement_section(self, build_dir_empty: Path) -> None:
+        # An empty build dir triggers failing findings from secure-boot and
+        # image-signing, both of which carry cra_mapping ["I.P1.d", "I.P1.f"],
+        # so the evidence pivot must surface at least one of those headings.
+        result = runner.invoke(
+            app, ["check", "--build-dir", str(build_dir_empty), "--format", "evidence"]
+        )
+        assert result.exit_code == 0, result.output
+        assert "I.P1.d" in result.output or "I.P1.f" in result.output
+
+    def test_evidence_format_emits_gaps_section(self, build_dir_empty: Path) -> None:
+        result = runner.invoke(
+            app, ["check", "--build-dir", str(build_dir_empty), "--format", "evidence"]
+        )
+        assert result.exit_code == 0, result.output
+        assert "Gaps" in result.output
+
+
 class TestCheckErrors:
     """Tests for error handling in check command."""
 
