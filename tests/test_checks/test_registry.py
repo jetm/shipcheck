@@ -264,12 +264,12 @@ class TestCheckRegistryFiltering:
 class TestDefaultRegistry:
     """Tests for the default registry with built-in checks."""
 
-    def test_default_registry_has_four_checks(self) -> None:
+    def test_default_registry_has_seven_checks(self) -> None:
         from shipcheck.checks.registry import get_default_registry
 
         registry = get_default_registry()
 
-        assert len(registry.checks) == 4
+        assert len(registry.checks) == 7
 
     def test_default_registry_has_builtin_checks(self) -> None:
         from shipcheck.checks.registry import get_default_registry
@@ -281,6 +281,9 @@ class TestDefaultRegistry:
         assert "cve-tracking" in check_ids
         assert "secure-boot" in check_ids
         assert "image-signing" in check_ids
+        assert "license-audit" in check_ids
+        assert "yocto-cve-check" in check_ids
+        assert "vuln-reporting" in check_ids
 
     def test_default_registry_order(self) -> None:
         from shipcheck.checks.registry import get_default_registry
@@ -291,6 +294,9 @@ class TestDefaultRegistry:
         assert check_ids.index("sbom-generation") < check_ids.index("cve-tracking")
         assert check_ids.index("cve-tracking") < check_ids.index("secure-boot")
         assert check_ids.index("secure-boot") < check_ids.index("image-signing")
+        assert check_ids.index("image-signing") < check_ids.index("license-audit")
+        assert check_ids.index("license-audit") < check_ids.index("yocto-cve-check")
+        assert check_ids.index("yocto-cve-check") < check_ids.index("vuln-reporting")
 
     def test_default_registry_returns_fresh_instance(self) -> None:
         from shipcheck.checks.registry import get_default_registry
