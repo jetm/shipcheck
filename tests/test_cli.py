@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+import shutil
+from pathlib import Path
 
 import pytest
-
-if TYPE_CHECKING:
-    from pathlib import Path
 from typer.testing import CliRunner
 
 from shipcheck.cli import app
 
 runner = CliRunner()
+
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture()
@@ -387,3 +387,232 @@ class TestBuildCheckConfig:
         result = _build_check_config(config)
         assert "sbom-generation" in result
         assert "cve-tracking" in result
+
+
+# ---------------------------------------------------------------------------
+# Dossier multi-file emit (--out DIR) — task 10.3 (RED until 10.4 lands)
+# ---------------------------------------------------------------------------
+
+
+def _build_dossier_build_dir(tmp_path: Path) -> Path:
+    """Create a minimal realistic build dir for --out dossier tests.
+
+    Mirrors the layout used by `test_integration._setup_evidence_build_dir`
+    so every evidence input is discoverable:
+      - tmp/deploy/licenses/core-image-test/license.manifest (mixed licenses)
+      - tmp/deploy/spdx/core-image-test.spdx.json (valid SPDX 2.3)
+      - tmp/deploy/images/core-image-test/core-image-test-qemux86-64.spdx.json
+      - tmp/log/cve/cve-summary.json (yocto cve-check summary)
+      - product.yaml (complete product fixture)
+    """
+    build_dir = tmp_path / "build"
+    build_dir.mkdir()
+
+    licenses_src = FIXTURES_DIR / "licenses" / "core-image-minimal" / "license.manifest"
+    sbom_src = FIXTURES_DIR / "sbom" / "valid-spdx-2.3.json"
+    cve_src = FIXTURES_DIR / "yocto_cve" / "cve-summary-scarthgap.json"
+    product_src = FIXTURES_DIR / "product" / "complete.yaml"
+
+    for src in (licenses_src, sbom_src, cve_src, product_src):
+        if not src.exists():
+            pytest.skip(f"required fixture missing: {src}")
+
+    licenses_dir = build_dir / "tmp" / "deploy" / "licenses" / "core-image-test"
+    licenses_dir.mkdir(parents=True)
+    shutil.copy(licenses_src, licenses_dir / "license.manifest")
+
+    images_dir = build_dir / "tmp" / "deploy" / "images" / "core-image-test"
+    images_dir.mkdir(parents=True)
+    shutil.copy(
+        sbom_src,
+        images_dir / "core-image-test-qemux86-64.spdx.json",
+    )
+    spdx_dir = build_dir / "tmp" / "deploy" / "spdx"
+    spdx_dir.mkdir(parents=True)
+    shutil.copy(sbom_src, spdx_dir / "core-image-test.spdx.json")
+
+    cve_dir = build_dir / "tmp" / "log" / "cve"
+    cve_dir.mkdir(parents=True)
+    shutil.copy(cve_src, cve_dir / "cve-summary.json")
+
+    shutil.copy(product_src, build_dir / "product.yaml")
+
+    return build_dir
+
+
+def _write_dossier_config(build_dir: Path, *, include_product: bool = False) -> Path:
+    """Write a minimal `.shipcheck.yaml` for the dossier tests.
+
+    When ``include_product`` is true, ``product_config_path`` is set to the
+    build dir's product.yaml so the CLI can discover product-identity data.
+    Called after ``monkeypatch.chdir(tmp_path)`` so the config lands in cwd.
+    """
+    config_path = Path(".shipcheck.yaml")
+    lines = [
+        "history:",
+        "  enabled: false",
+    ]
+    if include_product:
+        lines.append(f"product_config_path: {build_dir}/product.yaml")
+    config_path.write_text("\n".join(lines) + "\n")
+    return config_path
+
+
+class TestDossierOut:
+    """Tests for `shipcheck check --format evidence --out DIR` dossier emit.
+
+    These tests are RED until task 10.4 adds the `--out` Typer option to the
+    `check` command. Today they fail at runtime with `No such option: --out`.
+    """
+
+    def test_dossier_out_creates_core_artifacts(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """(a) --out DIR writes at minimum evidence-report.md, cve-report.md, scan.json."""
+        build_dir = _build_dossier_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _write_dossier_config(build_dir)
+        dossier_dir = tmp_path / "dossier"
+
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--build-dir",
+                str(build_dir),
+                "--format",
+                "evidence",
+                "--out",
+                str(dossier_dir),
+                "--checks",
+                "sbom-generation,cve-tracking,secure-boot,image-signing,yocto-cve-check",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert dossier_dir.is_dir(), f"expected dossier dir at {dossier_dir}"
+        assert (dossier_dir / "evidence-report.md").exists()
+        assert (dossier_dir / "cve-report.md").exists()
+        assert (dossier_dir / "scan.json").exists()
+
+    def test_dossier_out_writes_license_audit_when_enabled(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """(b) With `license-audit` enabled, also writes license-audit.md."""
+        build_dir = _build_dossier_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _write_dossier_config(build_dir)
+        dossier_dir = tmp_path / "dossier"
+
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--build-dir",
+                str(build_dir),
+                "--format",
+                "evidence",
+                "--out",
+                str(dossier_dir),
+                "--checks",
+                "sbom-generation,cve-tracking,license-audit",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert (dossier_dir / "license-audit.md").exists()
+
+    def test_dossier_out_writes_product_paperwork_when_product_config_supplied(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """(c) --product-config → technical-documentation.md + declaration-of-conformity.md."""
+        build_dir = _build_dossier_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _write_dossier_config(build_dir, include_product=True)
+        dossier_dir = tmp_path / "dossier"
+
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--build-dir",
+                str(build_dir),
+                "--format",
+                "evidence",
+                "--out",
+                str(dossier_dir),
+                "--product-config",
+                str(build_dir / "product.yaml"),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert (dossier_dir / "technical-documentation.md").exists()
+        assert (dossier_dir / "declaration-of-conformity.md").exists()
+
+    def test_dossier_out_errors_when_path_is_a_file(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """(d) --out points at an existing FILE → non-zero exit with clear error."""
+        build_dir = _build_dossier_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _write_dossier_config(build_dir)
+        existing_file = tmp_path / "not-a-dir"
+        existing_file.write_text("occupied\n")
+
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--build-dir",
+                str(build_dir),
+                "--format",
+                "evidence",
+                "--out",
+                str(existing_file),
+            ],
+        )
+
+        assert result.exit_code != 0, result.output
+        assert "not a directory" in result.output.lower()
+
+    def test_dossier_out_creates_nonexistent_path(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """(e) --out at a path that doesn't exist → create it and emit artifacts."""
+        build_dir = _build_dossier_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _write_dossier_config(build_dir)
+        dossier_dir = tmp_path / "deep" / "nested" / "dossier"
+        assert not dossier_dir.exists()
+
+        result = runner.invoke(
+            app,
+            [
+                "check",
+                "--build-dir",
+                str(build_dir),
+                "--format",
+                "evidence",
+                "--out",
+                str(dossier_dir),
+                "--checks",
+                "sbom-generation,cve-tracking",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert dossier_dir.is_dir(), (
+            f"expected shipcheck to create missing dossier path at {dossier_dir}"
+        )
+        assert (dossier_dir / "evidence-report.md").exists()
