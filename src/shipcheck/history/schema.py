@@ -50,9 +50,7 @@ CREATE TABLE IF NOT EXISTS scans (
 """
 
 
-SCANS_INDEX_TIMESTAMP_DDL = (
-    "CREATE INDEX IF NOT EXISTS idx_scans_timestamp ON scans(timestamp);"
-)
+SCANS_INDEX_TIMESTAMP_DDL = "CREATE INDEX IF NOT EXISTS idx_scans_timestamp ON scans(timestamp);"
 
 
 SCANS_INDEX_BUILD_DIR_HASH_DDL = (

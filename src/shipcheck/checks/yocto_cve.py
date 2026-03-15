@@ -165,8 +165,7 @@ def _finding_for_unknown(issue: dict) -> Finding:
     version = issue.get("version", "")
     raw_status = issue.get("status")
     message = (
-        f"{cve_id}: unrecognized status {raw_status!r} from cve-check output "
-        f"for package {pkg}"
+        f"{cve_id}: unrecognized status {raw_status!r} from cve-check output for package {pkg}"
     )
     remediation = (
         "Inspect the cve-check.bbclass output and confirm the entry's status. "
@@ -262,7 +261,7 @@ class YoctoCVECheck(BaseCheck):
         if not summary_path.exists():
             message = (
                 f"No cve-check summary at {summary_path}. "
-                "Add `INHERIT += \"cve-check\"` to local.conf or configure "
+                'Add `INHERIT += "cve-check"` to local.conf or configure '
                 "`yocto_cve.summary_path` in .shipcheck.yaml."
             )
             return CheckResult(
@@ -362,9 +361,7 @@ class YoctoCVECheck(BaseCheck):
         ]
         if counts["unknown"]:
             summary_parts.append(f"{counts['unknown']} unknown")
-        summary_text = (
-            f"cve-check summary {summary_path.name}: " + ", ".join(summary_parts)
-        )
+        summary_text = f"cve-check summary {summary_path.name}: " + ", ".join(summary_parts)
 
         return CheckResult(
             check_id=self.id,

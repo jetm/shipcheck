@@ -139,9 +139,7 @@ class VulnerabilityReportingCheck(BaseCheck):
         if not result_mapping:
             result_mapping = list(_DEFAULT_CRA_MAPPING)
 
-        summary = (
-            f"Vulnerability reporting: {len(findings)} finding(s), score {score}/{_MAX_SCORE}"
-        )
+        summary = f"Vulnerability reporting: {len(findings)} finding(s), score {score}/{_MAX_SCORE}"
 
         return CheckResult(
             check_id=self.id,

@@ -1017,12 +1017,8 @@ class TestEvidenceDossierEndToEnd:
             ],
         )
 
-        assert result.exit_code == 0, (
-            f"shipcheck check exited non-zero:\n{result.output}"
-        )
-        assert dossier_dir.is_dir(), (
-            f"expected dossier output dir at {dossier_dir}"
-        )
+        assert result.exit_code == 0, f"shipcheck check exited non-zero:\n{result.output}"
+        assert dossier_dir.is_dir(), f"expected dossier output dir at {dossier_dir}"
         # Core evidence artifacts: emitted whenever --format evidence --out is used.
         assert (dossier_dir / "evidence-report.md").exists()
         assert (dossier_dir / "scan.json").exists()
@@ -1118,10 +1114,7 @@ class TestEvidenceDossierEndToEnd:
             # The schema names are defined by group 6; any table holding scan rows
             # must contain at least one row after a successful check run.
             tables = [
-                row[0]
-                for row in conn.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table'"
-                )
+                row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
             ]
             assert tables, "history DB has no tables"
             scan_tables = [t for t in tables if "scan" in t.lower()]
@@ -1131,9 +1124,7 @@ class TestEvidenceDossierEndToEnd:
                 rows_total += conn.execute(
                     f"SELECT COUNT(*) FROM {table}"  # noqa: S608 - table name from controlled schema
                 ).fetchone()[0]
-            assert rows_total >= 1, (
-                f"expected at least one scan row across {scan_tables}"
-            )
+            assert rows_total >= 1, f"expected at least one scan row across {scan_tables}"
 
     def test_cra_mapping_validation_passed(
         self,

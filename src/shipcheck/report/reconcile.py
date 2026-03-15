@@ -139,8 +139,7 @@ def reconcile_findings(results: list[CheckResult]) -> list[CheckResult]:
                 group_first_result[key] = idx
 
     merged_by_key: dict[tuple[str, str, str], Finding] = {
-        key: _merge_group(group) if len(group) > 1 else group[0]
-        for key, group in groups.items()
+        key: _merge_group(group) if len(group) > 1 else group[0] for key, group in groups.items()
     }
 
     new_results: list[CheckResult] = []

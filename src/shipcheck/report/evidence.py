@@ -89,9 +89,7 @@ def render(report: ReportData) -> str:
     findings_by_requirement = _build_index(report)
 
     mapped_requirements = [
-        catalog.requirements[rid]
-        for rid in catalog.requirements
-        if rid in findings_by_requirement
+        catalog.requirements[rid] for rid in catalog.requirements if rid in findings_by_requirement
     ]
     unmapped_requirements = [
         catalog.requirements[rid]

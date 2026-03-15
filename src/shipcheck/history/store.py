@@ -100,9 +100,7 @@ class HistoryStore:
         conn = self._connect()
         try:
             conn.executescript(SCHEMA_DDL)
-            cursor = conn.execute(
-                "SELECT value FROM meta WHERE key = 'schema_version'"
-            )
+            cursor = conn.execute("SELECT value FROM meta WHERE key = 'schema_version'")
             row = cursor.fetchone()
             if row is None:
                 with conn:

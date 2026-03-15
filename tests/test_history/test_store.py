@@ -124,16 +124,10 @@ class TestStoreInitialization:
         conn = sqlite3.connect(db_path)
         try:
             # Look up version in any metadata / schema_version / settings table.
-            cursor = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            )
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
             tables = {row[0] for row in cursor.fetchall()}
-            candidate_tables = [
-                t for t in tables if "version" in t.lower() or "meta" in t.lower()
-            ]
-            assert candidate_tables, (
-                f"expected a schema metadata table, found tables: {tables}"
-            )
+            candidate_tables = [t for t in tables if "version" in t.lower() or "meta" in t.lower()]
+            assert candidate_tables, f"expected a schema metadata table, found tables: {tables}"
 
             # Scan the candidate tables for a row whose value is 1.
             found = False
@@ -198,9 +192,7 @@ class TestPersist:
         store.persist(report)
 
         rows = store.query()
-        expected = hashlib.sha256(
-            str(build.resolve()).encode("utf-8")
-        ).hexdigest()
+        expected = hashlib.sha256(str(build.resolve()).encode("utf-8")).hexdigest()
         assert rows[0]["build_dir_hash"] == expected
 
     def test_persist_records_per_check_status_and_score_as_json(self, tmp_path: Path):
@@ -314,9 +306,7 @@ class TestQueryFilters:
         rows = store.query(build_dir=str(build_a))
 
         assert len(rows) == 2
-        expected_hash = hashlib.sha256(
-            str(build_a.resolve()).encode("utf-8")
-        ).hexdigest()
+        expected_hash = hashlib.sha256(str(build_a.resolve()).encode("utf-8")).hexdigest()
         for row in rows:
             assert row["build_dir_hash"] == expected_hash
 
@@ -358,13 +348,9 @@ class TestIncompatibleSchemaVersion:
 
         conn = sqlite3.connect(db_path)
         try:
-            cursor = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            )
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
             tables = {row[0] for row in cursor.fetchall()}
-            meta_tables = [
-                t for t in tables if "version" in t.lower() or "meta" in t.lower()
-            ]
+            meta_tables = [t for t in tables if "version" in t.lower() or "meta" in t.lower()]
             assert meta_tables, "expected a schema metadata table to tamper with"
             meta_table = meta_tables[0]
 

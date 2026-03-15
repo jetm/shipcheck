@@ -199,18 +199,14 @@ def _drift_findings(
 
     findings: list[Finding] = []
     current: dict[str, str] = {
-        record.get("PACKAGE NAME", ""): record.get("LICENSE", "")
-        for record, _ in classified
+        record.get("PACKAGE NAME", ""): record.get("LICENSE", "") for record, _ in classified
     }
     for pkg, new_license in current.items():
         old_license = previous.get(pkg)
         if old_license and old_license != new_license:
             findings.append(
                 Finding(
-                    message=(
-                        f"License drift for package '{pkg}': "
-                        f"{old_license} -> {new_license}"
-                    ),
+                    message=(f"License drift for package '{pkg}': {old_license} -> {new_license}"),
                     severity="low",
                     details={
                         "package": pkg,

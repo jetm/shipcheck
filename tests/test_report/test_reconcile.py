@@ -76,19 +76,14 @@ def _cve_findings(results: list[CheckResult]) -> list[Finding]:
     return [f for f in _all_findings(results) if f.details and "cve" in f.details]
 
 
-def _find(
-    findings: list[Finding], *, cve: str, package: str
-) -> Finding:
+def _find(findings: list[Finding], *, cve: str, package: str) -> Finding:
     matches = [
         f
         for f in findings
-        if f.details
-        and f.details.get("cve") == cve
-        and f.details.get("package") == package
+        if f.details and f.details.get("cve") == cve and f.details.get("package") == package
     ]
     assert len(matches) == 1, (
-        f"expected exactly one finding for {cve}/{package}, "
-        f"got {len(matches)}"
+        f"expected exactly one finding for {cve}/{package}, got {len(matches)}"
     )
     return matches[0]
 
@@ -122,9 +117,7 @@ class TestMergeSameCVESamePackage:
 
         merged = _cve_findings(reconcile_findings([a, b]))
 
-        assert len(merged) == 1, (
-            f"expected exactly one merged finding, got {len(merged)}"
-        )
+        assert len(merged) == 1, f"expected exactly one merged finding, got {len(merged)}"
 
     def test_merged_finding_unions_sources(self):
         a = _result(

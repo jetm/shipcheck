@@ -174,9 +174,7 @@ class TestDraftHeader:
         first_item = re.search(r"^## Item 1\b", text, re.MULTILINE)
         assert draft_pos != -1, "DRAFT header missing"
         assert first_item is not None, "Item 1 heading missing"
-        assert draft_pos < first_item.start(), (
-            "DRAFT header must appear before '## Item 1'"
-        )
+        assert draft_pos < first_item.start(), "DRAFT header must appear before '## Item 1'"
 
 
 class TestMissingNarrativeRendersNA:
@@ -329,9 +327,7 @@ class TestItem3RiskAssessment:
             f"catalog must expose 13 Annex I Part I requirements, got {len(part_i_ids)}"
         )
         for rid in part_i_ids:
-            assert rid in item3, (
-                f"Item 3 risk assessment missing Annex I Part I requirement {rid}"
-            )
+            assert rid in item3, f"Item 3 risk assessment missing Annex I Part I requirement {rid}"
 
     def test_risk_assessment_includes_mapped_findings(
         self,
@@ -368,9 +364,7 @@ class TestOverwriteWarning:
             generate_annex_vii(empty_report, product, out_path)
 
         warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
-        assert warnings, (
-            "overwriting an existing output file must emit a WARNING log record"
-        )
+        assert warnings, "overwriting an existing output file must emit a WARNING log record"
         assert any(str(out_path) in r.getMessage() for r in warnings), (
             "warning must reference the output file path"
         )
@@ -397,7 +391,5 @@ def _section(text: str, item: int) -> str:
     """Return the body of ``## Item <item>`` up to the next ``## Item`` heading."""
     pattern = rf"(?ms)^## Item {item}\b.*?(?=^## Item \d+\b|\Z)"
     match = re.search(pattern, text)
-    assert match is not None, (
-        f"could not locate section for Item {item} in output:\n{text!r}"
-    )
+    assert match is not None, f"could not locate section for Item {item} in output:\n{text!r}"
     return match.group(0)

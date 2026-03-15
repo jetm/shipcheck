@@ -160,9 +160,7 @@ def _cve_open_count(row: dict[str, Any]) -> int:
 
 
 def _row_has_license_audit(row: dict[str, Any]) -> bool:
-    return any(
-        entry.get("check_id") in _LICENSE_CHECK_IDS for entry in _row_checks(row)
-    )
+    return any(entry.get("check_id") in _LICENSE_CHECK_IDS for entry in _row_checks(row))
 
 
 def build_dossier(

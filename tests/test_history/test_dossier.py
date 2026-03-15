@@ -186,8 +186,7 @@ class TestDossierSections:
         dossier = build_dossier(store)
 
         assert hasattr(dossier, "cve_velocity"), (
-            "DossierData must expose a cve_velocity section per spec "
-            "(introduction and resolution)"
+            "DossierData must expose a cve_velocity section per spec (introduction and resolution)"
         )
         assert dossier.cve_velocity is not None
 
@@ -221,9 +220,7 @@ class TestSinceFilter:
         # The January scan must be excluded.
         assert "2026-01-15" not in rendered
 
-    def test_since_with_no_matching_scans_returns_no_scans_marker(
-        self, store: HistoryStore
-    ):
+    def test_since_with_no_matching_scans_returns_no_scans_marker(self, store: HistoryStore):
         _seed_three_scans(store)
 
         dossier = build_dossier(store, since="2027-01-01")
@@ -288,9 +285,7 @@ class TestBuildDirFilter:
         assert "product-a" in rendered
         assert "product-b" in rendered
 
-    def test_build_dir_with_no_matching_product_returns_no_scans_marker(
-        self, store: HistoryStore
-    ):
+    def test_build_dir_with_no_matching_product_returns_no_scans_marker(self, store: HistoryStore):
         _seed_three_scans(store, build_dir="/srv/yocto/product-a")
 
         dossier = build_dossier(store, build_dir="/srv/yocto/does-not-exist")
@@ -312,9 +307,7 @@ class TestEmptyStoreMarker:
 
         assert isinstance(dossier, DossierData)
 
-    def test_empty_store_renders_explicit_no_scans_marker(
-        self, store: HistoryStore
-    ):
+    def test_empty_store_renders_explicit_no_scans_marker(self, store: HistoryStore):
         dossier = build_dossier(store)
         rendered = str(dossier)
 
@@ -324,12 +317,8 @@ class TestEmptyStoreMarker:
             "emit a blank section"
         )
 
-    def test_empty_store_with_since_and_build_dir_still_marks_no_scans(
-        self, store: HistoryStore
-    ):
-        dossier = build_dossier(
-            store, since="2026-01-01", build_dir="/srv/yocto/anything"
-        )
+    def test_empty_store_with_since_and_build_dir_still_marks_no_scans(self, store: HistoryStore):
+        dossier = build_dossier(store, since="2026-01-01", build_dir="/srv/yocto/anything")
         rendered = str(dossier)
 
         assert "no scans recorded" in rendered.lower()

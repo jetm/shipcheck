@@ -71,9 +71,7 @@ ANNEX_VI_TEMPLATE = (
     "elements type [type] is in compliance with Regulation (EU) 2024/2847"
 )
 
-HARMONISED_PLACEHOLDER = (
-    "[TO BE FILLED BY MANUFACTURER: list applicable harmonised standards]"
-)
+HARMONISED_PLACEHOLDER = "[TO BE FILLED BY MANUFACTURER: list applicable harmonised standards]"
 
 
 @pytest.fixture
@@ -96,9 +94,7 @@ class TestFullDeclarationHasEightAnnexVFieldsInOrder:
         text = out_path.read_text(encoding="utf-8").lower()
 
         for field in ANNEX_V_FIELDS:
-            assert field in text, (
-                f"full Declaration of Conformity missing Annex V field '{field}'"
-            )
+            assert field in text, f"full Declaration of Conformity missing Annex V field '{field}'"
 
     def test_fields_appear_in_annex_v_order(
         self,
@@ -164,12 +160,10 @@ class TestSimplifiedDeclarationAnnexVIFixedText:
         text = out_path.read_text(encoding="utf-8")
 
         assert product.manufacturer_name in text, (
-            "simplified DoC did not substitute [manufacturer] with "
-            f"{product.manufacturer_name!r}"
+            f"simplified DoC did not substitute [manufacturer] with {product.manufacturer_name!r}"
         )
         assert product.product_type in text, (
-            "simplified DoC did not substitute [type] with "
-            f"{product.product_type!r}"
+            f"simplified DoC did not substitute [type] with {product.product_type!r}"
         )
 
     def test_simplified_form_does_not_leave_literal_placeholders(
@@ -186,9 +180,7 @@ class TestSimplifiedDeclarationAnnexVIFixedText:
         assert "[manufacturer]" not in text, (
             "simplified DoC must substitute [manufacturer] placeholder"
         )
-        assert "[type]" not in text, (
-            "simplified DoC must substitute [type] placeholder"
-        )
+        assert "[type]" not in text, "simplified DoC must substitute [type] placeholder"
 
 
 class TestHarmonisedStandardsPlaceholder:
@@ -244,8 +236,7 @@ class TestMissingManufacturerAddressRaises:
             generate_declaration(product, out_path)
 
         assert "manufacturer.address" in str(excinfo.value), (
-            "error must name the missing field 'manufacturer.address'; "
-            f"got: {excinfo.value!r}"
+            f"error must name the missing field 'manufacturer.address'; got: {excinfo.value!r}"
         )
 
 
@@ -277,8 +268,7 @@ class TestDateOfIssueDefaultsToTodayIsoFormat:
         # ``1 April 2026`` or ``04/01/2026``.
         matches = re.findall(r"\b\d{4}-\d{2}-\d{2}\b", text)
         assert matches, (
-            "output must contain at least one ISO 8601 (YYYY-MM-DD) date; "
-            f"got:\n{text!r}"
+            f"output must contain at least one ISO 8601 (YYYY-MM-DD) date; got:\n{text!r}"
         )
 
         today = dt.date.today().isoformat()
