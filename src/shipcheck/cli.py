@@ -19,6 +19,19 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
+# Nested `doc` sub-app. Groups paperwork generators that consume a
+# product.yaml and emit a single regulator-facing document. Today it
+# only hosts `declaration` (Annex V / Annex VI Declaration of
+# Conformity); future CRA paperwork (e.g. a stand-alone vulnerability
+# disclosure policy template) slots under the same group without
+# cluttering the top-level CLI surface.
+doc_app = typer.Typer(
+    name="doc",
+    help="Generate regulator-facing CRA paperwork (Declaration of Conformity, ...).",
+    no_args_is_help=True,
+)
+app.add_typer(doc_app, name="doc")
+
 _VALID_FORMATS = {"markdown", "json", "html", "evidence"}
 _FORMAT_EXT = {"markdown": "md", "json": "json", "html": "html", "evidence": "md"}
 
@@ -409,6 +422,54 @@ def docs(
 
     generate_annex_vii(report_data, product, out)
     typer.echo(f"Wrote Annex VII technical documentation draft to {out}")
+
+
+@doc_app.command("declaration")
+def doc_declaration(
+    product_config: Path = typer.Option(
+        ...,
+        "--product-config",
+        help="Path to product.yaml describing product identity and manufacturer details.",
+    ),
+    out: Path = typer.Option(
+        ...,
+        "--out",
+        help="Destination markdown file for the Declaration of Conformity.",
+    ),
+    simplified: bool = typer.Option(
+        False,
+        "--simplified",
+        help="Emit the Annex VI simplified Declaration of Conformity instead of Annex V.",
+    ),
+) -> None:
+    """Generate an EU Declaration of Conformity (Annex V full or Annex VI simplified).
+
+    Loads product identity from ``--product-config`` and renders the
+    Declaration of Conformity required by Article 28 and Annex V of
+    Regulation (EU) 2024/2847 (Cyber Resilience Act). Pass
+    ``--simplified`` to emit the Annex VI short-form declaration
+    referencing the full DoC by URL.
+    """
+    from shipcheck.docs_generator.declaration import generate_declaration
+    from shipcheck.product import ProductConfigError, load_product_config
+
+    if not product_config.exists():
+        typer.echo(
+            f"Error: product config not found: {product_config}",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    try:
+        product = load_product_config(product_config)
+    except ProductConfigError as exc:
+        typer.echo(f"Error: invalid product config: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    generate_declaration(product, out, simplified=simplified)
+
+    form = "Annex VI simplified" if simplified else "Annex V full"
+    typer.echo(f"Wrote {form} Declaration of Conformity to {out}")
 
 
 @app.command()

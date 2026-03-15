@@ -858,3 +858,90 @@ class TestDocsCmd:
         assert not out_path.exists(), "expected no output file on error"
         # Error message must name the missing file so users can act on it.
         assert "product" in result.output.lower() or str(missing_product) in result.output
+
+
+# ---------------------------------------------------------------------------
+# doc declaration subcommand (`shipcheck doc declaration`) - task 10.7
+# ---------------------------------------------------------------------------
+
+
+# The eight Annex V section titles mandated by Regulation (EU) 2024/2847.
+# Mirrors the contract asserted in tests/test_docs_generator/test_declaration.py
+# so the CLI-level test and the generator-level test stay in lock-step.
+_ANNEX_V_FIELDS: tuple[str, ...] = (
+    "product identification",
+    "manufacturer identification",
+    "sole-responsibility statement",
+    "object of declaration",
+    "conformity statement",
+    "harmonised standards",
+    "notified body",
+    "additional information",
+)
+
+# The fixed Annex VI one-sentence declaration. The generator substitutes
+# [manufacturer] and [type] from product.yaml, so the CLI test asserts on
+# the invariant prefix/suffix segments of the sentence.
+_ANNEX_VI_PREFIX = "Hereby,"
+_ANNEX_VI_SUFFIX = "is in compliance with Regulation (EU) 2024/2847"
+
+
+class TestDocDeclarationCmd:
+    """Tests for the `shipcheck doc declaration` nested subcommand (task 10.7)."""
+
+    def test_doc_declaration_writes_annex_v_full_form(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Full form: exits 0, writes file with all 8 Annex V section markers."""
+        monkeypatch.chdir(tmp_path)
+        product_yaml = FIXTURES_DIR / "product" / "complete.yaml"
+        out_path = tmp_path / "dec.md"
+
+        result = runner.invoke(
+            app,
+            [
+                "doc",
+                "declaration",
+                "--product-config",
+                str(product_yaml),
+                "--out",
+                str(out_path),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert out_path.exists(), f"expected {out_path} to be written"
+        content = out_path.read_text().lower()
+        for field in _ANNEX_V_FIELDS:
+            assert field in content, f"expected Annex V section '{field}' in output"
+
+    def test_doc_declaration_simplified_emits_annex_vi_sentence(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Simplified form: exits 0, output contains the fixed Annex VI sentence."""
+        monkeypatch.chdir(tmp_path)
+        product_yaml = FIXTURES_DIR / "product" / "complete.yaml"
+        out_path = tmp_path / "dec.md"
+
+        result = runner.invoke(
+            app,
+            [
+                "doc",
+                "declaration",
+                "--product-config",
+                str(product_yaml),
+                "--out",
+                str(out_path),
+                "--simplified",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert out_path.exists(), f"expected {out_path} to be written"
+        content = out_path.read_text()
+        assert _ANNEX_VI_PREFIX in content, f"expected '{_ANNEX_VI_PREFIX}' in simplified output"
+        assert _ANNEX_VI_SUFFIX in content, f"expected '{_ANNEX_VI_SUFFIX}' in simplified output"
