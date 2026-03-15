@@ -782,3 +782,79 @@ class TestDossierCmd:
 
         assert result.exit_code == 0, result.output
         assert "no scans recorded" in result.output.lower()
+
+
+# ---------------------------------------------------------------------------
+# docs subcommand (`shipcheck docs`) - task 10.6
+# ---------------------------------------------------------------------------
+
+
+class TestDocsCmd:
+    """Tests for the `shipcheck docs` subcommand (task 10.6).
+
+    The `docs` subcommand runs the enabled checks against ``--build-dir`` to
+    build a ``ReportData`` (reusing the same code path as ``shipcheck check``),
+    loads ``--product-config``, then calls ``generate_annex_vii`` to write the
+    Annex VII technical documentation draft to ``--out``.
+    """
+
+    def test_docs_cmd_writes_annex_vii_file(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """`docs` exits 0, writes the file, and emits a DRAFT banner."""
+        build_dir = _build_dossier_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        product_yaml = FIXTURES_DIR / "product" / "complete.yaml"
+        out_path = tmp_path / "tech.md"
+
+        result = runner.invoke(
+            app,
+            [
+                "docs",
+                "--build-dir",
+                str(build_dir),
+                "--product-config",
+                str(product_yaml),
+                "--out",
+                str(out_path),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert out_path.exists(), f"expected {out_path} to be written"
+        content = out_path.read_text()
+        # The generator injects a "DRAFT - FOR MANUFACTURER REVIEW" banner at
+        # the top of the file; first few lines must include the DRAFT marker.
+        head = "\n".join(content.splitlines()[:5])
+        assert "DRAFT" in head, f"expected DRAFT banner near top, got:\n{head}"
+
+    def test_docs_cmd_missing_product_config_errors(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Missing `--product-config` file exits non-zero with descriptive error."""
+        build_dir = _build_dossier_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        missing_product = tmp_path / "does-not-exist.yaml"
+        out_path = tmp_path / "tech.md"
+
+        result = runner.invoke(
+            app,
+            [
+                "docs",
+                "--build-dir",
+                str(build_dir),
+                "--product-config",
+                str(missing_product),
+                "--out",
+                str(out_path),
+            ],
+        )
+
+        assert result.exit_code != 0, result.output
+        assert not out_path.exists(), "expected no output file on error"
+        # Error message must name the missing file so users can act on it.
+        assert "product" in result.output.lower() or str(missing_product) in result.output

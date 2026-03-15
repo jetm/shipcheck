@@ -333,6 +333,85 @@ def dossier(
 
 
 @app.command()
+def docs(
+    build_dir: Path = typer.Option(
+        ...,
+        "--build-dir",
+        help="Path to the Yocto build directory.",
+    ),
+    product_config: Path = typer.Option(
+        ...,
+        "--product-config",
+        help="Path to product.yaml describing product identity and CVD policy.",
+    ),
+    out: Path = typer.Option(
+        ...,
+        "--out",
+        help="Destination markdown file for the Annex VII technical documentation draft.",
+    ),
+    checks: str | None = typer.Option(
+        None,
+        "--checks",
+        help="Comma-separated list of checks to run (default: all enabled).",
+    ),
+) -> None:
+    """Generate the Annex VII technical documentation draft.
+
+    Runs the enabled checks against ``--build-dir`` to assemble a
+    ``ReportData`` (same path as ``shipcheck check``), loads the product
+    metadata from ``--product-config``, and writes the Annex VII markdown
+    draft to ``--out``. The file is overwritten if it already exists.
+    Missing/invalid ``product.yaml`` fields exit non-zero with a message
+    naming the offending field.
+    """
+    from shipcheck.docs_generator.annex_vii import generate_annex_vii
+    from shipcheck.product import ProductConfigError, load_product_config
+
+    if not build_dir.exists():
+        typer.echo(f"Error: build dir not found: {build_dir}", err=True)
+        raise typer.Exit(code=1)
+
+    if not product_config.exists():
+        typer.echo(
+            f"Error: product config not found: {product_config}",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    try:
+        product = load_product_config(product_config)
+    except ProductConfigError as exc:
+        typer.echo(f"Error: invalid product config: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    config = load_config(Path(".shipcheck.yaml"))
+    check_ids = [c.strip() for c in checks.split(",")] if checks else None
+    config.apply_cli_overrides(
+        build_dir=str(build_dir),
+        checks=check_ids,
+    )
+    config.product_config_path = str(product_config)
+
+    registry = get_default_registry()
+    check_config = _build_check_config(config)
+
+    try:
+        results = registry.run_checks(
+            build_dir=config.build_dir,
+            config=check_config,
+            check_ids=config.checks,
+        )
+    except ValueError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    report_data = build_report_data(results, build_dir=str(config.build_dir))
+
+    generate_annex_vii(report_data, product, out)
+    typer.echo(f"Wrote Annex VII technical documentation draft to {out}")
+
+
+@app.command()
 def init() -> None:
     """Initialize a shipcheck configuration file in the current directory."""
     config_path = Path(".shipcheck.yaml")
