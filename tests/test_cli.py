@@ -616,3 +616,169 @@ class TestDossierOut:
             f"expected shipcheck to create missing dossier path at {dossier_dir}"
         )
         assert (dossier_dir / "evidence-report.md").exists()
+
+
+# ---------------------------------------------------------------------------
+# Dossier subcommand (`shipcheck dossier`) — task 10.5
+# ---------------------------------------------------------------------------
+
+
+def _make_synthetic_report(
+    *,
+    timestamp: str = "2026-02-15T10:00:00Z",
+    build_dir: str = "/srv/yocto/product-a",
+    cve_findings: int = 1,
+    license_findings: int = 0,
+) -> "object":
+    """Build a minimal ReportData the history store can persist.
+
+    Mirrors the seeder used by ``tests/test_history/test_dossier.py`` so the
+    dossier CLI test exercises the same persistence contract without pulling
+    in the full registry pipeline.
+    """
+    from shipcheck.models import CheckResult, CheckStatus, Finding, ReportData
+
+    cve_check = CheckResult(
+        check_id="cve-scan",
+        check_name="CVE scan",
+        status=CheckStatus.WARN if cve_findings else CheckStatus.PASS,
+        score=50 - cve_findings,
+        max_score=50,
+        findings=[
+            Finding(
+                message=f"CVE-2026-{1000 + i} affecting openssl",
+                severity="medium",
+                cra_mapping=["I.P2.2", "I.P2.3"],
+            )
+            for i in range(cve_findings)
+        ],
+        summary=f"{cve_findings} unresolved CVEs",
+        cra_mapping=["I.P2.2", "I.P2.3"],
+    )
+    license_check = CheckResult(
+        check_id="license-audit",
+        check_name="License audit",
+        status=CheckStatus.WARN if license_findings else CheckStatus.PASS,
+        score=50 - license_findings,
+        max_score=50,
+        findings=[
+            Finding(
+                message=f"unknown-license-package-{i}",
+                severity="low",
+                cra_mapping=["I.P2.1", "VII.2.b"],
+            )
+            for i in range(license_findings)
+        ],
+        summary=f"{license_findings} unknown licences",
+        cra_mapping=["I.P2.1", "VII.2.b"],
+    )
+    return ReportData(
+        checks=[cve_check, license_check],
+        total_score=cve_check.score + license_check.score,
+        max_total_score=100,
+        framework="CRA",
+        framework_version="2024/2847",
+        bsi_tr_version="TR-03183-2 v2.1.0",
+        build_dir=build_dir,
+        timestamp=timestamp,
+        shipcheck_version="0.3.0",
+    )
+
+
+class TestDossierCmd:
+    """Tests for the `shipcheck dossier` subcommand (task 10.5)."""
+
+    def test_dossier_cmd_empty_store_exits_zero_with_marker(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """An empty history store exits 0 and surfaces 'no scans recorded'."""
+        monkeypatch.chdir(tmp_path)
+        config_path = tmp_path / ".shipcheck.yaml"
+        config_path.write_text("history:\n  path: .shipcheck/history.db\n")
+
+        result = runner.invoke(app, ["dossier"])
+
+        assert result.exit_code == 0, result.output
+        assert "no scans recorded" in result.output.lower()
+
+    def test_dossier_cmd_with_seeded_store_renders_header(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A store seeded with one synthetic scan produces the dossier header."""
+        from shipcheck.history.store import HistoryStore
+
+        monkeypatch.chdir(tmp_path)
+        history_path = tmp_path / ".shipcheck" / "history.db"
+        config_path = tmp_path / ".shipcheck.yaml"
+        config_path.write_text(f"history:\n  path: {history_path}\n")
+
+        store = HistoryStore(history_path)
+        store.persist(_make_synthetic_report())
+
+        result = runner.invoke(app, ["dossier"])
+
+        assert result.exit_code == 0, result.output
+        assert "Compliance Dossier" in result.output
+
+    def test_dossier_cmd_honors_history_disabled(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """`history.enabled: false` prints the disabled notice and exits 0."""
+        monkeypatch.chdir(tmp_path)
+        config_path = tmp_path / ".shipcheck.yaml"
+        config_path.write_text("history:\n  enabled: false\n")
+
+        result = runner.invoke(app, ["dossier"])
+
+        assert result.exit_code == 0, result.output
+        assert "history persistence disabled" in result.output.lower()
+
+    def test_dossier_cmd_writes_to_out_file(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """`--out FILE` writes the rendered dossier to disk instead of stdout."""
+        from shipcheck.history.store import HistoryStore
+
+        monkeypatch.chdir(tmp_path)
+        history_path = tmp_path / ".shipcheck" / "history.db"
+        config_path = tmp_path / ".shipcheck.yaml"
+        config_path.write_text(f"history:\n  path: {history_path}\n")
+
+        store = HistoryStore(history_path)
+        store.persist(_make_synthetic_report())
+
+        out_file = tmp_path / "dossier.md"
+        result = runner.invoke(app, ["dossier", "--out", str(out_file)])
+
+        assert result.exit_code == 0, result.output
+        assert out_file.exists()
+        assert "Compliance Dossier" in out_file.read_text()
+
+    def test_dossier_cmd_honors_since_filter(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """`--since DATE` filters out older scans; unmatched → 'no scans recorded'."""
+        from shipcheck.history.store import HistoryStore
+
+        monkeypatch.chdir(tmp_path)
+        history_path = tmp_path / ".shipcheck" / "history.db"
+        config_path = tmp_path / ".shipcheck.yaml"
+        config_path.write_text(f"history:\n  path: {history_path}\n")
+
+        store = HistoryStore(history_path)
+        store.persist(_make_synthetic_report(timestamp="2026-01-01T00:00:00Z"))
+
+        result = runner.invoke(app, ["dossier", "--since", "2027-01-01"])
+
+        assert result.exit_code == 0, result.output
+        assert "no scans recorded" in result.output.lower()

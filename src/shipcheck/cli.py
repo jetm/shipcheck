@@ -270,6 +270,69 @@ def check(
 
 
 @app.command()
+def dossier(
+    since: str | None = typer.Option(
+        None,
+        "--since",
+        help="ISO-8601 lower bound (inclusive) on scan timestamp (e.g. 2026-01-01).",
+    ),
+    build_dir: str | None = typer.Option(
+        None,
+        "--build-dir",
+        help="Restrict the dossier to scans recorded against this build directory.",
+    ),
+    format: str = typer.Option(
+        "markdown",
+        "--format",
+        help="Output format (markdown).",
+    ),
+    out: Path | None = typer.Option(
+        None,
+        "--out",
+        help="Write the dossier to FILE instead of stdout.",
+    ),
+) -> None:
+    """Produce a multi-scan compliance dossier from the local history store.
+
+    Reads scan history from the SQLite store configured under
+    ``history.path`` in ``.shipcheck.yaml`` (default ``.shipcheck/history.db``)
+    and renders a dossier proving sustained compliance activity per
+    CRA Annex I Part II §3. When ``history.enabled: false``, the command
+    prints a disabled notice and exits 0 rather than crashing.
+    """
+    from shipcheck.history.dossier import build_dossier
+    from shipcheck.history.store import HistoryStore, HistoryStoreError
+
+    if format != "markdown":
+        typer.echo(
+            f"Error: invalid format '{format}'. Only 'markdown' is supported.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    config = load_config(Path(".shipcheck.yaml"))
+
+    if not config.history.enabled:
+        typer.echo("history persistence disabled in .shipcheck.yaml")
+        return
+
+    try:
+        store = HistoryStore(config.history.path)
+    except HistoryStoreError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    dossier_data = build_dossier(store, since=since, build_dir=build_dir)
+    rendered = str(dossier_data)
+
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(rendered)
+    else:
+        typer.echo(rendered)
+
+
+@app.command()
 def init() -> None:
     """Initialize a shipcheck configuration file in the current directory."""
     config_path = Path(".shipcheck.yaml")
