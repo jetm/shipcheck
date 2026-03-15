@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import typer
@@ -24,15 +24,29 @@ _FORMAT_EXT = {"markdown": "md", "json": "json", "html": "html", "evidence": "md
 
 _SEVERITY_ORDER = ["critical", "high", "medium", "low"]
 
+# Check IDs whose findings populate the dossier's cve-report.md.
+_CVE_CHECK_IDS = {"cve-tracking", "yocto-cve-check"}
+
 
 def _build_check_config(config) -> dict:
     """Build a dict keyed by check ID from the ShipcheckConfig for the registry."""
-    return {
+    cfg: dict = {
         "sbom-generation": asdict(config.sbom),
         "cve-tracking": asdict(config.cve),
         "secure-boot": asdict(config.secure_boot),
         "image-signing": asdict(config.image_signing),
+        "license-audit": asdict(config.license_audit),
+        "yocto-cve-check": asdict(config.yocto_cve),
+        # vuln-reporting needs the product_config_path to locate product.yaml;
+        # it is a top-level ShipcheckConfig field, not a nested dataclass, so
+        # inject it explicitly here alongside the (currently empty) per-check
+        # VulnReportingConfig.
+        "vuln-reporting": {
+            **asdict(config.vuln_reporting),
+            "product_config_path": config.product_config_path,
+        },
     }
+    return cfg
 
 
 def _should_fail(results, fail_on: str | None) -> bool:
@@ -61,6 +75,89 @@ def _render_file_report(report_data, fmt: str) -> str:
     return markdown.render(report_data)
 
 
+def _prepare_out_dir(out_dir: Path) -> None:
+    """Validate/create the dossier output directory.
+
+    If the path exists and is a regular file, error out with a message
+    containing "not a directory" so callers can reliably match on that
+    substring. If the path does not exist, create it (and parents).
+    """
+    if out_dir.exists() and not out_dir.is_dir():
+        typer.echo(
+            f"Error: {out_dir} is not a directory (cannot write dossier)",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+
+def _cve_scoped_report(report_data):
+    """Return a shallow copy of report_data filtered to CVE check results.
+
+    Keeps totals/build_dir/timestamp intact so the rendered markdown still
+    reads like a complete shipcheck report, just scoped to cve-tracking and
+    yocto-cve-check.
+    """
+    cve_checks = [c for c in report_data.checks if c.check_id in _CVE_CHECK_IDS]
+    return replace(report_data, checks=cve_checks)
+
+
+def _write_dossier(
+    report_data,
+    out_dir: Path,
+    *,
+    product_config_path: str | None,
+) -> list[Path]:
+    """Emit the multi-file dossier under `out_dir` and return the written paths."""
+    written: list[Path] = []
+
+    evidence_md = out_dir / "evidence-report.md"
+    evidence_md.write_text(evidence.render(report_data))
+    written.append(evidence_md)
+
+    cve_md = out_dir / "cve-report.md"
+    cve_md.write_text(markdown.render(_cve_scoped_report(report_data)))
+    written.append(cve_md)
+
+    scan_json = out_dir / "scan.json"
+    scan_json.write_text(json_report.render(report_data))
+    written.append(scan_json)
+
+    ran_license_audit = any(c.check_id == "license-audit" for c in report_data.checks)
+    if ran_license_audit:
+        license_checks = [c for c in report_data.checks if c.check_id == "license-audit"]
+        license_report = replace(report_data, checks=license_checks)
+        license_md = out_dir / "license-audit.md"
+        license_md.write_text(markdown.render(license_report))
+        written.append(license_md)
+
+    if product_config_path:
+        product_path = Path(product_config_path)
+        if product_path.exists():
+            try:
+                from shipcheck.product import load_product_config
+
+                product = load_product_config(product_path)
+            except Exception as exc:  # noqa: BLE001 - surface all load failures cleanly
+                typer.echo(
+                    f"Warning: could not load product config {product_path}: {exc}",
+                    err=True,
+                )
+            else:
+                from shipcheck.docs_generator.annex_vii import generate_annex_vii
+                from shipcheck.docs_generator.declaration import generate_declaration
+
+                tech_doc = out_dir / "technical-documentation.md"
+                generate_annex_vii(report_data, product, tech_doc)
+                written.append(tech_doc)
+
+                doc = out_dir / "declaration-of-conformity.md"
+                generate_declaration(product, doc)
+                written.append(doc)
+
+    return written
+
+
 @app.command()
 def check(
     build_dir: Path = typer.Option(
@@ -83,6 +180,23 @@ def check(
         "--fail-on",
         help="Exit non-zero if findings at this severity or above (critical, high, medium, low).",
     ),
+    out: Path | None = typer.Option(
+        None,
+        "--out",
+        help=(
+            "Write a multi-file dossier to DIR (requires --format evidence). "
+            "Creates the directory if missing."
+        ),
+    ),
+    product_config: Path | None = typer.Option(
+        None,
+        "--product-config",
+        help=(
+            "Path to product.yaml (overrides `product_config_path` from "
+            ".shipcheck.yaml). Enables Annex VII and Declaration of Conformity "
+            "emission when combined with --out."
+        ),
+    ),
 ) -> None:
     """Run compliance checks against a Yocto build directory."""
     config = load_config(Path(".shipcheck.yaml"))
@@ -95,11 +209,24 @@ def check(
         fail_on=fail_on,
     )
 
+    if product_config is not None:
+        config.product_config_path = str(product_config)
+
     fmt = config.report.format
     if fmt not in _VALID_FORMATS:
         valid = ", ".join(sorted(_VALID_FORMATS))
         typer.echo(f"Error: invalid format '{fmt}'. Choose from: {valid}", err=True)
         raise typer.Exit(code=1)
+
+    if out is not None and fmt != "evidence":
+        typer.echo(
+            "Error: --out requires --format evidence (multi-file dossier emit)",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    if out is not None:
+        _prepare_out_dir(out)
 
     registry = get_default_registry()
     check_config = _build_check_config(config)
@@ -119,16 +246,24 @@ def check(
     console = Console()
     terminal.render(report_data, console=console)
 
-    content = _render_file_report(report_data, fmt)
-    if fmt == "evidence":
-        # Evidence pivot prints to stdout so CI pipelines can capture it;
-        # file/dossier emission is deferred to the `--out DIR` option.
-        typer.echo(content)
+    if out is not None:
+        written = _write_dossier(
+            report_data,
+            out,
+            product_config_path=config.product_config_path,
+        )
+        console.print(f"\nDossier written to: {out} ({len(written)} files)")
     else:
-        ext = _FORMAT_EXT[fmt]
-        output_name = f"{config.report.output}.{ext}"
-        Path(output_name).write_text(content)
-        console.print(f"\nFull report saved to: {output_name}")
+        content = _render_file_report(report_data, fmt)
+        if fmt == "evidence":
+            # Evidence pivot prints to stdout so CI pipelines can capture it;
+            # file/dossier emission only engages when `--out DIR` is provided.
+            typer.echo(content)
+        else:
+            ext = _FORMAT_EXT[fmt]
+            output_name = f"{config.report.output}.{ext}"
+            Path(output_name).write_text(content)
+            console.print(f"\nFull report saved to: {output_name}")
 
     if _should_fail(results, config.report.fail_on):
         raise typer.Exit(code=1)
