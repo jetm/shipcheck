@@ -945,3 +945,58 @@ class TestDocDeclarationCmd:
         content = out_path.read_text()
         assert _ANNEX_VI_PREFIX in content, f"expected '{_ANNEX_VI_PREFIX}' in simplified output"
         assert _ANNEX_VI_SUFFIX in content, f"expected '{_ANNEX_VI_SUFFIX}' in simplified output"
+
+
+class TestHistoryPersist:
+    """Tests for `shipcheck check` persisting scan rows to the history store.
+
+    Task 10.8 of devspec change ``shipcheck-v03-cra-evidence``. Every
+    successful scan writes one row to ``.shipcheck/history.db`` so
+    ``shipcheck dossier`` can prove sustained compliance activity per
+    CRA Annex I Part II §3. Tests use ``-k history_persist`` selection.
+    """
+
+    def test_history_persist_writes_row_after_check(
+        self,
+        build_dir_with_spdx: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """After `shipcheck check`, a scan row exists in .shipcheck/history.db."""
+        import sqlite3
+
+        monkeypatch.chdir(tmp_path)
+
+        result = runner.invoke(app, ["check", "--build-dir", str(build_dir_with_spdx)])
+        assert result.exit_code == 0, result.output
+
+        db_path = tmp_path / ".shipcheck" / "history.db"
+        assert db_path.exists(), f"expected history DB at {db_path}"
+
+        conn = sqlite3.connect(db_path)
+        try:
+            cursor = conn.execute("SELECT COUNT(*) FROM scans")
+            (row_count,) = cursor.fetchone()
+        finally:
+            conn.close()
+
+        assert row_count == 1, f"expected exactly one scan row, got {row_count}"
+
+    def test_history_persist_disabled_does_not_create_db(
+        self,
+        build_dir_with_spdx: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """With `history.enabled: false`, no DB file is created."""
+        monkeypatch.chdir(tmp_path)
+        config_path = tmp_path / ".shipcheck.yaml"
+        config_path.write_text("history:\n  enabled: false\n")
+
+        result = runner.invoke(app, ["check", "--build-dir", str(build_dir_with_spdx)])
+        assert result.exit_code == 0, result.output
+
+        db_path = tmp_path / ".shipcheck" / "history.db"
+        assert not db_path.exists(), (
+            f"expected no history DB when history.enabled=false, found {db_path}"
+        )

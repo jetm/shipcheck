@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict, replace
 from pathlib import Path
 
@@ -31,6 +32,8 @@ doc_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(doc_app, name="doc")
+
+logger = logging.getLogger(__name__)
 
 _VALID_FORMATS = {"markdown", "json", "html", "evidence"}
 _FORMAT_EXT = {"markdown": "md", "json": "json", "html": "html", "evidence": "md"}
@@ -75,6 +78,27 @@ def _should_fail(results, fail_on: str | None) -> bool:
             if finding.severity in failing_severities:
                 return True
     return False
+
+
+
+def _persist_history(report_data, history_config) -> None:
+    """Persist ``report_data`` to the scan history store.
+
+    A disabled config opens a no-op store so ``persist()`` is a silent
+    skip. Any persistence failure (SQLite I/O error, schema mismatch,
+    etc.) is logged as a warning and swallowed so the check command's
+    exit code continues to be driven solely by ``--fail-on``.
+    """
+    from shipcheck.history.store import HistoryStore
+
+    try:
+        if history_config.enabled:
+            store = HistoryStore(history_config.path)
+        else:
+            store = HistoryStore.disabled()
+        store.persist(report_data)
+    except Exception as exc:  # noqa: BLE001 - persistence must never crash the check
+        logger.warning("failed to persist scan history: %s", exc)
 
 
 def _render_file_report(report_data, fmt: str) -> str:
@@ -277,6 +301,8 @@ def check(
             output_name = f"{config.report.output}.{ext}"
             Path(output_name).write_text(content)
             console.print(f"\nFull report saved to: {output_name}")
+
+    _persist_history(report_data, config.history)
 
     if _should_fail(results, config.report.fail_on):
         raise typer.Exit(code=1)
