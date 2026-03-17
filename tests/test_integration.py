@@ -1207,9 +1207,7 @@ def _setup_duplicate_cve_build_dir(tmp_path: Path) -> Path:
     }
     images_dir = build_dir / "tmp" / "deploy" / "images"
     images_dir.mkdir(parents=True)
-    (images_dir / "scan.sbom-cve-check.yocto.json").write_text(
-        json.dumps(cve_tracking_payload)
-    )
+    (images_dir / "scan.sbom-cve-check.yocto.json").write_text(json.dumps(cve_tracking_payload))
 
     # yocto-cve-check input: scarthgap flat issues[*]
     yocto_cve_payload = {
@@ -1277,9 +1275,7 @@ class TestCVEReconciliationEndToEnd:
 
         merged = target[0]
         sources = set(merged.get("sources") or [])
-        assert "cve-tracking" in sources, (
-            f"merged finding is missing cve-tracking source: {merged}"
-        )
+        assert "cve-tracking" in sources, f"merged finding is missing cve-tracking source: {merged}"
         assert "yocto-cve-check" in sources, (
             f"merged finding is missing yocto-cve-check source: {merged}"
         )

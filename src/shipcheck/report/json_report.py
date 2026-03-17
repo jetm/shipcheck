@@ -19,6 +19,7 @@ def _serialize_finding(finding: Finding) -> dict[str, Any]:
         "sources": list(finding.sources),
     }
 
+
 def _serialize_check(check: CheckResult) -> dict[str, Any]:
     return {
         "check_id": check.check_id,
