@@ -42,8 +42,17 @@ _FORMAT_EXT = {"markdown": "md", "json": "json", "html": "html", "evidence": "md
 
 _SEVERITY_ORDER = ["critical", "high", "medium", "low"]
 
-# Check IDs whose findings populate the dossier's cve-report.md.
-_CVE_CHECK_IDS = {"cve-tracking", "yocto-cve-check"}
+
+def _cve_check_ids() -> frozenset[str]:
+    """Return the IDs of registered checks whose findings represent CVEs.
+
+    Derived from ``BaseCheck.produces_cve_findings`` on the live default
+    registry so adding a new CVE source is a one-line override on the
+    check class with no central registration step. Computed per-call so
+    tests can patch ``get_default_registry`` to inject fakes.
+    """
+    return frozenset(c.id for c in get_default_registry().checks if c.produces_cve_findings)
+
 
 # Exit code used when a check emits a CRA mapping ID not present in the
 # catalog. Intentionally distinct from the ``--fail-on`` exit code (1) so
@@ -139,10 +148,12 @@ def _cve_scoped_report(report_data):
     """Return a shallow copy of report_data filtered to CVE check results.
 
     Keeps totals/build_dir/timestamp intact so the rendered markdown still
-    reads like a complete shipcheck report, just scoped to cve-tracking and
-    yocto-cve-check.
+    reads like a complete shipcheck report, just scoped to checks whose
+    ``produces_cve_findings`` trait is True (today: ``cve-tracking`` and
+    ``yocto-cve-check``).
     """
-    cve_checks = [c for c in report_data.checks if c.check_id in _CVE_CHECK_IDS]
+    cve_check_ids = _cve_check_ids()
+    cve_checks = [c for c in report_data.checks if c.check_id in cve_check_ids]
     return replace(report_data, checks=cve_checks)
 
 

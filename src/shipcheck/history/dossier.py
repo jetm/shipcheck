@@ -43,8 +43,20 @@ if TYPE_CHECKING:
     from shipcheck.history.store import HistoryStore
 
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
-_CVE_CHECK_IDS = frozenset({"cve-scan", "yocto-cve-check"})
 _LICENSE_CHECK_IDS = frozenset({"license-audit"})
+
+
+def _cve_check_ids() -> frozenset[str]:
+    """Return registered check IDs whose findings represent CVEs.
+
+    Derived from ``BaseCheck.produces_cve_findings`` on the live default
+    registry so adding a new CVE source is a one-line override on the
+    check class with no central registration step. Computed per-call so
+    tests can swap the registry via patching ``get_default_registry``.
+    """
+    from shipcheck.checks.registry import get_default_registry
+
+    return frozenset(c.id for c in get_default_registry().checks if c.produces_cve_findings)
 
 
 @dataclass(frozen=True)
@@ -140,15 +152,16 @@ def _cve_open_count(row: dict[str, Any]) -> int:
     """Count findings emitted by CVE-producing checks for ``row``.
 
     The store persists per-check finding counts inside the ``checks``
-    JSON blob. We treat the sum of findings across both ``cve-scan``
-    and ``yocto-cve-check`` as the "open CVE" population for that scan;
-    reconciliation of duplicates happens at report assembly, not in
-    history aggregation.
+    JSON blob. The set of CVE producers is derived from the live
+    registry via :func:`_cve_check_ids`, so checks added later (e.g. a
+    third-party CVE scanner) are picked up automatically without
+    touching this function.
     """
+    cve_check_ids = _cve_check_ids()
     total = 0
     for entry in _row_checks(row):
         check_id = entry.get("check_id")
-        if check_id in _CVE_CHECK_IDS:
+        if check_id in cve_check_ids:
             count = entry.get("finding_count")
             if count is None:
                 count = entry.get("findings")

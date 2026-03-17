@@ -23,6 +23,11 @@
 ### Changed
 
 - `CheckStatus` enum extended with `ERROR` member for checks whose input is structurally unreadable (previously had PASS/WARN/FAIL/SKIP only)
+- `BaseCheck.produces_cve_findings: ClassVar[bool] = False` trait declares which checks emit CVE findings; the dossier CVE filter and CVE-velocity counter now derive their producer set from this flag instead of a hardcoded ID list
+
+### Fixed
+
+- Dossier CVE-velocity counter now matches the registered `cve-tracking` check ID (previously matched the never-registered `cve-scan` and silently undercounted)
 
 ## [0.0.2] - 2026-04-01
 

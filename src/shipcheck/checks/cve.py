@@ -208,6 +208,7 @@ class CVECheck(BaseCheck):
     name = "CVE Tracking"
     framework = ["CRA"]
     severity = "critical"
+    produces_cve_findings = True
 
     def run(self, build_dir: Path, config: dict) -> CheckResult:
         cve_file = _discover_cve_output(build_dir)

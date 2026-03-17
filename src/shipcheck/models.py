@@ -5,7 +5,7 @@ from __future__ import annotations
 import abc
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -85,6 +85,13 @@ class BaseCheck(abc.ABC):
     name: str
     framework: list[str]
     severity: str
+
+    # Set to True on subclasses whose findings represent CVEs. The dossier
+    # CVE filter, the multi-file `cve-report.md` emit, and any future CVE
+    # aggregator discover producers via this flag instead of a hard-coded
+    # ID set, so adding a new CVE source is a one-line override on the
+    # check class with no central registration step.
+    produces_cve_findings: ClassVar[bool] = False
 
     @abc.abstractmethod
     def run(self, build_dir: Path, config: dict) -> CheckResult:

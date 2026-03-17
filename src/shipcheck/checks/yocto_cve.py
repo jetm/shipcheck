@@ -254,6 +254,7 @@ class YoctoCVECheck(BaseCheck):
     name = "Yocto CVE Check"
     framework = ["CRA"]
     severity = "high"
+    produces_cve_findings = True
 
     def run(self, build_dir: Path, config: dict) -> CheckResult:
         summary_path = _resolve_summary_path(build_dir, config.get("summary_path"))
