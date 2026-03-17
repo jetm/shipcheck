@@ -15,8 +15,9 @@ def _serialize_finding(finding: Finding) -> dict[str, Any]:
         "severity": finding.severity,
         "remediation": finding.remediation,
         "details": finding.details,
+        "cra_mapping": list(finding.cra_mapping),
+        "sources": list(finding.sources),
     }
-
 
 def _serialize_check(check: CheckResult) -> dict[str, Any]:
     return {

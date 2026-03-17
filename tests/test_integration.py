@@ -1158,3 +1158,128 @@ class TestEvidenceDossierEndToEnd:
         assert result.exit_code == 0, result.output
         assert "invalid CRA mapping" not in result.output.lower()
         assert "unknown cra" not in result.output.lower()
+
+
+# ---------------------------------------------------------------------------
+# CVE reconciliation across cve-tracking and yocto-cve-check
+# ---------------------------------------------------------------------------
+
+
+def _setup_duplicate_cve_build_dir(tmp_path: Path) -> Path:
+    """Build dir where both cve-tracking and yocto-cve-check flag the same CVE.
+
+    Seeds:
+      - ``tmp/deploy/images/scan.sbom-cve-check.yocto.json`` consumed by
+        cve-tracking. Contains an Unpatched finding for
+        ``CVE-2024-1234`` on ``openssl-3.0.12``.
+      - ``tmp/log/cve/cve-summary.json`` consumed by yocto-cve-check. Also
+        flags ``CVE-2024-1234`` as Unpatched on ``openssl-3.0.12``.
+    The SBOM fixture is needed so the sbom-generation check doesn't abort
+    the run, and has no bearing on reconciliation.
+    """
+    build_dir = tmp_path / "build"
+    build_dir.mkdir()
+
+    spdx_dir = build_dir / "tmp" / "deploy" / "spdx"
+    spdx_dir.mkdir(parents=True)
+    shutil.copy(
+        FIXTURES_DIR / "sbom" / "valid-spdx-2.3.json",
+        spdx_dir / "image.spdx.json",
+    )
+
+    # cve-tracking input: Yocto sbom-cve-check format (nested package[*].issue[*])
+    cve_tracking_payload = {
+        "version": 1,
+        "package": [
+            {
+                "name": "openssl",
+                "version": "3.0.12",
+                "issue": [
+                    {
+                        "id": "CVE-2024-1234",
+                        "status": "Unpatched",
+                        "scorev3": "7.5",
+                        "summary": "Buffer overflow in TLS handshake",
+                    }
+                ],
+            }
+        ],
+    }
+    images_dir = build_dir / "tmp" / "deploy" / "images"
+    images_dir.mkdir(parents=True)
+    (images_dir / "scan.sbom-cve-check.yocto.json").write_text(
+        json.dumps(cve_tracking_payload)
+    )
+
+    # yocto-cve-check input: scarthgap flat issues[*]
+    yocto_cve_payload = {
+        "version": "2",
+        "issues": [
+            {
+                "id": "CVE-2024-1234",
+                "package": "openssl",
+                "version": "3.0.12",
+                "status": "Unpatched",
+                "severity": "HIGH",
+                "scorev3": "7.5",
+                "summary": "Buffer overflow in TLS handshake",
+            }
+        ],
+    }
+    cve_log_dir = build_dir / "tmp" / "log" / "cve"
+    cve_log_dir.mkdir(parents=True)
+    (cve_log_dir / "cve-summary.json").write_text(json.dumps(yocto_cve_payload))
+
+    return build_dir
+
+
+@pytest.mark.integration
+class TestCVEReconciliationEndToEnd:
+    """Duplicate CVE findings across cve-tracking and yocto-cve-check merge.
+
+    Covers the yocto-cve-check spec requirement "Reconciliation with existing
+    CVE check" end-to-end: a CVE + package + version flagged by BOTH scanners
+    must appear exactly once in the JSON report with ``sources`` unioning the
+    two check ids.
+    """
+
+    def test_duplicate_cve_merges_into_single_finding(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_duplicate_cve_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+
+        result = _invoke_check(build_dir, fmt="json")
+        assert result.exit_code == 0, result.output
+
+        data = _read_json_report(tmp_path)
+
+        # Flatten every finding across every check and pick the ones for our
+        # target CVE/package/version triple.
+        target = []
+        for check_data in data["checks"]:
+            for finding in check_data["findings"]:
+                details = finding.get("details") or {}
+                cve = details.get("cve") or details.get("cve_id")
+                if (
+                    cve == "CVE-2024-1234"
+                    and details.get("package") == "openssl"
+                    and details.get("version") == "3.0.12"
+                ):
+                    target.append(finding)
+
+        assert len(target) == 1, (
+            "Expected exactly one reconciled finding for "
+            f"CVE-2024-1234/openssl/3.0.12, got {len(target)}: {target}"
+        )
+
+        merged = target[0]
+        sources = set(merged.get("sources") or [])
+        assert "cve-tracking" in sources, (
+            f"merged finding is missing cve-tracking source: {merged}"
+        )
+        assert "yocto-cve-check" in sources, (
+            f"merged finding is missing yocto-cve-check source: {merged}"
+        )

@@ -13,6 +13,7 @@ from shipcheck.checks.registry import get_default_registry
 from shipcheck.config import load_config
 from shipcheck.cra.loader import validate_cra_mappings
 from shipcheck.report import evidence, html, json_report, markdown, terminal
+from shipcheck.report.reconcile import reconcile_findings
 from shipcheck.report.score import build_report_data
 
 app = typer.Typer(
@@ -285,6 +286,13 @@ def check(
         raise typer.Exit(code=1) from exc
 
     report_data = build_report_data(results, build_dir=str(config.build_dir))
+
+    # Merge duplicate CVE findings across cve-tracking and yocto-cve-check so
+    # the dossier, terminal view, and persisted history all see one
+    # authoritative finding per (cve, package, version) with sources unioned.
+    # Must run before validate_cra_mappings so the validator inspects the
+    # reconciled mapping union.
+    report_data = replace(report_data, checks=reconcile_findings(report_data.checks))
 
     # Validate every finding's cra_mapping entry against the pinned CRA
     # catalog before any renderer sees the report. A phantom requirement

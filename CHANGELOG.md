@@ -13,7 +13,7 @@
 - `--out DIR` option on `check` that emits a multi-file compliance dossier (evidence report, license audit, CVE report, Annex VII technical documentation, Declaration of Conformity, `scan.json`)
 - `license-audit` check parsing Yocto's human-readable `tmp/deploy/licenses/*/license.manifest` (complements the machine-readable SPDX SBOM check)
 - `yocto-cve-check` check integrating with Yocto's `cve-check.bbclass` output at `tmp/log/cve/cve-summary.json`, version-tolerant across Kirkstone and Scarthgap schemas
-- CVE finding reconciliation: `shipcheck.report.reconcile.reconcile_findings` merges duplicate findings from `cve-scan` and `yocto-cve-check`
+- CVE finding reconciliation: `shipcheck check` merges duplicate findings from `cve-tracking` and `yocto-cve-check` into a single finding whose `sources` lists every scanner that flagged it
 - SQLite scan history store at `.shipcheck/history.db` persisting every scan record
 - `shipcheck dossier` subcommand producing a multi-scan trend report (scan cadence, score trend, CVE velocity, licence drift)
 - `shipcheck docs` subcommand generating an Annex VII technical documentation draft from scan evidence plus `product.yaml`

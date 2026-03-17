@@ -74,6 +74,7 @@ def _build_findings(
     suppressed: list[dict] = []
     for pkg in packages:
         pkg_name = pkg.get("name", "<unknown>")
+        pkg_version = pkg.get("version", "")
         for issue in pkg.get("issue", []):
             if issue["status"] != "Unpatched":
                 continue
@@ -102,8 +103,10 @@ def _build_findings(
                         "cve_id": cve_id,
                         "cvss": cvss,
                         "package": pkg_name,
+                        "version": pkg_version,
                     },
                     cra_mapping=["I.P2.2", "I.P2.3"],
+                    sources=["cve-tracking"],
                 )
             )
     return findings, suppressed
