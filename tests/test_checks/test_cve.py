@@ -113,6 +113,7 @@ class TestCVECheckDiscovery:
         assert len(result.findings) >= 1
         finding = result.findings[0]
         assert finding.severity == "critical"
+        assert finding.remediation is not None
         assert "inherit cve-check" in finding.remediation
 
     def test_discovery_finds_sbom_cve_check(self, tmp_path: Path) -> None:

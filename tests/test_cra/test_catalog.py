@@ -82,21 +82,21 @@ class TestCatalogImmutability:
         catalog = load_catalog()
 
         with pytest.raises(dataclasses.FrozenInstanceError):
-            catalog.source_version = "mutated"  # type: ignore[misc]
+            catalog.source_version = "mutated"  # type: ignore[misc]  # ty: ignore[invalid-assignment]
 
     def test_requirement_is_frozen_dataclass(self):
         catalog = load_catalog()
         req = next(iter(catalog.requirements.values()))
 
         with pytest.raises(dataclasses.FrozenInstanceError):
-            req.title = "mutated"  # type: ignore[misc]
+            req.title = "mutated"  # type: ignore[misc]  # ty: ignore[invalid-assignment]
 
     def test_requirements_mapping_rejects_item_assignment(self):
         catalog = load_catalog()
 
         # MappingProxyType raises TypeError on __setitem__.
         with pytest.raises(TypeError):
-            catalog.requirements["BOGUS.X.1"] = next(iter(catalog.requirements.values()))  # type: ignore[index]
+            catalog.requirements["BOGUS.X.1"] = next(iter(catalog.requirements.values()))  # type: ignore[index]  # ty: ignore[invalid-assignment]
 
     def test_requirements_mapping_rejects_deletion(self):
         catalog = load_catalog()

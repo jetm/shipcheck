@@ -236,7 +236,7 @@ class TestJsonReportOutput:
         score = data["readiness_score"]
         assert "score" in score
         assert "max_score" in score
-        assert score["max_score"] == 200
+        assert score["max_score"] == 350
 
     def test_json_report_has_checks_array(
         self,
@@ -248,7 +248,7 @@ class TestJsonReportOutput:
         _invoke_check(build_dir, fmt="json")
         data = _read_json_report(tmp_path)
         assert isinstance(data["checks"], list)
-        assert len(data["checks"]) == 4
+        assert len(data["checks"]) == 7
         check_ids = {c["check_id"] for c in data["checks"]}
         assert "sbom-generation" in check_ids
         assert "cve-tracking" in check_ids
@@ -522,7 +522,7 @@ class TestMissingArtifacts:
 class TestReadinessScore:
     """Verify readiness score reflects check results."""
 
-    def test_max_score_is_200(
+    def test_max_score_is_350(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -531,7 +531,7 @@ class TestReadinessScore:
         monkeypatch.chdir(tmp_path)
         _invoke_check(build_dir, fmt="json")
         data = _read_json_report(tmp_path)
-        assert data["readiness_score"]["max_score"] == 200
+        assert data["readiness_score"]["max_score"] == 350
 
     def test_score_between_zero_and_max(
         self,
@@ -549,7 +549,7 @@ class TestReadinessScore:
     def test_score_in_terminal_output(self, tmp_path: Path):
         build_dir = _setup_build_dir(tmp_path)
         result = _invoke_check(build_dir)
-        assert "/200" in result.output
+        assert "/350" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -828,12 +828,12 @@ class TestImageSigningCheckViaCLI:
 
 
 # ---------------------------------------------------------------------------
-# Score aggregation with all 4 checks
+# Score aggregation with all registered checks
 # ---------------------------------------------------------------------------
 
 
 class TestScoreAggregationAllChecks:
-    """Verify score aggregation across all 4 checks."""
+    """Verify score aggregation across all registered checks."""
 
     def test_all_checks_contribute_to_total_score(
         self,
@@ -850,7 +850,7 @@ class TestScoreAggregationAllChecks:
         data = _read_json_report(tmp_path)
         total = sum(c["score"] for c in data["checks"])
         assert data["readiness_score"]["score"] == total
-        assert data["readiness_score"]["max_score"] == 200
+        assert data["readiness_score"]["max_score"] == 350
 
     def test_max_score_scales_with_filtered_checks(
         self,
@@ -868,10 +868,10 @@ class TestScoreAggregationAllChecks:
         data = _read_json_report(tmp_path)
         assert data["readiness_score"]["max_score"] == 100
 
-    def test_terminal_score_shows_out_of_200(self, tmp_path: Path):
+    def test_terminal_score_shows_out_of_350(self, tmp_path: Path):
         build_dir = _setup_build_dir(tmp_path)
         result = _invoke_check(build_dir)
-        assert "/200" in result.output
+        assert "/350" in result.output
 
     def test_markdown_report_includes_all_four_checks(
         self,
@@ -899,7 +899,7 @@ class TestScoreAggregationAllChecks:
         assert "Secure Boot" in content
         assert "Image Signing" in content
 
-    def test_missing_all_artifacts_max_score_still_200(
+    def test_missing_all_artifacts_max_score_still_350(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -908,7 +908,7 @@ class TestScoreAggregationAllChecks:
         monkeypatch.chdir(tmp_path)
         _invoke_check(build_dir, fmt="json")
         data = _read_json_report(tmp_path)
-        assert data["readiness_score"]["max_score"] == 200
+        assert data["readiness_score"]["max_score"] == 350
         assert data["readiness_score"]["score"] == 0
 
 

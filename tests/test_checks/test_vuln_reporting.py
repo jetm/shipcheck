@@ -156,7 +156,8 @@ class TestExpiredSupportPeriod:
             or "support" in _flatten_text(f)
         ]
         assert related, (
-            f"expected at least one finding about the expired support period; got {result.findings!r}"
+            "expected at least one finding about the expired support period; "
+            f"got {result.findings!r}"
         )
         for finding in related:
             assert finding.severity in {"medium", "low"}, (
@@ -217,11 +218,13 @@ class TestMissingUpdateMechanism:
             if "update" in _flatten_text(f) or "mechanism" in _flatten_text(f)
         ]
         assert related, (
-            f"expected at least one finding about the missing update mechanism; got {result.findings!r}"
+            "expected at least one finding about the missing update mechanism; "
+            f"got {result.findings!r}"
         )
         for finding in related:
             assert finding.severity in {"medium", "low"}, (
-                f"expected medium/low severity for missing update mechanism; got {finding.severity} "
+                "expected medium/low severity for missing update mechanism; "
+                f"got {finding.severity} "
                 f"on {finding.message!r}"
             )
 
@@ -246,7 +249,8 @@ class TestCraMappingCoverage:
         result = _run(fixture, tmp_path)
 
         assert result.findings, (
-            f"fixture {fixture!r} should produce at least one finding for this test to mean anything"
+            f"fixture {fixture!r} should produce at least one finding "
+            "for this test to mean anything"
         )
         for finding in result.findings:
             mapping = finding.cra_mapping

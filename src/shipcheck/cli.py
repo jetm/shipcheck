@@ -87,7 +87,6 @@ def _should_fail(results, fail_on: str | None) -> bool:
     return False
 
 
-
 def _persist_history(report_data, history_config) -> None:
     """Persist ``report_data`` to the scan history store.
 

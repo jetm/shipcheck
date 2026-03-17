@@ -211,10 +211,7 @@ class TestPersist:
         per_check_raw = rows[0]["checks"]
         # Either a JSON string or an already-decoded list/dict is acceptable;
         # the contract says JSON-encoded on disk, so decoding must work.
-        if isinstance(per_check_raw, str):
-            per_check = json.loads(per_check_raw)
-        else:
-            per_check = per_check_raw
+        per_check = json.loads(per_check_raw) if isinstance(per_check_raw, str) else per_check_raw
 
         # Normalise to a dict keyed by check id for easy lookup.
         if isinstance(per_check, list):

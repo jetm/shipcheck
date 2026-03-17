@@ -629,7 +629,7 @@ def _make_synthetic_report(
     build_dir: str = "/srv/yocto/product-a",
     cve_findings: int = 1,
     license_findings: int = 0,
-) -> "object":
+) -> object:
     """Build a minimal ReportData the history store can persist.
 
     Mirrors the seeder used by ``tests/test_history/test_dossier.py`` so the
