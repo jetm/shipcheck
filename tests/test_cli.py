@@ -359,6 +359,58 @@ class TestInitCommand:
         assert "secure-boot" in content
         assert "image-signing" in content
 
+    def test_init_scaffold_lists_all_v03_check_ids(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The scaffold's checks list must enumerate every registered check.
+
+        Otherwise users initialising a fresh project miss out on
+        license-audit, yocto-cve-check, and vuln-reporting because the
+        scaffold predates them.
+        """
+        monkeypatch.chdir(tmp_path)
+        runner.invoke(app, ["init"])
+        content = (tmp_path / ".shipcheck.yaml").read_text()
+        for check_id in (
+            "sbom-generation",
+            "cve-tracking",
+            "secure-boot",
+            "image-signing",
+            "license-audit",
+            "yocto-cve-check",
+            "vuln-reporting",
+        ):
+            assert check_id in content, f"scaffold missing check id {check_id!r}"
+
+    def test_init_scaffold_contains_v03_config_sections(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """All per-check config sections + product_config_path + history must be templated."""
+        monkeypatch.chdir(tmp_path)
+        runner.invoke(app, ["init"])
+        content = (tmp_path / ".shipcheck.yaml").read_text()
+        for section in (
+            "product_config_path",
+            "license_audit",
+            "yocto_cve",
+            "history",
+            "vuln_reporting",
+        ):
+            assert section in content, f"scaffold missing config section {section!r}"
+
+    def test_init_scaffold_contains_v03_usage_examples(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Comment header should advertise the v0.3 CLI surface."""
+        monkeypatch.chdir(tmp_path)
+        runner.invoke(app, ["init"])
+        content = (tmp_path / ".shipcheck.yaml").read_text()
+        assert "--format evidence" in content
+        assert "--out" in content
+        assert "shipcheck dossier" in content
+        assert "shipcheck docs" in content
+        assert "shipcheck doc declaration" in content
+
 
 class TestBuildCheckConfig:
     """Tests for `_build_check_config()` mapping new check IDs."""

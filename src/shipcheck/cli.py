@@ -545,20 +545,36 @@ def init() -> None:
 
     scaffold = """\
 # shipcheck configuration
-# See https://github.com/tiamarin/shipcheck for documentation.
+# See https://github.com/jetm/shipcheck for documentation.
+#
+# Common invocations:
+#   shipcheck check --build-dir build/
+#   shipcheck check --build-dir build/ --fail-on high --format json > report.json
+#   shipcheck check --build-dir build/ --format evidence --out dossier/
+#   shipcheck dossier --since 2026-01-01
+#   shipcheck docs
+#   shipcheck doc declaration --product-config product.yaml --out doc.md
 
-# Path to the Yocto build directory
+# Path to the Yocto build directory (the dir containing tmp/deploy/)
 # build_dir: ./build
 
 # Compliance framework (only CRA supported in v0.1)
 # framework: CRA
 
-# List of check IDs to run (default: all)
+# Path to product.yaml (manufacturer / support / CVD metadata used by
+# vuln-reporting, the Annex VII generator and the Declaration of
+# Conformity generator).
+# product_config_path: product.yaml
+
+# List of check IDs to run (default: all registered checks)
 # checks:
 #   - sbom-generation
 #   - cve-tracking
 #   - secure-boot
 #   - image-signing
+#   - license-audit
+#   - yocto-cve-check
+#   - vuln-reporting
 
 # SBOM check configuration
 # sbom:
@@ -569,7 +585,7 @@ def init() -> None:
 #     - license
 #     - checksum
 
-# CVE check configuration
+# CVE check configuration (consumes Yocto cve-check / sbom-cve-check / vex.bbclass)
 # cve:
 #   suppress:
 #     - CVE-2023-1234
@@ -583,11 +599,30 @@ def init() -> None:
 #   expect_fit: true
 #   expect_verity: true
 
+# License audit configuration (parses tmp/deploy/licenses/<image>/license.manifest)
+# license_audit:
+#   allowlist: []
+#   denylist: []
+#   expected_licenses: []
+
+# Yocto cve-check.bbclass integration
+# yocto_cve:
+#   treat_ignored_as_patched: false
+#   summary_path: null    # default: tmp/log/cve/cve-summary.json
+
+# Vulnerability reporting check (Article 14 / Annex I Part II §§4-8)
+# vuln_reporting: {}
+
+# Scan history store (powers `shipcheck dossier` and `shipcheck docs`)
+# history:
+#   enabled: true
+#   path: .shipcheck/history.db
+
 # Report output options
 # report:
-#   format: markdown        # markdown | json | html
+#   format: markdown        # markdown | json | html | evidence
 #   output: shipcheck-report
-#   fail_on: null            # null | critical | high | medium | low
+#   fail_on: null           # null | critical | high | medium | low
 """
     config_path.write_text(scaffold)
     typer.echo("Created .shipcheck.yaml")
