@@ -36,6 +36,9 @@ MANIFEST
 # Generated reports
 shipcheck-report.*
 
+# Local scan history store (runtime artifact)
+.shipcheck/
+
 # Unit test / coverage reports
 htmlcov/
 .tox/
