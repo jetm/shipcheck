@@ -11,6 +11,7 @@ from rich.console import Console
 
 from shipcheck.checks.registry import get_default_registry
 from shipcheck.config import load_config
+from shipcheck.cra.loader import validate_cra_mappings
 from shipcheck.report import evidence, html, json_report, markdown, terminal
 from shipcheck.report.score import build_report_data
 
@@ -42,6 +43,12 @@ _SEVERITY_ORDER = ["critical", "high", "medium", "low"]
 
 # Check IDs whose findings populate the dossier's cve-report.md.
 _CVE_CHECK_IDS = {"cve-tracking", "yocto-cve-check"}
+
+# Exit code used when a check emits a CRA mapping ID not present in the
+# catalog. Intentionally distinct from the ``--fail-on`` exit code (1) so
+# CI operators can tell a severity-threshold failure apart from a self-
+# inconsistent report.
+_CRA_VALIDATION_EXIT_CODE = 2
 
 
 def _build_check_config(config) -> dict:
@@ -279,6 +286,18 @@ def check(
         raise typer.Exit(code=1) from exc
 
     report_data = build_report_data(results, build_dir=str(config.build_dir))
+
+    # Validate every finding's cra_mapping entry against the pinned CRA
+    # catalog before any renderer sees the report. A phantom requirement
+    # ID would propagate into the evidence report, the dossier, and the
+    # persisted history row, so failing fast here is cheaper than cleaning
+    # up an inconsistent audit trail. Uses a distinct exit code so CI
+    # pipelines can distinguish this from a --fail-on threshold miss.
+    try:
+        validate_cra_mappings(report_data)
+    except ValueError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=_CRA_VALIDATION_EXIT_CODE) from exc
 
     console = Console()
     terminal.render(report_data, console=console)

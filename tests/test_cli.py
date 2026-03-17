@@ -1000,3 +1000,94 @@ class TestHistoryPersist:
         assert not db_path.exists(), (
             f"expected no history DB when history.enabled=false, found {db_path}"
         )
+
+
+# ---------------------------------------------------------------------------
+# CRA mapping validation in `check` pipeline — task 10.9
+# ---------------------------------------------------------------------------
+
+
+class TestCraValidation:
+    """Tests for `shipcheck check` invoking `validate_cra_mappings(report)`.
+
+    Task 10.9 of devspec change ``shipcheck-v03-cra-evidence``. An invalid
+    CRA mapping ID emitted by any check must cause the command to exit
+    non-zero with a dedicated error exit code (distinct from ``--fail-on``'s
+    exit code 1) so operators can tell the two failure modes apart.
+    Tests use ``-k cra_validation`` selection.
+    """
+
+    def test_cra_validation_rejects_invalid_mapping_id(
+        self,
+        build_dir_with_spdx: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A check emitting `cra_mapping=["BOGUS.X.1"]` → non-zero exit,
+        error message names the invalid ID.
+        """
+        from shipcheck.checks.registry import CheckRegistry
+        from shipcheck.models import (
+            BaseCheck,
+            CheckResult,
+            CheckStatus,
+            Finding,
+        )
+
+        class _BogusCheck(BaseCheck):
+            id = "bogus-mapping"
+            name = "Bogus Mapping"
+            framework = ["CRA"]
+            severity = "low"
+
+            def run(self, build_dir, config):  # type: ignore[override]
+                return CheckResult(
+                    check_id=self.id,
+                    check_name=self.name,
+                    status=CheckStatus.WARN,
+                    score=0,
+                    max_score=1,
+                    findings=[
+                        Finding(
+                            message="synthetic bogus finding",
+                            severity="low",
+                            cra_mapping=["BOGUS.X.1"],
+                        )
+                    ],
+                    summary="bogus",
+                )
+
+        def _stub_registry() -> CheckRegistry:
+            registry = CheckRegistry()
+            registry.register(_BogusCheck())
+            return registry
+
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr("shipcheck.cli.get_default_registry", _stub_registry)
+
+        result = runner.invoke(app, ["check", "--build-dir", str(build_dir_with_spdx)])
+
+        assert result.exit_code != 0, result.output
+        # Validation failure must NOT collide with --fail-on exit code (1).
+        assert result.exit_code != 1, (
+            f"expected distinct exit code from --fail-on's 1, got {result.exit_code}"
+        )
+        combined = result.output + (result.stderr if result.stderr_bytes else "")
+        assert "BOGUS.X.1" in combined, (
+            f"expected invalid ID 'BOGUS.X.1' in output, got:\n{combined}"
+        )
+
+    def test_cra_validation_silent_on_valid_mappings(
+        self,
+        build_dir_with_spdx: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Normal `check` run with valid mappings: no validation error printed,
+        exits 0 (no --fail-on threshold set).
+        """
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(app, ["check", "--build-dir", str(build_dir_with_spdx)])
+
+        assert result.exit_code == 0, result.output
+        assert "unknown CRA requirement id" not in result.output
