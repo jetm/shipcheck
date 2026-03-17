@@ -91,14 +91,14 @@ def _find(findings: list[Finding], *, cve: str, package: str) -> Finding:
 class TestMergeSameCVESamePackage:
     def test_same_cve_same_package_same_version_merges(self):
         a = _result(
-            "cve-scan",
+            "cve-tracking",
             [
                 _cve_finding(
                     cve="CVE-2024-1234",
                     package="openssl",
                     version="3.0.12",
                     severity="high",
-                    source="cve-scan",
+                    source="cve-tracking",
                 )
             ],
         )
@@ -121,14 +121,14 @@ class TestMergeSameCVESamePackage:
 
     def test_merged_finding_unions_sources(self):
         a = _result(
-            "cve-scan",
+            "cve-tracking",
             [
                 _cve_finding(
                     cve="CVE-2024-1234",
                     package="openssl",
                     version="3.0.12",
                     severity="high",
-                    source="cve-scan",
+                    source="cve-tracking",
                 )
             ],
         )
@@ -151,7 +151,7 @@ class TestMergeSameCVESamePackage:
             package="openssl",
         )
 
-        assert set(merged.sources) == {"cve-scan", "yocto-cve-check"}
+        assert set(merged.sources) == {"cve-tracking", "yocto-cve-check"}
 
 
 class TestDifferentPackagesRemainIndependent:
@@ -160,14 +160,14 @@ class TestDifferentPackagesRemainIndependent:
         # as separate findings because they are separate vulnerabilities
         # against separate components.
         a = _result(
-            "cve-scan",
+            "cve-tracking",
             [
                 _cve_finding(
                     cve="CVE-2024-9999",
                     package="openssl",
                     version="3.0.12",
                     severity="high",
-                    source="cve-scan",
+                    source="cve-tracking",
                 )
             ],
         )
@@ -191,21 +191,21 @@ class TestDifferentPackagesRemainIndependent:
         openssl = _find(findings, cve="CVE-2024-9999", package="openssl")
         curl = _find(findings, cve="CVE-2024-9999", package="curl")
 
-        assert openssl.sources == ["cve-scan"]
+        assert openssl.sources == ["cve-tracking"]
         assert curl.sources == ["yocto-cve-check"]
 
 
 class TestSeverityReconciliation:
     def test_merged_finding_keeps_highest_severity_critical_over_low(self):
         a = _result(
-            "cve-scan",
+            "cve-tracking",
             [
                 _cve_finding(
                     cve="CVE-2024-5555",
                     package="glibc",
                     version="2.39",
                     severity="low",
-                    source="cve-scan",
+                    source="cve-tracking",
                 )
             ],
         )
@@ -232,14 +232,14 @@ class TestSeverityReconciliation:
 
     def test_merged_finding_keeps_highest_severity_high_over_medium(self):
         a = _result(
-            "cve-scan",
+            "cve-tracking",
             [
                 _cve_finding(
                     cve="CVE-2024-6666",
                     package="busybox",
                     version="1.36.1",
                     severity="medium",
-                    source="cve-scan",
+                    source="cve-tracking",
                 )
             ],
         )
@@ -270,28 +270,28 @@ class TestDeterministicOrdering:
         def build() -> list[CheckResult]:
             return [
                 _result(
-                    "cve-scan",
+                    "cve-tracking",
                     [
                         _cve_finding(
                             cve="CVE-2024-0001",
                             package="openssl",
                             version="3.0.12",
                             severity="high",
-                            source="cve-scan",
+                            source="cve-tracking",
                         ),
                         _cve_finding(
                             cve="CVE-2024-0002",
                             package="curl",
                             version="8.5.0",
                             severity="medium",
-                            source="cve-scan",
+                            source="cve-tracking",
                         ),
                         _cve_finding(
                             cve="CVE-2024-0003",
                             package="glibc",
                             version="2.39",
                             severity="critical",
-                            source="cve-scan",
+                            source="cve-tracking",
                         ),
                     ],
                 ),

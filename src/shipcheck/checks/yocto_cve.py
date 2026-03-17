@@ -16,7 +16,7 @@ of the ``version`` string to match what real builds emit in practice.
 
 Each finding carries ``sources=["yocto-cve-check"]`` and
 ``cra_mapping=["I.P2.2", "I.P2.3"]`` so reconciliation (see report.reconcile)
-can merge matches with the existing ``cve-scan`` check.
+    can merge matches with the existing ``cve-tracking`` check.
 """
 
 from __future__ import annotations

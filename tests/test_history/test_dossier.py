@@ -61,8 +61,8 @@ def _make_report(
     """
 
     cve_check = CheckResult(
-        check_id="cve-scan",
-        check_name="CVE scan",
+        check_id="cve-tracking",
+        check_name="CVE tracking",
         status=CheckStatus.WARN if cve_findings else CheckStatus.PASS,
         score=50 - cve_findings,
         max_score=50,

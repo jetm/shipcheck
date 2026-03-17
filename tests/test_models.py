@@ -398,16 +398,16 @@ class TestFindingSources:
         assert f.sources == []
 
     def test_sources_accepts_single_source(self):
-        f = Finding(message="x", severity="low", sources=["cve-scan"])
-        assert f.sources == ["cve-scan"]
+        f = Finding(message="x", severity="low", sources=["cve-tracking"])
+        assert f.sources == ["cve-tracking"]
 
     def test_sources_accepts_multiple_sources(self):
         f = Finding(
             message="x",
             severity="high",
-            sources=["cve-scan", "yocto-cve-check"],
+            sources=["cve-tracking", "yocto-cve-check"],
         )
-        assert f.sources == ["cve-scan", "yocto-cve-check"]
+        assert f.sources == ["cve-tracking", "yocto-cve-check"]
 
     def test_sources_is_list_type(self):
         f = Finding(message="x", severity="low")
@@ -417,7 +417,7 @@ class TestFindingSources:
         """default_factory=list must not share the same list across instances."""
         f1 = Finding(message="a", severity="low")
         f2 = Finding(message="b", severity="low")
-        f1.sources.append("cve-scan")
+        f1.sources.append("cve-tracking")
         assert f2.sources == []
 
 
@@ -517,10 +517,10 @@ class TestRoundTripSerialization:
         f = Finding(
             message="x",
             severity="high",
-            sources=["cve-scan", "yocto-cve-check"],
+            sources=["cve-tracking", "yocto-cve-check"],
         )
         d = asdict(f)
-        assert d["sources"] == ["cve-scan", "yocto-cve-check"]
+        assert d["sources"] == ["cve-tracking", "yocto-cve-check"]
 
     def test_finding_round_trip_preserves_cra_mapping_and_sources(self):
         from dataclasses import asdict
@@ -531,13 +531,13 @@ class TestRoundTripSerialization:
             remediation="Upgrade to 3.0.12",
             details={"cve": "CVE-2024-1234", "package": "openssl"},
             cra_mapping=["I.P2.2", "I.P2.3"],
-            sources=["cve-scan", "yocto-cve-check"],
+            sources=["cve-tracking", "yocto-cve-check"],
         )
         d = asdict(original)
         reconstructed = Finding(**d)
         assert reconstructed == original
         assert reconstructed.cra_mapping == ["I.P2.2", "I.P2.3"]
-        assert reconstructed.sources == ["cve-scan", "yocto-cve-check"]
+        assert reconstructed.sources == ["cve-tracking", "yocto-cve-check"]
 
     def test_check_result_asdict_contains_cra_mapping(self):
         from dataclasses import asdict
