@@ -20,6 +20,7 @@
 - `shipcheck doc declaration` subcommand generating Annex V (full) and Annex VI (simplified) Declaration of Conformity templates
 - `vuln-reporting` check validating Article 14 / Annex I Part II §§4-8 documentation obligations (CVD policy, SPoC, support period, update distribution)
 - `shipcheck init` scaffold now lists all 7 v0.3 checks and templates the `license_audit`, `yocto_cve`, `history`, `vuln_reporting`, and `product_config_path` sections with v0.3 usage examples
+- README rewritten with install, quickstart, check catalog, subcommand summary, and a pointer to the OpenSSF CRA Yocto rules catalog (was a 5-line stub)
 
 ### Changed
 
