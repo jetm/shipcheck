@@ -32,7 +32,7 @@ Patch releases (`v0.X.Y` bug fixes) do not require a new pilot unless the fix to
 
 Before starting the procedure, assemble the following:
 
-- **`pilots/NNNN-<name>/kas.yml`**: the kas-container build configuration. Pins the poky source (branch + commit), the machine, the distro, the target image recipe, and any required `local_conf_header` lines. This file is the single source of truth for "what was built"; it is committed alongside the pilot report.
+- **`pilots/NNNN-<name>/kas.yml`**: the kas-container build configuration. Pins the poky source with a `url:` entry (branch + commit), the machine, the distro, the target image recipe, and any required `local_conf_header` lines. The `url:` form lets `kas-container` clone poky into the container cleanly without any host-side bind-mounts. This file is the single source of truth for "what was built"; it is committed alongside the pilot report.
 - **`.shipcheck.yaml`**: the shipcheck configuration applied during the scan. For a first pilot on a given target, `shipcheck init` produces a working scaffold that you then commit next to the report. Subsequent pilots on the same target can reuse or diff against the previous pilot's copy.
 - **`product.yaml`** (optional): required only when the pilot exercises the `shipcheck docs` or `shipcheck doc declaration` subcommands, which consume product metadata for CRA Annex VII and Declaration of Conformity rendering.
 - **Expected outputs** under the kas-managed `build/tmp/deploy/` once the build completes:
@@ -49,44 +49,72 @@ A pilot is reproducible from a clean machine. The host prerequisites are deliber
 
 On a clean machine:
 
-1. Install `kas-container` 5.x. On Arch, `pacman -S kas` pulls it in; upstream instructions live at https://kas.readthedocs.io/.
-2. Install podman (preferred) or docker. `kas-container` detects whichever is on `PATH`; podman is preferred because it runs rootless.
-3. Verify `kas-container --version` reports 5.x and `podman --version` (or `docker --version`) reports a working runtime.
-4. Ensure at least ~30 GB of free disk in the kas work directory. First builds download the full poky source tree, a toolchain, and the sstate cache; 12-20 GB is typical, with headroom for a second image.
-5. Ensure a multi-core CPU (4+ cores recommended). bitbake parallelises aggressively; a 2-core VM will complete the first build in 8+ hours, while a 16-core workstation finishes in roughly an hour.
+1. Install `kas-container` 5.x plus a container runtime. On Arch, `pacman -S kas` pulls kas in; upstream instructions live at https://kas.readthedocs.io/. Install podman (preferred) or docker - `kas-container` detects whichever is on `PATH`, and podman is preferred because it runs rootless.
+2. Verify the installation: `kas-container --version` should report 5.x and `podman --version` (or `docker --version`) should report a working runtime.
+3. Ensure enough free disk in the kas work directory: at least ~30 GB when starting with empty caches (first build downloads the full poky source tree, a toolchain, and builds the sstate cache from scratch), or ~5 GB when `DL_DIR` and `SSTATE_DIR` are pre-seeded and cover the dependency graph.
+4. Ensure a multi-core CPU (4+ cores recommended). bitbake parallelises aggressively; a 2-core VM will complete the first build in 8+ hours, while a 16-core workstation finishes in roughly an hour from empty caches, or in ~30 minutes from pre-seeded caches.
+5. If you want to reuse existing Yocto caches from prior work, export the corresponding env vars before invoking `kas-container` (see the Cache reuse subsection below).
 
-Notice what is **not** on this list: no manual bitbake host-deps (`gcc`, `diffstat`, `chrpath`, `texinfo`, etc.), no manual `oe-init-build-env`, no host-side layer cloning. `kas-container` handles all of those inside its own image, which is why the bootstrap collapses to "container runtime plus disk".
+Notice what is **not** on this list: no manual bitbake host-deps (`gcc`, `diffstat`, `chrpath`, `texinfo`, etc.), no manual `oe-init-build-env`, no host-side layer cloning, no manual bind-mounts of poky. `kas-container` handles all of those inside its own image and clones the layers listed in `kas.yml` (including poky) into the container on first run, which is why the bootstrap collapses to "container runtime plus disk".
 
-For **pilot 0001** specifically, the kas YAML pins the existing poky checkout at `~/repos/work/poky` (branch `my-scarthgap`) as the poky source, so no re-clone is needed on the machine that has that checkout. The kas YAML uses a `type: git` entry pointing at the local path so the container sees the same commit the host does. Other pilots may pin an upstream remote instead; either form is valid as long as the branch and commit are explicit in the YAML.
+### Cache reuse (optional but strongly recommended)
+
+`kas-container` 5.x automatically bind-mounts a small set of host directories into the container when the corresponding env var is set on the host, and exports the same env vars inside the container so that `bitbake` and `kas` pick them up without any `kas.yml` changes. The relevant mappings are:
+
+| Host env var | Container path | Purpose |
+|---|---|---|
+| `KAS_WORK_DIR` | `/work` | kas work directory (defaults to `$PWD`) |
+| `KAS_BUILD_DIR` | `/build` | bitbake build directory |
+| `DL_DIR` | `/downloads` | source tarball cache |
+| `KAS_REPO_REF_DIR` | `/repo-ref` | git reference-repo cache for faster clones |
+| `SSTATE_DIR` | `/sstate` | bitbake sstate cache |
+
+To reuse pre-seeded Yocto caches, export `DL_DIR` and `SSTATE_DIR` before invoking `kas-container`:
+
+```bash
+export DL_DIR=~/repos/work/cache/downloads
+export SSTATE_DIR=~/repos/work/cache/sstate
+```
+
+The cost is effectively zero - first-time clone of poky takes ~30-60 s over the network regardless of cache state - and the benefit is large: a first pilot on a well-seeded cache drops from 4-8 hours to roughly 30 minutes when the caches cover the dependency graph.
+
+`ccache` is **not** on the auto-mount list. Enabling it is possible but requires passing `--runtime-args "-v <host-ccache-dir>:/ccache:rw"` to `kas-container` plus adding `CCACHE_DIR = "/ccache"` and `INHERIT += "ccache"` in a `kas.yml` override. Skip this unless compile time (rather than fetch/sstate reuse) is the critical path - for a first pilot it rarely is.
+
+If you do not have pre-seeded caches yet, simply omit the env vars; `kas-container` populates a local `downloads/` and `sstate-cache/` under `KAS_WORK_DIR` and reuses them on subsequent runs.
 
 ## 5. Procedure
 
 The procedure below produces the full pilot artefact bundle from a committed `kas.yml`. Run every command from the shipcheck repo root.
 
 1. Review `pilots/NNNN-<name>/kas.yml`. Confirm it pins a specific poky commit, the right target image recipe, and any required `INHERIT` lines such as `INHERIT += "create-spdx cve-check"`.
-2. Run the kas-container build:
+2. Run the kas-container build. Export cache env vars first if you have pre-seeded Yocto caches to reuse (see the Cache reuse subsection above):
 
    ```bash
-   kas-container build pilots/NNNN-<name>/kas.yml
+   cd ~/repos/personal/shipcheck
+   export DL_DIR=~/repos/work/cache/downloads   # if you have one
+   export SSTATE_DIR=~/repos/work/cache/sstate  # if you have one
+   kas-container build pilots/NNNN-<name>/kas.yml 2>&1 | tee pilots/NNNN-<name>/log.txt
    ```
 
-   This produces `${KAS_WORK_DIR}/build/tmp/deploy/` (and siblings) under the kas work directory. The first run takes 4-8 hours depending on CPU and network; subsequent runs against the same YAML are much faster because kas-container reuses the sstate cache. Record the build directory path; the rest of the procedure refers to it as `<kas-build-dir>`.
+   kas-container clones poky from the `url:` entry in `kas.yml` into the container on first run. With no caches, the first build takes 4-8 hours depending on CPU and network; with DL_DIR and SSTATE_DIR pre-seeded the same build typically completes in ~30 minutes. Subsequent runs against the same YAML are faster because kas-container reuses the sstate cache either way.
 
-3. Run the shipcheck scan in evidence-dossier mode, capturing stdout plus stderr to `log.txt`:
+   The kas-managed build directory lands under `KAS_WORK_DIR`, which defaults to the current working directory - i.e. `build/` under the shipcheck repo root. The rest of the procedure refers to it as `./build`.
+
+3. Run the shipcheck scan in evidence-dossier mode, appending stdout plus stderr to `log.txt`:
 
    ```bash
    shipcheck check \
-     --build-dir <kas-build-dir> \
+     --build-dir ./build \
      --format evidence \
      --out pilots/NNNN-<name>/dossier/ \
-     2>&1 | tee pilots/NNNN-<name>/log.txt
+     2>&1 | tee -a pilots/NNNN-<name>/log.txt
    ```
 
 4. Re-run the same scan in JSON mode to capture machine-readable output next to the dossier:
 
    ```bash
    shipcheck check \
-     --build-dir <kas-build-dir> \
+     --build-dir ./build \
      --format json \
      > pilots/NNNN-<name>/scan.json
    ```
