@@ -1,0 +1,105 @@
+# kas-container build configuration for pilot 0001.
+#
+# Target: poky Scarthgap, qemux86-64, core-image-minimal
+# Inherits: create-spdx + cve-check, so the shipcheck pilot has
+# real SPDX documents under tmp/deploy/spdx/ and a real CVE summary
+# at tmp/log/cve/cve-summary.json to audit against.
+#
+# The poky source is pinned to an existing local checkout at
+# ~/repos/work/poky on branch my-scarthgap. The `repos.poky` entry
+# sets `path:` with no `url:`, which tells kas to skip all version
+# control operations on that repo (see kas.repos.Repo factory:
+# when url is None, disable_operations = True). The branch and
+# commit fields below are recorded for audit / reproducibility -
+# they describe what the pilot MUST be run against, not what kas
+# will fetch.
+#
+# Running natively:
+#
+#     kas checkout pilots/0001-poky-scarthgap-min/kas.yml
+#     kas build    pilots/0001-poky-scarthgap-min/kas.yml
+#
+# Running under kas-container: the container mounts /repo (the
+# shipcheck repo that contains this file) and /work (KAS_WORK_DIR)
+# but does NOT bind-mount /home/tiamarin/repos/work/poky by default.
+# For container-based runs the poky tree has to be made visible
+# inside the container. Two supported options, in order of
+# preference:
+#
+#   1. Bind-mount poky under KAS_WORK_DIR before invoking
+#      kas-container, then change `path:` below to a relative form
+#      such as `poky` so kas resolves it against /work inside the
+#      container, e.g.:
+#
+#          mkdir -p /tmp/shipcheck-pilot-work
+#          ln -s /home/tiamarin/repos/work/poky /tmp/shipcheck-pilot-work/poky
+#          KAS_WORK_DIR=/tmp/shipcheck-pilot-work \
+#              kas-container checkout \
+#              pilots/0001-poky-scarthgap-min/kas.yml
+#
+#   2. Point `url:` at `file:///work/poky` and pre-seed
+#      /work/poky via a bind mount. Slower, because kas will still
+#      try to `git fetch` against the file:// URL.
+#
+# Pilot 0001's REPORT.md records which path was taken on the run
+# that produced the artefacts.
+
+header:
+  version: 14
+
+distro: poky
+machine: qemux86-64
+target: core-image-minimal
+
+repos:
+  # The shipcheck repo itself - no layers to add, just lets kas
+  # anchor relative paths against this file's location.
+  shipcheck:
+
+  poky:
+    # Local checkout at ~/repos/work/poky. No `url:` -> kas
+    # disables version control operations on this entry and uses
+    # whatever is currently checked out at `path:`. The pilot
+    # procedure requires the user to have branch `my-scarthgap` at
+    # commit cb2dcb4963... checked out before the build runs; see
+    # REPORT.md for the exact commit that the run captured.
+    path: /home/tiamarin/repos/work/poky
+    branch: my-scarthgap
+    commit: cb2dcb4963e5fbe449f1bcb019eae883ddecc8ec
+    layers:
+      meta:
+      meta-poky:
+      meta-yocto-bsp:
+
+local_conf_header:
+  shipcheck-pilot: |
+    # Enable the two Yocto classes whose output shipcheck audits:
+    # create-spdx produces tmp/deploy/spdx/*.spdx.json documents and
+    # cve-check produces per-recipe CVE reports plus the aggregate
+    # summary at tmp/log/cve/cve-summary.json.
+    INHERIT += "create-spdx cve-check"
+
+    # cve-check defaults. The aggregate summary path is hardcoded
+    # here so shipcheck's yocto-cve-check finder can locate it
+    # regardless of any distro-level override.
+    CVE_CHECK_DB_UPDATE = "1"
+    CVE_CHECK_FORMAT_JSON = "1"
+    CVE_CHECK_SUMMARY_DIR = "${LOG_DIR}/cve"
+    CVE_CHECK_SUMMARY_FILE_NAME_JSON = "cve-summary.json"
+    CVE_CHECK_LOG_JSON = "${CVE_CHECK_SUMMARY_DIR}/${CVE_CHECK_SUMMARY_FILE_NAME_JSON}"
+
+    # Keep the build deterministic-ish for the pilot: one thread per
+    # CPU core, standard sstate reuse. Anyone re-running the pilot
+    # can override via environment variables.
+    BB_NUMBER_THREADS ?= "${@oe.utils.cpu_count()}"
+    PARALLEL_MAKE    ?= "-j ${@oe.utils.cpu_count()}"
+
+    # create-spdx options. Default SPDX_INCLUDE_SOURCES is off; we
+    # leave it off because pilot 0001 only audits the metadata
+    # layer, not the source archive layer. Flip to "1" in later
+    # pilots if license-audit needs source-file granularity.
+    SPDX_INCLUDE_SOURCES = "0"
+
+    # Make the SBOM and CVE outputs reproducible enough to diff
+    # across re-runs of the same pilot.
+    BB_HASHCONFIG_IGNORE_VARS += "DATE TIME"
