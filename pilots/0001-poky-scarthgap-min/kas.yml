@@ -53,8 +53,11 @@ target: core-image-minimal
 
 repos:
   # The shipcheck repo itself - no layers to add, just lets kas
-  # anchor relative paths against this file's location.
+  # anchor relative paths against this file's location. The
+  # `layers: {}` override stops kas from treating the repo root
+  # as a layer (default behaviour when layers is omitted).
   shipcheck:
+    layers: {}
 
   poky:
     # Local checkout at ~/repos/work/poky. No `url:` -> kas
