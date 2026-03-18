@@ -82,6 +82,18 @@ The cost is effectively zero - first-time clone of poky takes ~30-60 s over the 
 
 If you do not have pre-seeded caches yet, simply omit the env vars; `kas-container` populates a local `downloads/` and `sstate-cache/` under `KAS_WORK_DIR` and reuses them on subsequent runs.
 
+### NVD API key (optional, strongly recommended)
+
+`cve-update-nvd2-native.bb` calls the NVD REST API 2.0 for every CVE while populating the local vulnerability database. Without an API key, NVD rate-limits the caller to one request every ~6 seconds, which stretches a full first-time CVE DB build to 10+ hours. With an API key, the limit drops to one request every ~2 seconds and the same build completes in roughly 2-3 hours.
+
+Request a free key at https://nvd.nist.gov/developers/request-an-api-key. Once you have it, export it in the shell that launches `kas-container` so the value flows into the bitbake environment:
+
+```bash
+export NVDCVE_API_KEY="<your-nvd-api-key>"
+```
+
+The committed `kas.yml` declares `env: { NVDCVE_API_KEY: }` with a null default. kas forwards the host value into the container (via `-e NVDCVE_API_KEY`) and adds the name to `BB_ENV_PASSTHROUGH_ADDITIONS`; bitbake reads it from there at task time. Because the default is null, the key is only passed when the caller has actually exported it on the host - the secret never touches git, and there is no hardcoded fallback in the committed config.
+
 ## 5. Procedure
 
 The procedure below produces the full pilot artefact bundle from a committed `kas.yml`. Run every command from the shipcheck repo root.
@@ -91,6 +103,7 @@ The procedure below produces the full pilot artefact bundle from a committed `ka
 
    ```bash
    cd ~/repos/personal/shipcheck
+   export NVDCVE_API_KEY="<your-nvd-api-key>"   # optional, strongly recommended
    export DL_DIR=~/repos/work/cache/downloads   # if you have one
    export SSTATE_DIR=~/repos/work/cache/sstate  # if you have one
    kas-container build pilots/NNNN-<name>/kas.yml 2>&1 | tee pilots/NNNN-<name>/log.txt

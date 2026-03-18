@@ -57,6 +57,15 @@ repos:
       meta-poky:
       meta-yocto-bsp:
 
+# Forward host environment variables to bitbake via
+# BB_ENV_PASSTHROUGH_ADDITIONS. kas-container forwards these via
+# `-e <VAR>` into the container; kas then exposes them to bitbake.
+#
+# null value means "only forward if the caller has it set" with no
+# committed default - the right pattern for secrets.
+env:
+  NVDCVE_API_KEY:
+
 local_conf_header:
   shipcheck-pilot: |
     # Enable the two Yocto classes whose output shipcheck audits:
