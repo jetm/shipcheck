@@ -74,6 +74,53 @@ it.
 | `shipcheck init` | Write a `.shipcheck.yaml` scaffold |
 | `shipcheck version` | Print the installed version |
 
+## Roadmap
+
+shipcheck ships in capability phases. Each phase bundles a set of checks
+with the report and evidence plumbing they need.
+
+### Shipped (v0.1)
+
+- **Phase 1 — SBOM + CVE + Report.** `sbom-generation` and `cve-tracking`
+  checks; terminal / markdown / JSON / HTML reports; readiness score and
+  `--fail-on` CI gating; `.shipcheck.yaml` configuration.
+- **Phase 2 — Secure Boot, Image Signing, and CRA evidence layer.**
+  `secure-boot` (sbsign / image-uefi-sign class detection, test-key
+  flagging) and `image-signing` (FIT signatures, dm-verity) checks.
+  Static CRA requirement catalog with `cra_mapping` metadata on every
+  finding, `--format evidence` renderer, `--out DIR` multi-file dossier,
+  `license-audit` and `yocto-cve-check` checks, CVE finding reconciliation
+  across scanners, SQLite scan history at `.shipcheck/history.db`, the
+  `dossier`, `docs`, and `doc declaration` subcommands, and a
+  `vuln-reporting` check covering Article 14 / Annex I Part II §§4-8
+  documentation obligations.
+
+Pilot: see `pilots/0001-poky-scarthgap-min/REPORT.md` (pending — first
+pilot run is in progress).
+
+### Planned
+
+- **Phase 3 — Update mechanism + OP-TEE.** Detect capsule update /
+  swupdate / RAUC and verify signed updates; OP-TEE integration,
+  measured boot, TPM.
+- **Phase 3.5 — OCI attestation + kernel hardening.** OCI container SBOM
+  attestation via `image-oci`; kernel hardening configs (FORTIFY_SOURCE,
+  STACKPROTECTOR, KASLR); `harvest.json` export.
+- **Phase 4 — CI integration.** GitLab CI and GitHub Actions templates,
+  SARIF output for the GitHub Security tab, shared history aggregation
+  across runs.
+- **Phase 5 — Web dashboard.** FastAPI backend on top of the history
+  store and dossier output; audit-facing share view; self-hostable.
+
+### Depth follow-ups
+
+Open improvements to existing checks rather than new phases:
+
+- SPDX 3.0 and CycloneDX full field validation
+- Secure Boot PE/COFF binary signature verification
+- Secure Boot PKI chain validation (PK / KEK / DB enrollment)
+- CI pipeline signing-step detection in `.gitlab-ci.yml` / GitHub workflows
+
 ## Configuration
 
 Per-check configuration lives in `.shipcheck.yaml`. See the scaffold
