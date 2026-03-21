@@ -78,6 +78,22 @@ export SSTATE_DIR=~/repos/work/cache/sstate
 
 The cost is effectively zero - first-time clone of poky takes ~30-60 s over the network regardless of cache state - and the benefit is large: a first pilot on a well-seeded cache drops from 4-8 hours to roughly 30 minutes when the caches cover the dependency graph.
 
+`KAS_REPO_REF_DIR` is a separate cache for git reference repositories: a directory of bare clones that `kas` uses with `git clone --reference` to avoid re-downloading objects already present locally. It expects a directory containing bare clones named by URL slug - for example, `git.yoctoproject.org.poky.git/` for `https://git.yoctoproject.org/poky.git`. One-time setup:
+
+```bash
+mkdir -p ~/.cache/kas-ref
+git clone --bare ~/repos/work/poky ~/.cache/kas-ref/git.yoctoproject.org.poky.git
+# OR clone from upstream if you don't have a local poky:
+#   git clone --bare https://git.yoctoproject.org/poky.git \
+#             ~/.cache/kas-ref/git.yoctoproject.org.poky.git
+```
+
+Then export it before invoking `kas-container`:
+
+```bash
+export KAS_REPO_REF_DIR=~/.cache/kas-ref
+```
+
 `ccache` is **not** on the auto-mount list. Enabling it is possible but requires passing `--runtime-args "-v <host-ccache-dir>:/ccache:rw"` to `kas-container` plus adding `CCACHE_DIR = "/ccache"` and `INHERIT += "ccache"` in a `kas.yml` override. Skip this unless compile time (rather than fetch/sstate reuse) is the critical path - for a first pilot it rarely is.
 
 If you do not have pre-seeded caches yet, simply omit the env vars; `kas-container` populates a local `downloads/` and `sstate-cache/` under `KAS_WORK_DIR` and reuses them on subsequent runs.
@@ -92,7 +108,17 @@ Request a free key at https://nvd.nist.gov/developers/request-an-api-key. Once y
 export NVDCVE_API_KEY="<your-nvd-api-key>"
 ```
 
-The committed `kas.yml` declares `env: { NVDCVE_API_KEY: }` with a null default. kas forwards the host value into the container (via `-e NVDCVE_API_KEY`) and adds the name to `BB_ENV_PASSTHROUGH_ADDITIONS`; bitbake reads it from there at task time. Because the default is null, the key is only passed when the caller has actually exported it on the host - the secret never touches git, and there is no hardcoded fallback in the committed config.
+The committed `kas.yml` declares `env: { NVDCVE_API_KEY: }` with a null default. The `env:` declaration tells kas to add `NVDCVE_API_KEY` to `BB_ENV_PASSTHROUGH_ADDITIONS` inside the container, so bitbake is *allowed* to read it at task time. Because the default is null, the key is only considered when the caller has actually exported it on the host - the secret never touches git, and there is no hardcoded fallback in the committed config.
+
+However, `kas-container` does **not** auto-forward arbitrary env vars into the container. Inspecting the `kas-container` wrapper script shows that only a fixed set of vars is passed through with `-e` (`KAS_WORK_DIR`, `KAS_BUILD_DIR`, `DL_DIR`, `SSTATE_DIR`, `KAS_REPO_REF_DIR`, `SSH_*`, `AWS_*`, `NETRC`, and a handful of other well-known names). `NVDCVE_API_KEY` is not on that list, so declaring it under `env:` in `kas.yml` is necessary but not sufficient: the value reaches `BB_ENV_PASSTHROUGH_ADDITIONS` but the var itself is absent from the container's OS environment, and bitbake ends up reading an empty string. The net effect is that the build silently falls back to the unauthenticated 6-second rate limit.
+
+The fix is to tell `kas-container` to import the var from the calling shell by appending a `-e NVDCVE_API_KEY` argument to docker/podman via `--runtime-args`:
+
+```bash
+kas-container --runtime-args "-e NVDCVE_API_KEY" build pilots/NNNN-<name>/kas.yml
+```
+
+This is a `kas-container`-specific limitation. Native `kas` (the non-container wrapper) forwards host env vars via its own handling and does not need the extra flag. The full Procedure invocation in the next section includes `--runtime-args "-e NVDCVE_API_KEY"` for this reason, and the Verification sub-subsection shows how to confirm the var reaches both the container env and bitbake's data store.
 
 ## 5. Procedure
 
@@ -104,14 +130,36 @@ The procedure below produces the full pilot artefact bundle from a committed `ka
    ```bash
    cd ~/repos/personal/shipcheck
    export NVDCVE_API_KEY="<your-nvd-api-key>"   # optional, strongly recommended
-   export DL_DIR=~/repos/work/cache/downloads   # if you have one
-   export SSTATE_DIR=~/repos/work/cache/sstate  # if you have one
-   kas-container build pilots/NNNN-<name>/kas.yml 2>&1 | tee pilots/NNNN-<name>/log.txt
+   export DL_DIR=~/repos/work/cache/downloads
+   export SSTATE_DIR=~/repos/work/cache/sstate
+   export KAS_REPO_REF_DIR=~/.cache/kas-ref     # optional, reuses bare clones
+   kas-container \
+       --runtime-args "-e NVDCVE_API_KEY" \
+       build pilots/0001-poky-scarthgap-min/kas.yml 2>&1 \
+       | tee pilots/0001-poky-scarthgap-min/log.txt
    ```
+
+   The `--runtime-args "-e NVDCVE_API_KEY"` is required because `kas-container` does not auto-forward arbitrary env vars into the container (see the NVD API key subsection above). `DL_DIR`, `SSTATE_DIR`, and `KAS_REPO_REF_DIR` are on the kas-container auto-mount list, so they flow in without extra flags.
 
    kas-container clones poky from the `url:` entry in `kas.yml` into the container on first run. With no caches, the first build takes 4-8 hours depending on CPU and network; with DL_DIR and SSTATE_DIR pre-seeded the same build typically completes in ~30 minutes. Subsequent runs against the same YAML are faster because kas-container reuses the sstate cache either way.
 
    The kas-managed build directory lands under `KAS_WORK_DIR`, which defaults to the current working directory - i.e. `build/` under the shipcheck repo root. The rest of the procedure refers to it as `./build`.
+
+   **Verification.** After the build starts (or even as a dry-run before the build), confirm that `DL_DIR`, `SSTATE_DIR`, and `NVDCVE_API_KEY` all land inside the container and into bitbake's data store:
+
+   ```bash
+   kas-container --runtime-args "-e NVDCVE_API_KEY" shell \
+       pilots/0001-poky-scarthgap-min/kas.yml -c \
+       'echo "=== container env ==="; \
+        env | grep -E "^(DL_DIR|SSTATE_DIR|NVDCVE_API_KEY)=" \
+            | sed "s/NVDCVE_API_KEY=.*/NVDCVE_API_KEY=<SET>/"; \
+        echo "=== bitbake data ==="; \
+        bitbake -e core-image-minimal 2>/dev/null \
+            | grep -E "^(DL_DIR|SSTATE_DIR|NVDCVE_API_KEY)=" \
+            | sed "s/NVDCVE_API_KEY=.*/NVDCVE_API_KEY=<SET>/"'
+   ```
+
+   Expected good output: `DL_DIR`, `SSTATE_DIR`, and `NVDCVE_API_KEY` all appear in both the container env section and the bitbake data section. If `NVDCVE_API_KEY` only appears under the bitbake data section's `BB_ENV_PASSTHROUGH_ADDITIONS` but is missing from the container env, the `--runtime-args "-e NVDCVE_API_KEY"` forwarding is missing - bitbake will then read an empty value and fall back to the unauthenticated 6-second rate limit.
 
 3. Run the shipcheck scan in evidence-dossier mode, appending stdout plus stderr to `log.txt`:
 
