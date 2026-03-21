@@ -161,6 +161,22 @@ The procedure below produces the full pilot artefact bundle from a committed `ka
 
    Expected good output: `DL_DIR`, `SSTATE_DIR`, and `NVDCVE_API_KEY` all appear in both the container env section and the bitbake data section. If `NVDCVE_API_KEY` only appears under the bitbake data section's `BB_ENV_PASSTHROUGH_ADDITIONS` but is missing from the container env, the `--runtime-args "-e NVDCVE_API_KEY"` forwarding is missing - bitbake will then read an empty value and fall back to the unauthenticated 6-second rate limit.
 
+   Next, confirm that the bind mounts backing `/downloads`, `/sstate`, and `/repo-ref` inside the container actually point at the host paths the caller exported. The env check above proves the variables are set, but it does not prove the mounts are wired correctly:
+
+   ```bash
+   # Verify that /downloads, /sstate, and /repo-ref inside the container
+   # are bind-mounted from the expected host paths.
+   kas-container --runtime-args "-e NVDCVE_API_KEY" shell \
+       pilots/0001-poky-scarthgap-min/kas.yml -c \
+       'for m in /downloads /sstate /repo-ref; do \
+            echo "=== $m ==="; findmnt "$m" 2>/dev/null || echo "(not mounted)"; \
+        done'
+   ```
+
+   `findmnt` reports the underlying source of each bind mount. The SOURCE column shows the host filesystem path (in the form `/dev/<disk>[<host subpath>]`). That host subpath is the `DL_DIR` / `SSTATE_DIR` / `KAS_REPO_REF_DIR` the caller exported. If any of the three shows `(not mounted)`, the corresponding env var was not set on the host when kas-container launched, or kas-container did not forward it.
+
+   `/repo-ref` only appears when `KAS_REPO_REF_DIR` is exported; if the caller skipped the bare-clone cache-reuse setup, that entry printing `(not mounted)` is expected.
+
 3. Run the shipcheck scan in evidence-dossier mode, appending stdout plus stderr to `log.txt`:
 
    ```bash
