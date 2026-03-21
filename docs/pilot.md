@@ -120,6 +120,64 @@ kas-container --runtime-args "-e NVDCVE_API_KEY" build pilots/NNNN-<name>/kas.ym
 
 This is a `kas-container`-specific limitation. Native `kas` (the non-container wrapper) forwards host env vars via its own handling and does not need the extra flag. The full Procedure invocation in the next section includes `--runtime-args "-e NVDCVE_API_KEY"` for this reason, and the Verification sub-subsection shows how to confirm the var reaches both the container env and bitbake's data store.
 
+### CVE DB persistence and backup
+
+The `cve-update-nvd2-native.bb` recipe maintains a SQLite NVD database at `${DL_DIR}/CVE_CHECK/nvdcve_2-2.db` and uses the database file's mtime to decide whether to skip the fetch, run an incremental update, or re-download the full dataset. The recipe is already designed to be incremental across pilot runs, so the cache survives naturally as long as `DL_DIR` is not destroyed.
+
+#### The built-in incremental mechanism
+
+`do_fetch` in the recipe tracks the database's mtime and issues `lastModStartDate` / `lastModEndDate` query args to the NVD REST API 2.0 to pull only the CVE rows that changed since the last run. Two thresholds govern the behaviour:
+
+| DB age | do_fetch behaviour | Wall-clock cost |
+|---|---|---|
+| < 24h | skipped entirely | ~0s |
+| 24h - 120d | incremental (only CVEs changed since last run) | seconds to minutes |
+| > 120d | full re-download (NVD API 120-day window exceeded) | hours |
+
+The 24h threshold is controlled by `CVE_DB_UPDATE_INTERVAL` (default `86400`). The 120d threshold is controlled by `CVE_DB_INCR_UPDATE_AGE_THRES` (default `10368000`). The 120d value is bounded by the NVD API itself: `lastModStartDate` and `lastModEndDate` cannot span more than 120 days, so raising `CVE_DB_INCR_UPDATE_AGE_THRES` above that will trigger NVD API errors mid-fetch.
+
+#### Where the DB lives
+
+The database lives at `${DL_DIR}/CVE_CHECK/nvdcve_2-2.db`, which resolves to `~/repos/work/cache/downloads/CVE_CHECK/nvdcve_2-2.db` on the pilot host via the `DL_DIR` bind mount that `kas-container` sets up. Because `DL_DIR` lives on the host filesystem, the database is persistent across pilot runs by default - there is no container-lifecycle issue to work around.
+
+#### Threats to the DB
+
+Three things can destroy the cached database and force the next pilot to do a full multi-hour re-download:
+
+- `kas-container cleanall` - wipes `DL_DIR` entirely. This is distinct from `kas-container clean` and `kas-container cleansstate`, both of which preserve `DL_DIR`. Only `cleanall` removes the NVD database.
+- Manual `rm` on the `CVE_CHECK/` directory, or the host disk filling up and the database being deleted to free space.
+- `bitbake -c cleanall cve-update-nvd2-native` - targets the recipe directly and removes its downloads, including the SQLite file.
+
+#### Backup and restore
+
+Back up the database after every successful pilot. The copy is cheap (typically a few hundred MB, shrinks incrementally), and restoring it avoids a multi-hour re-download if one of the threats above hits:
+
+```bash
+# Backup after a successful pilot (idempotent, incremental):
+mkdir -p ~/repos/work/cache/downloads-backup/CVE_CHECK
+cp -p ~/repos/work/cache/downloads/CVE_CHECK/nvdcve_2-2.db \
+      ~/repos/work/cache/downloads-backup/CVE_CHECK/
+```
+
+```bash
+# Restore after cleanall or disk loss:
+mkdir -p ~/repos/work/cache/downloads/CVE_CHECK
+cp -p ~/repos/work/cache/downloads-backup/CVE_CHECK/nvdcve_2-2.db \
+      ~/repos/work/cache/downloads/CVE_CHECK/
+```
+
+`cp -p` is required on both sides: the recipe uses the database file's mtime to decide between skip / incremental / full re-download (see the thresholds table above), so restoring with a fresh mtime would force a full re-download on the next build and defeat the purpose of the backup.
+
+#### Optional: extend the skip window
+
+If a pilot host runs multiple builds per day and the default 24h skip window is too aggressive - for example, rebuilding the same target repeatedly during a triage session - `CVE_DB_UPDATE_INTERVAL` can be raised via the `local_conf_header` block in `kas.yml`:
+
+```
+CVE_DB_UPDATE_INTERVAL = "604800"   # skip fetch if DB < 7 days old
+```
+
+Do **not** raise `CVE_DB_INCR_UPDATE_AGE_THRES` above its default `10368000` (120 days). The upper bound is imposed by the NVD API's `lastModStartDate` window, not by the recipe; a larger value will cause API errors mid-fetch rather than enable a longer incremental window.
+
 ## 5. Procedure
 
 The procedure below produces the full pilot artefact bundle from a committed `kas.yml`. Run every command from the shipcheck repo root.
