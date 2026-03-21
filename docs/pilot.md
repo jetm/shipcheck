@@ -259,6 +259,34 @@ The procedure below produces the full pilot artefact bundle from a committed `ka
 
 Do not hand-edit `log.txt`, `scan.json`, or anything under `dossier/`. If a shipcheck bug surfaces during step 3 or step 4 and you need to fix it, regenerate all three artefacts after the fix and note the regeneration in the report's Run section.
 
+### Troubleshooting
+
+#### FileNotFoundError in lzlib/first-alphabetical recipe do_cve_check
+
+Symptom (from bitbake output):
+
+```text
+ERROR: lzlib-...-r0 do_cve_check: ...
+Exception: FileNotFoundError: [Errno 2] No such file or directory: '.../tmp/log/cve/cve-summary.json'
+```
+
+Cause: the kas.yml `local_conf_header` overrides `CVE_CHECK_LOG_JSON` to point at the aggregate summary path. That path is the per-image aggregate location, not the per-recipe location. The per-recipe `do_cve_check` tries to write the file before the aggregator task creates the parent directory, so the very first recipe to run `do_cve_check` (lzlib, by alphabetical order) fails with `FileNotFoundError`.
+
+Fix: remove any override of `CVE_CHECK_LOG_JSON`, `CVE_CHECK_SUMMARY_DIR`, and `CVE_CHECK_SUMMARY_FILE_NAME_JSON` from the kas.yml. The defaults from `cve-check.bbclass` do the right thing:
+
+- Per-recipe JSON goes to `${T}/cve.json` (bitbake-managed temp dir, always exists).
+- Per-image aggregate goes to `tmp/deploy/images/<machine>/<image>.json`.
+- Convenience symlink at `tmp/log/cve/cve-summary.json` points at the latest aggregate, created by `do_cve_check_write_rootfs_manifest` in `cve-check.bbclass`.
+
+shipcheck's yocto-cve-check reads the symlink. No override is needed.
+
+Note: `do_cve_check` is not sstate-cached, so after fixing the kas.yml just re-run `kas-container build`. If the failed task stays cached anyway, force a clean rebuild of the offending recipe:
+
+```bash
+kas-container shell pilots/NNNN-<name>/kas.yml -c \
+    'bitbake -c cleanall lzlib && bitbake core-image-minimal'
+```
+
 ## 6. Report template
 
 Every pilot report uses the same structure. The template below is the canonical shape; instantiate it under `pilots/NNNN-<name>/REPORT.md`.

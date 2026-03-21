@@ -74,14 +74,21 @@ local_conf_header:
     # summary at tmp/log/cve/cve-summary.json.
     INHERIT += "create-spdx cve-check"
 
-    # cve-check defaults. The aggregate summary path is hardcoded
-    # here so shipcheck's yocto-cve-check finder can locate it
-    # regardless of any distro-level override.
+    # cve-check defaults. The cve-check.bbclass task
+    # do_cve_check_write_rootfs_manifest creates a symlink at
+    # ${LOG_DIR}/cve/cve-summary.json pointing at the latest per-image
+    # aggregate manifest, and shipcheck's yocto-cve-check reads that
+    # symlink directly - so no path override is needed here.
+    #
+    # Do NOT override CVE_CHECK_LOG_JSON, CVE_CHECK_SUMMARY_DIR, or
+    # CVE_CHECK_SUMMARY_FILE_NAME_JSON. CVE_CHECK_LOG_JSON defaults to
+    # ${T}/cve.json (the per-recipe temp dir, always exists); pointing
+    # it at the aggregate summary path causes the first recipe's
+    # do_cve_check to FileNotFoundError because the aggregate dir is
+    # only created later by the per-image manifest task. See
+    # docs/pilot.md Troubleshooting for the full story.
     CVE_CHECK_DB_UPDATE = "1"
     CVE_CHECK_FORMAT_JSON = "1"
-    CVE_CHECK_SUMMARY_DIR = "${LOG_DIR}/cve"
-    CVE_CHECK_SUMMARY_FILE_NAME_JSON = "cve-summary.json"
-    CVE_CHECK_LOG_JSON = "${CVE_CHECK_SUMMARY_DIR}/${CVE_CHECK_SUMMARY_FILE_NAME_JSON}"
 
     # Keep the build deterministic-ish for the pilot: one thread per
     # CPU core, standard sstate reuse. Anyone re-running the pilot
