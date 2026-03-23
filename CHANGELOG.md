@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Pilot testing methodology (`docs/pilot.md`) documenting when pilots are required, kas-container bootstrap with cache reuse (`DL_DIR`, `SSTATE_DIR`, `KAS_REPO_REF_DIR`), NVD API key passthrough, the per-pilot artefact layout, and the gating rules that tie pilot completion to release tags.
+- First pilot report (`pilots/0001-poky-scarthgap-min/REPORT.md`) validating the v0.1 check set against a real poky Scarthgap `core-image-minimal` build with `INHERIT += "create-spdx cve-check"`. All seven registered check IDs executed without raising.
+- Pilots directory convention at repo root (`pilots/NNNN-<short-name>/`) containing `kas.yml`, `log.txt`, `scan.json`, `REPORT.md`, and a `dossier/` subdirectory with the full `--out` evidence bundle.
+
+### Changed
+
+- README Roadmap now links to `pilots/0001-poky-scarthgap-min/REPORT.md` instead of the "pending - first pilot run is in progress" placeholder.
+- Added a "Known limitations" subsection to README under "What it checks" enumerating documented scope boundaries surfaced by pilot 0001 (`vuln-reporting` requires `product.yaml`, `secure-boot` is config-level only, `image-signing` is config-level only, `sbom-generation` accepts SPDX 2.x, `cve-tracking` / `yocto-cve-check` file-lookup divergence).
+
 ## [0.1.0]
 
 ### Added

@@ -63,6 +63,36 @@ CVE findings from `cve-tracking` and `yocto-cve-check` are reconciled
 into a single finding whose `sources` lists every scanner that flagged
 it.
 
+### Known limitations
+
+Pilot 0001 (poky Scarthgap `core-image-minimal`) validated the v0.1 check set
+end-to-end against real bitbake output. The following are documented
+limitations, not defects:
+
+- **`vuln-reporting` requires `product.yaml`** - without a `product.yaml`
+  providing Article 14 / Annex I Part II §§4-8 data (CVD policy, SPoC,
+  support period, update distribution), the check returns an ERROR status
+  with "product.yaml not found". Supply the file via
+  `product_config_path` in `.shipcheck.yaml` to exercise the check.
+- **`secure-boot` is config-level only** - detects the signing-class
+  inheritance and flags known test keys in `.shipcheck.yaml`, but does
+  NOT perform PE/COFF binary signature verification, PKI chain validation
+  (PK/KEK/DB enrollment), or CI-file signing-step detection. Those depths
+  are tracked as roadmap follow-ups (, ).
+- **`image-signing` is config-level only** - detects FIT image signatures
+  and dm-verity configuration from the build tree layout, but does NOT
+  verify the cryptographic integrity of the signed artefacts. Cryptographic
+  verification is tracked as a roadmap follow-up.
+- **`sbom-generation` accepts SPDX 2.x, not only 2.3** - poky Scarthgap's
+  `create-spdx` class emits SPDX 2.2 documents; shipcheck accepts both 2.2
+  and 2.3 against the BSI TR-03183-2 v2.1.0 field requirements. SPDX 3.0
+  is detected but not field-validated.
+- **`cve-tracking` looks for specific Yocto output locations** - pilot 0001
+  surfaced that `cve-tracking` and `yocto-cve-check` use different lookup
+  logic; the more reliable path is `yocto-cve-check`, which reads
+  `tmp/log/cve/cve-summary.json`. The reconciliation between the two is
+  tracked as .
+
 ## Subcommands
 
 | Command | Purpose |
@@ -95,8 +125,7 @@ with the report and evidence plumbing they need.
   `vuln-reporting` check covering Article 14 / Annex I Part II §§4-8
   documentation obligations.
 
-Pilot: see `pilots/0001-poky-scarthgap-min/REPORT.md` (pending — first
-pilot run is in progress).
+Pilot: see [`pilots/0001-poky-scarthgap-min/REPORT.md`](pilots/0001-poky-scarthgap-min/REPORT.md).
 
 ### Planned
 
