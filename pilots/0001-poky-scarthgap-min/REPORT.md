@@ -26,7 +26,13 @@ build_host: CachyOS (kas-container runs the build inside a Debian trixie
   SPDX and cve-check via `INHERIT += "create-spdx cve-check"` in the
   `local_conf_header:` section. No override of
   `CVE_CHECK_LOG_JSON` / `CVE_CHECK_SUMMARY_DIR` (see Troubleshooting
-  PF-TB2 below).
+  PF-TB2 below). Note: the original  task 3.1 specified branch
+  `my-scarthgap` pointing at the local poky checkout at
+  `~/repos/work/poky`; this pilot uses upstream `scarthgap` instead so
+  `kas-container` can clone poky cleanly into its own `/work/poky`
+  without host bind-mounts (switch landed in commit `3f5a67a`). The
+  commit pin is identical, so reproducibility is preserved. Upstream
+  URL is now the recommended default for future pilots.
 - `.shipcheck.yaml`: none. Pilot 0001 exercises shipcheck defaults so
   the run is reproducible without any per-project tuning.
 - `product.yaml`: none. Pilot 0001 exercises the default
