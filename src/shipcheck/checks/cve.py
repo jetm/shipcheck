@@ -6,6 +6,8 @@ import json
 import logging
 from typing import TYPE_CHECKING
 
+from shipcheck.checks import _cve_discovery
+from shipcheck.checks.yocto_cve import _normalize_issues
 from shipcheck.models import BaseCheck, CheckResult, CheckStatus, Finding
 
 if TYPE_CHECKING:
@@ -13,17 +15,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-IMAGES_SUBDIR = "tmp/deploy/images"
-
 _REMEDIATION_NO_OUTPUT = (
     "No CVE scan output found. Add `inherit cve-check` to your image recipe "
     "or run sbom-cve-check against your SPDX SBOM."
-)
-
-_CVE_GLOB_PATTERNS = (
-    "*.sbom-cve-check.yocto.json",
-    "*.rootfs.json",
-    "*/cve_check_summary*.json",
 )
 
 _REQUIRED_ISSUE_FIELDS = ("id", "status")
@@ -141,32 +135,45 @@ def _compute_score(findings: list[Finding]) -> int:
 def _discover_cve_output(build_dir: Path) -> Path | None:
     """Search for CVE scan output in priority order, return first match.
 
-    Lookup order:
-        1. tmp/deploy/images/*.sbom-cve-check.yocto.json
-        2. tmp/deploy/images/*.rootfs.json
-        3. tmp/deploy/images/*/cve_check_summary*.json
+    Thin wrapper over :func:`_cve_discovery.discover_cve_output` kept so tests
+    that monkeypatch ``cve._discover_cve_output`` continue to work.  See the
+    shared discovery module for the authoritative lookup order.
     """
-    images_dir = build_dir / IMAGES_SUBDIR
-    if not images_dir.is_dir():
-        return None
+    return _cve_discovery.discover_cve_output(build_dir)
 
-    for pattern in _CVE_GLOB_PATTERNS:
-        matches = sorted(images_dir.glob(pattern))
-        if matches:
-            return matches[0]
 
-    return None
+def _issues_to_packages(issues: list[dict]) -> list[dict]:
+    """Regroup a flat list of normalized issues into package[] shape.
+
+    Issues are expected to carry ``package`` and ``version`` fields (as
+    produced by :func:`shipcheck.checks.yocto_cve._normalize_issues`).  The
+    grouping preserves issue order within each ``(package, version)`` key and
+    preserves first-seen ordering of the keys themselves.
+    """
+    grouped: dict[tuple[str, str], dict] = {}
+    for issue in issues:
+        name = issue.get("package", "")
+        version = issue.get("version", "")
+        key = (name, version)
+        bucket = grouped.get(key)
+        if bucket is None:
+            bucket = {"name": name, "version": version, "issue": []}
+            grouped[key] = bucket
+        bucket["issue"].append(issue)
+    return list(grouped.values())
 
 
 def _parse_cve_json(cve_file: Path) -> list[dict]:
     """Parse a CVE JSON file and return the package list.
 
-    Handles all three Yocto CVE output format variants:
-    - sbom-cve-check: integer version, cpes field present
-    - vex.bbclass: integer version, no cpes field
-    - legacy cve-check: string version, no cpes field
+    Handles both Yocto CVE output shapes:
 
-    All fields except id and status on issues are optional.
+    * ``package[].issue[]`` (sbom-cve-check, vex.bbclass, legacy cve-check).
+    * Flat ``issues[]`` with inline ``package``/``version`` (Scarthgap
+      ``tmp/log/cve/cve-summary.json``); regrouped into ``package[]`` shape
+      so :func:`_build_findings` can consume either input uniformly.
+
+    All fields except ``id`` and ``status`` on issues are optional.
 
     Returns:
         List of package dicts, each with 'name', 'version', 'issue', and
@@ -181,11 +188,14 @@ def _parse_cve_json(cve_file: Path) -> list[dict]:
         msg = f"Failed to parse CVE JSON: {cve_file}: {e}"
         raise ValueError(msg) from e
 
-    if "package" not in data:
+    if not isinstance(data, dict) or ("package" not in data and "issues" not in data):
         msg = f"Missing 'package' key in CVE JSON: {cve_file}"
         raise ValueError(msg)
 
-    packages = data["package"]
+    if "package" in data and "issues" not in data:
+        packages = data["package"]
+    else:
+        packages = _issues_to_packages(_normalize_issues(data))
 
     for pkg in packages:
         pkg_name = pkg.get("name", "<unknown>")
