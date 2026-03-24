@@ -1,10 +1,12 @@
 """License audit check for Yocto `license.manifest` files.
 
-Parses Yocto's text-based license metadata under
-`<build-dir>/tmp/deploy/licenses/<image>/license.manifest`, classifies each
-declared SPDX ID into a canonical category, and surfaces copyleft-boundary
-risks alongside unknown licences. Drift detection against a previous scan is
-stubbed out here; it is wired to `HistoryStore` in a later task.
+Parses Yocto's text-based license metadata found anywhere under
+`<build-dir>/tmp/deploy/licenses/` (legacy per-image layout
+`<image>/license.manifest` and the real per-architecture layout
+`<arch>/<image-or-pkg>/license.manifest`), classifies each declared SPDX ID
+into a canonical category, and surfaces copyleft-boundary risks alongside
+unknown licences. Drift detection against a previous scan is stubbed out
+here; it is wired to `HistoryStore` in a later task.
 """
 
 from __future__ import annotations
@@ -96,34 +98,41 @@ def _split_license_expression(expr: str) -> list[str]:
 
 
 def _discover_image_dir(build_dir: Path) -> Path | None:
-    """Locate the most recently modified image directory under tmp/deploy/licenses/.
+    """Locate the directory containing the newest `license.manifest` under the tree.
+
+    Walks `tmp/deploy/licenses/` recursively so that both the legacy per-image
+    layout (`tmp/deploy/licenses/<image>/license.manifest`) and the real Yocto
+    per-architecture layout
+    (`tmp/deploy/licenses/<arch>/<image-or-pkg>/license.manifest`) are found
+    by the same discovery pass. Among all matches, the one with the newest
+    mtime wins and its parent directory is returned.
 
     Returns None when the `tmp/deploy/licenses/` directory itself is missing.
-    When the directory exists but contains no manifests, returns None as well
-    so the caller can treat it as a SKIP.
+    When the directory exists but contains no manifests at any depth, also
+    returns None so the caller can treat it as a SKIP.
     """
     licenses_dir = build_dir / LICENSES_SUBDIR
     if not licenses_dir.is_dir():
         return None
 
     candidates: list[tuple[float, Path]] = []
-    for entry in licenses_dir.iterdir():
-        if not entry.is_dir():
-            continue
-        manifest = entry / "license.manifest"
+    for manifest in licenses_dir.rglob("license.manifest"):
         if not manifest.is_file():
             continue
-        # Prefer the manifest's own mtime; fall back to the directory mtime.
         try:
             mtime = manifest.stat().st_mtime
         except OSError:
-            mtime = entry.stat().st_mtime
-        candidates.append((mtime, entry))
+            parent = manifest.parent
+            try:
+                mtime = parent.stat().st_mtime
+            except OSError:
+                continue
+        candidates.append((mtime, manifest))
 
     if not candidates:
         return None
     candidates.sort(key=lambda item: item[0])
-    return candidates[-1][1]
+    return candidates[-1][1].parent
 
 
 def _parse_manifest(manifest: Path) -> list[dict[str, str]]:
