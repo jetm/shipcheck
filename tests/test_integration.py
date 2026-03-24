@@ -1279,3 +1279,120 @@ class TestCVEReconciliationEndToEnd:
         assert "yocto-cve-check" in sources, (
             f"merged finding is missing yocto-cve-check source: {merged}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Pilot-0001 CVE discovery divergence regression (task 2.6)
+# ---------------------------------------------------------------------------
+
+
+def _write_yocto_summary_only_tree(build_dir: Path) -> Path:
+    """Stage a build tree where cve-summary.json is the ONLY CVE evidence.
+
+    No ``tmp/deploy/images/*.sbom-cve-check.yocto.json`` and no legacy
+    ``*.rootfs.json`` / ``cve_check_summary*.json`` files exist, so both
+    checks must fall through to ``tmp/log/cve/cve-summary.json`` via the
+    shared :mod:`shipcheck.checks._cve_discovery` helper.
+
+    The payload uses the Scarthgap flat ``issues[]`` shape and carries
+    multiple unpatched CVEs so this fixture is distinct from the single-CVE
+    fixture staged by task 2.3 under
+    ``tests/fixtures/cve/yocto_summary_only/``.
+    """
+    cve_log_dir = build_dir / "tmp" / "log" / "cve"
+    cve_log_dir.mkdir(parents=True)
+    payload = {
+        "version": "2",
+        "issues": [
+            {
+                "id": "CVE-2024-9001",
+                "package": "openssl",
+                "version": "3.2.1",
+                "status": "Unpatched",
+                "severity": "HIGH",
+                "scorev3": "7.5",
+                "summary": "Null-deref in TLS handshake parser",
+            },
+            {
+                "id": "CVE-2024-9002",
+                "package": "busybox",
+                "version": "1.36.1",
+                "status": "Unpatched",
+                "severity": "MEDIUM",
+                "scorev3": "5.3",
+                "summary": "Integer overflow in tar extraction",
+            },
+            {
+                "id": "CVE-2024-9003",
+                "package": "glibc",
+                "version": "2.39",
+                "status": "Unpatched",
+                "severity": "HIGH",
+                "scorev3": "7.8",
+                "summary": "Heap OOB read in getaddrinfo",
+            },
+        ],
+    }
+    (cve_log_dir / "cve-summary.json").write_text(json.dumps(payload))
+    return cve_log_dir / "cve-summary.json"
+
+
+@pytest.mark.integration
+class TestPilot0001CveDivergencePrevention:
+    """Regression guard for the pilot-0001 divergence.
+
+    Before , cve-tracking and yocto-cve-check disagreed on whether a
+    Scarthgap build with only ``tmp/log/cve/cve-summary.json`` had CVE
+    evidence: cve-tracking reported "No CVE scan output found" (FAIL) while
+    yocto-cve-check happily parsed the same file.  Running both checks
+    through the shared registry against that same tree must now yield
+    non-empty findings for BOTH checks and both summaries must reference
+    ``cve-summary.json`` so operators see the same evidence filename cited
+    twice.  If this test breaks, the two checks have drifted again.
+    """
+
+    def test_pilot0001_cve_divergence_prevention(self, tmp_path: Path):
+        from shipcheck.checks.registry import get_default_registry
+
+        build_dir = tmp_path / "build"
+        build_dir.mkdir()
+        _write_yocto_summary_only_tree(build_dir)
+
+        registry = get_default_registry()
+        results = registry.run_checks(
+            build_dir=build_dir,
+            config={},
+            check_ids=["cve-tracking", "yocto-cve-check"],
+        )
+
+        by_id = {r.check_id: r for r in results}
+        assert set(by_id) == {"cve-tracking", "yocto-cve-check"}, (
+            f"expected both CVE checks to run, got: {sorted(by_id)}"
+        )
+
+        cve_tracking = by_id["cve-tracking"]
+        yocto_cve = by_id["yocto-cve-check"]
+
+        # Both checks must produce findings - the whole point of the pilot
+        # regression is that cve-tracking used to return zero findings and
+        # FAIL while yocto-cve-check found the same file and emitted
+        # findings.
+        assert cve_tracking.findings, (
+            f"cve-tracking produced no findings against cve-summary.json: "
+            f"status={cve_tracking.status}, summary={cve_tracking.summary!r}"
+        )
+        assert yocto_cve.findings, (
+            f"yocto-cve-check produced no findings against cve-summary.json: "
+            f"status={yocto_cve.status}, summary={yocto_cve.summary!r}"
+        )
+
+        # Both summaries must name the same evidence file so the report
+        # never shows divergent conclusions about the same input.
+        assert "cve-summary.json" in cve_tracking.summary, (
+            f"cve-tracking summary does not reference cve-summary.json: "
+            f"{cve_tracking.summary!r}"
+        )
+        assert "cve-summary.json" in yocto_cve.summary, (
+            f"yocto-cve-check summary does not reference cve-summary.json: "
+            f"{yocto_cve.summary!r}"
+        )
