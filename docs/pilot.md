@@ -245,7 +245,7 @@ The procedure below produces the full pilot artefact bundle from a committed `ka
      2>&1 | tee -a pilots/NNNN-<name>/log.txt
    ```
 
-4. Re-run the same scan in JSON mode to capture machine-readable output next to the dossier:
+4. Re-run the same scan in JSON mode to capture machine-readable output next to the dossier. `--format json` (without `--out`) writes the JSON payload to stdout, so redirect it straight into the pilot directory:
 
    ```bash
    shipcheck check \
