@@ -25,6 +25,7 @@ import json
 import logging
 from pathlib import Path
 
+from shipcheck.checks._cve_discovery import discover_cve_output
 from shipcheck.models import BaseCheck, CheckResult, CheckStatus, Finding
 
 logger = logging.getLogger(__name__)
@@ -218,9 +219,16 @@ def _resolve_summary_path(build_dir: Path, config_path: str | None) -> Path:
     """Resolve the summary path honoring the ``summary_path`` override.
 
     Absolute paths are used verbatim; relative paths are resolved under
-    ``build_dir``.  ``None`` falls back to the Yocto default.
+    ``build_dir``.  ``None`` delegates to
+    :func:`shipcheck.checks._cve_discovery.discover_cve_output` so the CVE
+    checks agree on evidence location (pilot-0001 fix ); when the
+    shared helper also finds nothing, the canonical Yocto default is
+    returned so the SKIP message still names the expected path.
     """
     if config_path is None:
+        discovered = discover_cve_output(build_dir)
+        if discovered is not None:
+            return discovered
         return build_dir / DEFAULT_SUMMARY_RELPATH
     candidate = Path(config_path)
     if candidate.is_absolute():
