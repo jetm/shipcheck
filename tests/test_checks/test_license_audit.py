@@ -19,10 +19,11 @@ from pathlib import Path
 
 import pytest
 
-from shipcheck.checks.license_audit import LicenseAuditCheck
+from shipcheck.checks.license_audit import LicenseAuditCheck, _discover_image_dir
 from shipcheck.models import CheckStatus, Finding
 
 FIXTURE_ROOT = Path(__file__).parent.parent / "fixtures" / "licenses"
+FIXTURE_ROOT_PERARCH = Path(__file__).parent.parent / "fixtures" / "license_manifests"
 LICENSE_SUBDIR = "tmp/deploy/licenses"
 
 
@@ -290,3 +291,71 @@ class TestCraMappingOnEveryFinding:
             f"CheckResult.cra_mapping={result.cra_mapping!r} must include "
             f"one of {sorted(self.EXPECTED)}"
         )
+
+
+# --- Per-architecture layout discovery (Yocto real build layout) ---
+
+
+class TestDiscoverPerArchLayout:
+    """Direct tests for `_discover_image_dir()` against real Yocto layouts.
+
+    Task 3.2 rewrote `_discover_image_dir()` to walk
+    `tmp/deploy/licenses/` recursively so that both the legacy
+    `<image>/license.manifest` layout and the real per-architecture
+    `<arch>/<image-or-pkg>/license.manifest` layout resolve through the
+    same discovery pass. These tests pin that behaviour.
+
+    Mtime-sensitive cases use `tmp_path` to avoid git-mtime flakiness;
+    the plain per-arch case reuses the committed fixture under
+    `tests/fixtures/license_manifests/peraarch/`.
+    """
+
+    def test_per_arch_layout_discovered(self) -> None:
+        # Committed fixture tree:
+        #   peraarch/tmp/deploy/licenses/qemux86_64/core-image-minimal/license.manifest
+        # No top-level <image>/license.manifest exists; discovery must
+        # still return the parent directory of the per-arch manifest.
+        build_dir = FIXTURE_ROOT_PERARCH / "peraarch"
+
+        result = _discover_image_dir(build_dir)
+
+        assert result is not None
+        expected = build_dir / LICENSE_SUBDIR / "qemux86_64" / "core-image-minimal"
+        assert result == expected
+        assert (result / "license.manifest").is_file()
+
+    def test_newest_mtime_wins_across_arch_subdirs(self, tmp_path: Path) -> None:
+        # Synthesise two manifests at different depths under different
+        # arch subdirectories and pin mtimes explicitly so the test is
+        # deterministic regardless of filesystem create-time quirks.
+        licenses = tmp_path / LICENSE_SUBDIR
+        older_dir = licenses / "qemux86_64" / "core-image-minimal"
+        newer_dir = licenses / "core2-64" / "base-passwd"
+        older_dir.mkdir(parents=True)
+        newer_dir.mkdir(parents=True)
+
+        older_manifest = older_dir / "license.manifest"
+        newer_manifest = newer_dir / "license.manifest"
+        older_manifest.write_text("PACKAGE NAME: busybox\nLICENSE: MIT\n")
+        newer_manifest.write_text("PACKAGE NAME: base-passwd\nLICENSE: GPL-2.0-only\n")
+
+        os.utime(older_manifest, (1_700_000_000.0, 1_700_000_000.0))
+        os.utime(newer_manifest, (1_800_000_000.0, 1_800_000_000.0))
+
+        result = _discover_image_dir(tmp_path)
+
+        assert result == newer_dir
+
+    def test_empty_licenses_dir_returns_none(self, tmp_path: Path) -> None:
+        # The directory exists but contains no license.manifest at any
+        # depth. Discovery must return None so the caller can SKIP.
+        licenses = tmp_path / LICENSE_SUBDIR
+        licenses.mkdir(parents=True)
+        # Create some empty arch subdirectories without any manifests
+        # to confirm recursion does not accidentally pick up siblings.
+        (licenses / "qemux86_64").mkdir()
+        (licenses / "core2-64" / "some-pkg").mkdir(parents=True)
+
+        result = _discover_image_dir(tmp_path)
+
+        assert result is None
