@@ -275,7 +275,7 @@ class LicenseAuditCheck(BaseCheck):
                 findings=[],
                 summary=(
                     f"No license.manifest files found under "
-                    f"{LICENSES_SUBDIR}/ — skipping license audit"
+                    f"{LICENSES_SUBDIR}/**/license.manifest — skipping license audit"
                 ),
                 cra_mapping=list(CRA_MAPPING),
             )
