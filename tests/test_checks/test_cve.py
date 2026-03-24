@@ -1002,3 +1002,46 @@ class TestCVECheckCRAMapping:
         assert "I.P2.3" in result.cra_mapping, (
             f"CheckResult.cra_mapping missing I.P2.3; got {result.cra_mapping!r}"
         )
+
+
+class TestSharedDiscoveryYoctoSummary:
+    """Integration coverage for  shared discovery (pilot-0001 PF-02).
+
+    Ensures that ``cve-tracking`` treats the Scarthgap aggregate summary at
+    ``tmp/log/cve/cve-summary.json`` as valid CVE evidence, staying in sync
+    with ``yocto-cve-check`` so the two checks cannot diverge on the same
+    build tree.  Covers spec ``cve-check`` scenario "Shared discovery agrees
+    with yocto-cve-check".
+    """
+
+    def test_shared_discovery_yocto_summary_only(self) -> None:
+        """Build tree with only tmp/log/cve/cve-summary.json yields findings.
+
+        The fixture contains one unpatched CVE in Scarthgap's flat ``issues[]``
+        shape.  The check must (a) discover the summary via the shared helper,
+        (b) not SKIP, (c) not fall back to the "No CVE scan output found"
+        FAIL branch, and (d) emit at least one finding.
+        """
+        build_dir = FIXTURES_DIR / "yocto_summary_only"
+        summary = build_dir / "tmp" / "log" / "cve" / "cve-summary.json"
+        assert summary.is_file(), (
+            f"fixture precondition: {summary} must exist for this test to be meaningful"
+        )
+
+        check = CVECheck()
+        result = check.run(build_dir, {})
+
+        assert result.status is not CheckStatus.SKIP, (
+            f"expected non-SKIP (discovery must find the summary); got {result.status}"
+        )
+        assert not (
+            result.status is CheckStatus.FAIL
+            and result.summary == "No CVE scan output found"
+        ), (
+            f"expected discovery to succeed, not the no-output FAIL branch; "
+            f"got status={result.status}, summary={result.summary!r}"
+        )
+        assert len(result.findings) >= 1, (
+            f"expected at least one finding from the unpatched CVE in the fixture; "
+            f"got {len(result.findings)} findings, summary={result.summary!r}"
+        )
