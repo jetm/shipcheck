@@ -152,6 +152,72 @@ class TestCheckCommand:
         assert (tmp_path / "shipcheck-report.html").exists()
 
 
+class TestJsonStdout:
+    """Tests for `shipcheck check --format json` emitting to stdout.
+
+    Task 1.1 of devspec change ``v01-pilot-fixes``. When `--format json` is
+    used without `--out`, the JSON payload goes to stdout (so `> scan.json`
+    captures it cleanly), no Rich terminal report is rendered, and no
+    ``shipcheck-report.json`` is silently written in cwd. Covers spec
+    ``config-and-cli`` scenarios "JSON format goes to stdout" and
+    "JSON format with shell redirection".
+
+    Note: ``mix_stderr=False`` is no longer a ``CliRunner`` constructor
+    kwarg in Click 8.2+ (removed upstream); the default runner already
+    exposes ``result.stdout`` and ``result.stderr`` as separate streams,
+    which is the behaviour the task requested.
+    """
+
+    def test_json_stdout_emits_parseable_payload(
+        self, build_dir_with_spdx: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`--format json` without `--out` writes well-formed JSON to stdout."""
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(
+            app, ["check", "--build-dir", str(build_dir_with_spdx), "--format", "json"]
+        )
+        assert result.exit_code == 0, result.output
+
+        data = json.loads(result.stdout)
+        assert "readiness_score" in data
+        assert "score" in data["readiness_score"]
+
+    def test_json_stdout_suppresses_rich_terminal_report(
+        self, build_dir_with_spdx: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`--format json` without `--out` must not render the Rich terminal report.
+
+        The terminal renderer emits a "Readiness score" header; its absence
+        confirms the JSON short-circuit skipped ``terminal.render()``. Parsing
+        ``result.stdout`` as JSON is the stronger check (any stray terminal
+        bytes would break ``json.loads``), but the explicit absence assertion
+        documents the intent.
+        """
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(
+            app, ["check", "--build-dir", str(build_dir_with_spdx), "--format", "json"]
+        )
+        assert result.exit_code == 0, result.output
+
+        # stdout must be pure JSON - no Rich header, no table borders.
+        json.loads(result.stdout)
+        assert "Readiness score" not in result.stdout
+
+    def test_json_stdout_does_not_write_report_file(
+        self, build_dir_with_spdx: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`--format json` without `--out` must not write ``shipcheck-report.json`` in cwd."""
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(
+            app, ["check", "--build-dir", str(build_dir_with_spdx), "--format", "json"]
+        )
+        assert result.exit_code == 0, result.output
+        assert not (tmp_path / "shipcheck-report.json").exists(), (
+            "--format json without --out must emit to stdout only; "
+            "silent file write in cwd breaks shell redirection contract"
+        )
+
+
 class TestFailOn:
     """Tests for --fail-on exit code gating."""
 
