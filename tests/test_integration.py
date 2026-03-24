@@ -77,9 +77,14 @@ def _invoke_check(
     return runner.invoke(app, args)
 
 
-def _read_json_report(tmp_path: Path) -> dict:
-    """Read and parse the JSON report file."""
-    return json.loads((tmp_path / "shipcheck-report.json").read_text())
+def _read_json_report(result) -> dict:  # type: ignore[no-untyped-def]
+    """Parse the JSON payload emitted to stdout by `shipcheck check --format json`.
+
+    Since task 1.2 routed ``--format json`` (without ``--out``) to stdout,
+    the JSON payload is no longer written to ``./shipcheck-report.json``;
+    tests read ``result.stdout`` from the ``CliRunner`` result directly.
+    """
+    return json.loads(result.stdout)
 
 
 # ---------------------------------------------------------------------------
@@ -186,16 +191,20 @@ class TestMarkdownReportOutput:
 class TestJsonReportOutput:
     """Verify JSON report format via --format json."""
 
-    def test_json_report_created(
+    def test_json_report_emitted_to_stdout(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ):
+        """`--format json` (no `--out`) emits JSON on stdout, not to disk."""
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
         result = _invoke_check(build_dir, fmt="json")
         assert result.exit_code == 0, result.output
-        assert (tmp_path / "shipcheck-report.json").exists()
+        # Payload parseable as JSON.
+        json.loads(result.stdout)
+        # No file side-effect in cwd; the contract is stdout-only.
+        assert not (tmp_path / "shipcheck-report.json").exists()
 
     def test_json_report_is_valid_json(
         self,
@@ -204,8 +213,8 @@ class TestJsonReportOutput:
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         assert isinstance(data, dict)
 
     def test_json_report_has_required_metadata(
@@ -215,8 +224,8 @@ class TestJsonReportOutput:
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         assert data["framework_version"] == "2024/2847"
         assert "TR-03183-2" in data["bsi_tr_version"]
         assert "shipcheck_version" in data
@@ -230,8 +239,8 @@ class TestJsonReportOutput:
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         assert "readiness_score" in data
         score = data["readiness_score"]
         assert "score" in score
@@ -245,8 +254,8 @@ class TestJsonReportOutput:
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         assert isinstance(data["checks"], list)
         assert len(data["checks"]) == 7
         check_ids = {c["check_id"] for c in data["checks"]}
@@ -254,16 +263,6 @@ class TestJsonReportOutput:
         assert "cve-tracking" in check_ids
         assert "secure-boot" in check_ids
         assert "image-signing" in check_ids
-
-    def test_terminal_output_still_produced_with_json(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ):
-        build_dir = _setup_build_dir(tmp_path)
-        monkeypatch.chdir(tmp_path)
-        result = _invoke_check(build_dir, fmt="json")
-        assert "Readiness score:" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -391,12 +390,12 @@ class TestChecksFilter:
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(
+        result = _invoke_check(
             build_dir,
             checks="sbom-generation",
             fmt="json",
         )
-        data = _read_json_report(tmp_path)
+        data = _read_json_report(result)
         assert len(data["checks"]) == 1
         assert data["checks"][0]["check_id"] == "sbom-generation"
 
@@ -407,12 +406,12 @@ class TestChecksFilter:
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(
+        result = _invoke_check(
             build_dir,
             checks="cve-tracking",
             fmt="json",
         )
-        data = _read_json_report(tmp_path)
+        data = _read_json_report(result)
         assert len(data["checks"]) == 1
         assert data["checks"][0]["check_id"] == "cve-tracking"
 
@@ -423,12 +422,12 @@ class TestChecksFilter:
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(
+        result = _invoke_check(
             build_dir,
             checks="sbom-generation",
             fmt="json",
         )
-        data = _read_json_report(tmp_path)
+        data = _read_json_report(result)
         assert data["readiness_score"]["max_score"] == 50
 
 
@@ -447,8 +446,8 @@ class TestMissingArtifacts:
     ):
         build_dir = _setup_build_dir(tmp_path, include_sbom=False)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         sbom = next(c for c in data["checks"] if c["check_id"] == "sbom-generation")
         assert sbom["status"] == "fail"
         assert sbom["score"] == 0
@@ -460,8 +459,8 @@ class TestMissingArtifacts:
     ):
         build_dir = _setup_build_dir(tmp_path, include_cve=False)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         cve = next(c for c in data["checks"] if c["check_id"] == "cve-tracking")
         assert cve["status"] == "fail"
         assert cve["score"] == 0
@@ -477,8 +476,8 @@ class TestMissingArtifacts:
             include_cve=False,
         )
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         assert data["readiness_score"]["score"] == 0
 
     def test_terminal_shows_fail(
@@ -506,8 +505,8 @@ class TestMissingArtifacts:
             include_cve=False,
         )
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         for check_data in data["checks"]:
             for finding in check_data["findings"]:
                 if finding["severity"] in ("critical", "high"):
@@ -529,8 +528,8 @@ class TestReadinessScore:
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         assert data["readiness_score"]["max_score"] == 350
 
     def test_score_between_zero_and_max(
@@ -540,8 +539,8 @@ class TestReadinessScore:
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         score = data["readiness_score"]["score"]
         max_score = data["readiness_score"]["max_score"]
         assert 0 <= score <= max_score
@@ -588,7 +587,7 @@ class TestReportContentIntegrity:
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
         result = _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        data = _read_json_report(result)
         for check_data in data["checks"]:
             assert check_data["check_name"] in result.output
 
@@ -599,8 +598,8 @@ class TestReportContentIntegrity:
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         assert str(build_dir) in data["build_dir"]
 
     def test_json_timestamp_is_iso8601(
@@ -612,8 +611,8 @@ class TestReportContentIntegrity:
 
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         datetime.fromisoformat(data["timestamp"])
 
     def test_json_checks_have_expected_fields(
@@ -623,8 +622,8 @@ class TestReportContentIntegrity:
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         for check_data in data["checks"]:
             assert "check_id" in check_data
             assert "check_name" in check_data
@@ -702,8 +701,8 @@ class TestSecureBootCheckViaCLI:
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         check_ids = {c["check_id"] for c in data["checks"]}
         assert "secure-boot" in check_ids
 
@@ -716,8 +715,8 @@ class TestSecureBootCheckViaCLI:
         _add_secureboot_config(build_dir)
         _add_efi_artifacts(build_dir)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         sb = next(c for c in data["checks"] if c["check_id"] == "secure-boot")
         assert sb["score"] > 0
         assert sb["max_score"] == 50
@@ -729,8 +728,8 @@ class TestSecureBootCheckViaCLI:
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         sb = next(c for c in data["checks"] if c["check_id"] == "secure-boot")
         assert sb["score"] == 0
 
@@ -742,8 +741,8 @@ class TestSecureBootCheckViaCLI:
         build_dir = _setup_build_dir(tmp_path)
         _add_secureboot_config(build_dir)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, checks="secure-boot", fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, checks="secure-boot", fmt="json")
+        data = _read_json_report(result)
         assert len(data["checks"]) == 1
         assert data["checks"][0]["check_id"] == "secure-boot"
         assert data["readiness_score"]["max_score"] == 50
@@ -769,8 +768,8 @@ class TestImageSigningCheckViaCLI:
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         check_ids = {c["check_id"] for c in data["checks"]}
         assert "image-signing" in check_ids
 
@@ -782,8 +781,8 @@ class TestImageSigningCheckViaCLI:
         build_dir = _setup_build_dir(tmp_path)
         _add_verity_config(build_dir)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         isig = next(c for c in data["checks"] if c["check_id"] == "image-signing")
         assert isig["score"] > 0
         assert isig["max_score"] == 50
@@ -796,8 +795,8 @@ class TestImageSigningCheckViaCLI:
         build_dir = _setup_build_dir(tmp_path)
         _add_signed_fit(build_dir)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         isig = next(c for c in data["checks"] if c["check_id"] == "image-signing")
         assert isig["score"] > 0
 
@@ -808,8 +807,8 @@ class TestImageSigningCheckViaCLI:
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         isig = next(c for c in data["checks"] if c["check_id"] == "image-signing")
         assert len(isig["findings"]) > 0
 
@@ -820,8 +819,8 @@ class TestImageSigningCheckViaCLI:
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, checks="image-signing", fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, checks="image-signing", fmt="json")
+        data = _read_json_report(result)
         assert len(data["checks"]) == 1
         assert data["checks"][0]["check_id"] == "image-signing"
         assert data["readiness_score"]["max_score"] == 50
@@ -846,8 +845,8 @@ class TestScoreAggregationAllChecks:
         _add_signed_fit(build_dir)
         _add_verity_config(build_dir)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         total = sum(c["score"] for c in data["checks"])
         assert data["readiness_score"]["score"] == total
         assert data["readiness_score"]["max_score"] == 350
@@ -860,12 +859,12 @@ class TestScoreAggregationAllChecks:
         """Filtering to 2 checks yields max_score=100."""
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(
+        result = _invoke_check(
             build_dir,
             checks="sbom-generation,cve-tracking",
             fmt="json",
         )
-        data = _read_json_report(tmp_path)
+        data = _read_json_report(result)
         assert data["readiness_score"]["max_score"] == 100
 
     def test_terminal_score_shows_out_of_350(self, tmp_path: Path):
@@ -906,8 +905,8 @@ class TestScoreAggregationAllChecks:
     ):
         build_dir = _setup_build_dir(tmp_path, include_sbom=False, include_cve=False)
         monkeypatch.chdir(tmp_path)
-        _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
         assert data["readiness_score"]["max_score"] == 350
         assert data["readiness_score"]["score"] == 0
 
@@ -1252,7 +1251,7 @@ class TestCVEReconciliationEndToEnd:
         result = _invoke_check(build_dir, fmt="json")
         assert result.exit_code == 0, result.output
 
-        data = _read_json_report(tmp_path)
+        data = _read_json_report(result)
 
         # Flatten every finding across every check and pick the ones for our
         # target CVE/package/version triple.

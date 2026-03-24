@@ -72,20 +72,6 @@ class TestCheckCommand:
         report_path = tmp_path / "shipcheck-report.md"
         assert report_path.exists(), f"Expected {report_path} to be written"
 
-    def test_check_writes_json_report(
-        self, build_dir_with_spdx: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.chdir(tmp_path)
-        result = runner.invoke(
-            app, ["check", "--build-dir", str(build_dir_with_spdx), "--format", "json"]
-        )
-        assert result.exit_code == 0
-        report_path = tmp_path / "shipcheck-report.json"
-        assert report_path.exists()
-        data = json.loads(report_path.read_text())
-        assert "readiness_score" in data
-        assert "score" in data["readiness_score"]
-
     def test_check_writes_html_report(
         self, build_dir_with_spdx: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -98,16 +84,6 @@ class TestCheckCommand:
         assert report_path.exists()
         content = report_path.read_text()
         assert "<html" in content
-
-    def test_check_terminal_output_always_produced_with_json_format(
-        self, build_dir_with_spdx: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.chdir(tmp_path)
-        result = runner.invoke(
-            app, ["check", "--build-dir", str(build_dir_with_spdx), "--format", "json"]
-        )
-        assert result.exit_code == 0
-        assert "Readiness score" in result.output
 
     def test_check_filters_checks(self, build_dir_with_spdx: Path) -> None:
         result = runner.invoke(
