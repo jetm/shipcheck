@@ -318,7 +318,11 @@ def check(
         raise typer.Exit(code=_CRA_VALIDATION_EXIT_CODE) from exc
 
     console = Console()
-    terminal.render(report_data, console=console)
+    # Suppress the Rich terminal report when `--format json` is used without
+    # `--out` so shell redirection (`> scan.json`) captures clean JSON on
+    # stdout instead of ANSI-laden terminal text.
+    if not (fmt == "json" and out is None):
+        terminal.render(report_data, console=console)
 
     if out is not None:
         written = _write_dossier(
@@ -329,9 +333,10 @@ def check(
         console.print(f"\nDossier written to: {out} ({len(written)} files)")
     else:
         content = _render_file_report(report_data, fmt)
-        if fmt == "evidence":
-            # Evidence pivot prints to stdout so CI pipelines can capture it;
-            # file/dossier emission only engages when `--out DIR` is provided.
+        if fmt in ("evidence", "json"):
+            # Single-stream formats print to stdout so CI pipelines can
+            # capture them via shell redirection; file/dossier emission only
+            # engages when `--out DIR` is provided.
             typer.echo(content)
         else:
             ext = _FORMAT_EXT[fmt]
