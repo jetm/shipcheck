@@ -1389,10 +1389,8 @@ class TestPilot0001CveDivergencePrevention:
         # Both summaries must name the same evidence file so the report
         # never shows divergent conclusions about the same input.
         assert "cve-summary.json" in cve_tracking.summary, (
-            f"cve-tracking summary does not reference cve-summary.json: "
-            f"{cve_tracking.summary!r}"
+            f"cve-tracking summary does not reference cve-summary.json: {cve_tracking.summary!r}"
         )
         assert "cve-summary.json" in yocto_cve.summary, (
-            f"yocto-cve-check summary does not reference cve-summary.json: "
-            f"{yocto_cve.summary!r}"
+            f"yocto-cve-check summary does not reference cve-summary.json: {yocto_cve.summary!r}"
         )

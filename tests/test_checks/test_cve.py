@@ -1035,8 +1035,7 @@ class TestSharedDiscoveryYoctoSummary:
             f"expected non-SKIP (discovery must find the summary); got {result.status}"
         )
         assert not (
-            result.status is CheckStatus.FAIL
-            and result.summary == "No CVE scan output found"
+            result.status is CheckStatus.FAIL and result.summary == "No CVE scan output found"
         ), (
             f"expected discovery to succeed, not the no-output FAIL branch; "
             f"got status={result.status}, summary={result.summary!r}"
