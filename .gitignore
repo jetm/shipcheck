@@ -7,7 +7,6 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
-!tests/fixtures/pilot_real/build/
 develop-eggs/
 dist/
 downloads/
@@ -81,3 +80,7 @@ dmypy.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Test fixtures (keep at end so negations override all prior ignore patterns)
+!tests/fixtures/pilot_real/
+!tests/fixtures/pilot_real/**
