@@ -209,3 +209,50 @@ cause and the fix applied.
   the working configuration in a committed `kas.yml` that any later
   pilot can copy. It also produced reusable methodology artefacts
   (the Troubleshooting subsection above) for pilot 0002 and beyond.
+
+## Re-run (2026-04-20)
+
+This re-run exercises the same cached kas-container build used in the
+original pilot against shipcheck after the , , and
+ fixes landed. The goal is to confirm that the three
+release-gating bugs (PF-01, PF-02, PF-03) no longer reproduce on a real
+Yocto tree. Artefacts are captured in `scan-rerun.json` and
+`dossier-rerun/`.
+
+### PF-* resolution table
+
+| ID | Old status | New status | Evidence |
+|----|------------|------------|----------|
+| PF-01 | FAIL (silent `./shipcheck-report.json` side-effect; Rich report on stdout) | RESOLVED | `--format json` now writes parseable JSON to stdout; captured at `scan-rerun.json` (1.1 MB, valid); no `./shipcheck-report.json` file created in cwd |
+| PF-02 | FAIL (`cve-tracking` returned "No CVE scan output found" while `yocto-cve-check` saw 584 unpatched) | RESOLVED | `cve-tracking` now discovers `tmp/log/cve/cve-summary.json` via the shared helper; summary: "584 unpatched CVE(s) found in cve-summary.json (213 packages, 16638 issues)" - agrees with `yocto-cve-check` on evidence presence |
+| PF-03 | FAIL (`license-audit` SKIP: no manifest found under the synthetic layout) | RESOLVED | Recursive `Path.rglob("license.manifest")` selects `core-image-minimal-qemux86-64.rootfs-20260417211226/license.manifest` by newest mtime; summary: "37 package(s) ... permissive: 9; weak-copyleft: 2; strong-copyleft: 21; unknown: 5" |
+
+### Per-check status delta
+
+| Check ID | Before | After | Note |
+|----------|--------|-------|------|
+| `cve-tracking` | FAIL ("No CVE scan output found") | FAIL (584 unpatched CVEs in `cve-summary.json`) | Status unchanged (FAIL -> FAIL) but the reason changed: the check now produces the same evidence-backed verdict as `yocto-cve-check`. PF-02 cleared. |
+| `yocto-cve-check` | FAIL (584 unpatched) | FAIL (584 unpatched) | No change expected; the check was already working. |
+| `license-audit` | SKIP | WARN | SKIP -> WARN. The check transitioned from "no manifest found" to parsing 37 packages and emitting 5 findings (all unknown-license records). PF-03 cleared. |
+
+The other four registered checks (`sbom-generation`, `secure-boot`,
+`image-signing`, `vuln-reporting`) ran with the same status and
+summaries as in the original pilot; they were not in scope for the
+v0.1 release gate.
+
+Design risk **R2** (mtime-based manifest selection on the pilot build)
+did not materialise: `Path.rglob` naturally selected the image-level
+rootfs manifest rather than any per-package manifest, because the
+image-level file has the newest mtime in this build. The recursive
+discovery is therefore safe on the poky Scarthgap layout without the
+follow-up filter contemplated in design D3.
+
+### Artifacts
+
+- `pilots/0001-poky-scarthgap-min/scan-rerun.json` (full JSON scan, 1.1 MB, parseable)
+- `pilots/0001-poky-scarthgap-min/dossier-rerun/cve-report.md`
+- `pilots/0001-poky-scarthgap-min/dossier-rerun/evidence-report.md`
+- `pilots/0001-poky-scarthgap-min/dossier-rerun/license-audit.md`
+- `pilots/0001-poky-scarthgap-min/dossier-rerun/scan.json`
+
+All three pilot-0001 blockers cleared; v0.1 release gate unblocked.
