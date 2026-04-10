@@ -80,10 +80,15 @@ def _copy_image_artifacts(build_dir: Path, out: Path) -> None:
                 continue
             rel = manifest.relative_to(build_dir)
             _copy(manifest, out / rel)
-        cve_files = sorted(p for p in machine_dir.glob("*.cve") if not p.is_symlink())
-        if cve_files:
-            rel = cve_files[0].relative_to(build_dir)
-            _copy(cve_files[0], out / rel)
+
+
+def _truncate_issues(package: dict) -> dict:
+    issues = package.get("issue")
+    if not isinstance(issues, list):
+        return package
+    ordered = sorted(issues, key=lambda item: item.get("id", "") if isinstance(item, dict) else "")
+    package["issue"] = ordered[:3]
+    return package
 
 
 def _rewrite_cve_summary(build_dir: Path, out: Path, allowlist: set[str]) -> bool:
@@ -93,7 +98,8 @@ def _rewrite_cve_summary(build_dir: Path, out: Path, allowlist: set[str]) -> boo
     with src.open() as fh:
         data = json.load(fh)
     packages = data.get("package", [])
-    data["package"] = [p for p in packages if p.get("name") in allowlist]
+    kept = [p for p in packages if p.get("name") in allowlist]
+    data["package"] = [_truncate_issues(p) for p in kept]
     dst = out / "tmp" / "log" / "cve" / "cve-summary.json"
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")

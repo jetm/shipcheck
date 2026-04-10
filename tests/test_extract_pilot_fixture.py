@@ -54,15 +54,37 @@ def _make_minimal_build_dir(root: Path) -> Path:
     img_dir.mkdir(parents=True)
     (img_dir / "img.manifest").write_text("foo qemux86_64 1.0\n")
 
-    # CVE summary with both allowlisted and non-allowlisted packages
+    # CVE summary with both allowlisted and non-allowlisted packages.
+    # openssl has 5 issues so the truncation-to-3 behaviour is exercised.
     cve_dir = build / "tmp" / "log" / "cve"
     cve_dir.mkdir(parents=True)
     cve_data = {
         "version": "1",
         "package": [
-            {"name": "openssl", "layer": "meta", "version": "3.0.0", "issue": []},
+            {
+                "name": "openssl",
+                "layer": "meta",
+                "version": "3.0.0",
+                "issue": [
+                    {"id": "CVE-2024-0005", "status": "Patched"},
+                    {"id": "CVE-2024-0001", "status": "Patched"},
+                    {"id": "CVE-2024-0003", "status": "Unpatched"},
+                    {"id": "CVE-2024-0002", "status": "Ignored"},
+                    {"id": "CVE-2024-0004", "status": "Patched"},
+                ],
+            },
             {"name": "zlib", "layer": "meta", "version": "1.2.13", "issue": []},
-            {"name": "glibc", "layer": "meta", "version": "2.39", "issue": []},
+            {
+                "name": "glibc",
+                "layer": "meta",
+                "version": "2.39",
+                "issue": [
+                    {"id": "CVE-2023-0002", "status": "Patched"},
+                    {"id": "CVE-2023-0001", "status": "Patched"},
+                    {"id": "CVE-2023-0003", "status": "Unpatched"},
+                    {"id": "CVE-2023-0004", "status": "Ignored"},
+                ],
+            },
             {"name": "some-random-pkg", "layer": "meta", "version": "0.1", "issue": []},
         ],
     }
@@ -146,3 +168,25 @@ def test_extraction_is_byte_identical_across_runs(tmp_path: Path) -> None:
         bytes_a = (out_a / rel).read_bytes()
         bytes_b = (out_b / rel).read_bytes()
         assert bytes_a == bytes_b, f"byte mismatch for {rel}"
+
+
+@pytest.mark.unit
+def test_issue_arrays_are_truncated_to_three(tmp_path: Path) -> None:
+    build = _make_minimal_build_dir(tmp_path)
+    out = tmp_path / "out"
+
+    result = _run(["--build-dir", str(build), "--out", str(out)])
+
+    assert result.returncode == 0, result.stderr
+
+    data = json.loads((out / "tmp" / "log" / "cve" / "cve-summary.json").read_text())
+    for package in data["package"]:
+        assert len(package["issue"]) <= 3, (
+            f"package {package.get('name')!r} retained {len(package['issue'])} issues"
+        )
+
+    # openssl had 5 issues in the fixture - verify deterministic sort-by-id
+    # keeps the three lowest-id entries.
+    by_name = {pkg["name"]: pkg for pkg in data["package"]}
+    openssl_ids = [issue["id"] for issue in by_name["openssl"]["issue"]]
+    assert openssl_ids == ["CVE-2024-0001", "CVE-2024-0002", "CVE-2024-0003"]
