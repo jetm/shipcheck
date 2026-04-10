@@ -12,6 +12,13 @@
 
 - README Roadmap now links to `pilots/0001-poky-scarthgap-min/REPORT.md` instead of the "pending - first pilot run is in progress" placeholder.
 - Added a "Known limitations" subsection to README under "What it checks" enumerating documented scope boundaries surfaced by pilot 0001 (`vuln-reporting` requires `product.yaml`, `secure-boot` is config-level only, `image-signing` is config-level only, `sbom-generation` accepts SPDX 2.x, `cve-tracking` / `yocto-cve-check` file-lookup divergence).
+- **BREAKING**: `shipcheck check --format json` now writes the JSON payload to stdout instead of silently creating `./shipcheck-report.json` in the current working directory; callers that relied on the file side-effect must switch to shell redirection (`--format json > report.json`) or pass `--out DIR` for the dossier bundle. (Pilot: pilots/0001-poky-scarthgap-min/REPORT.md#re-run-2026-04-20)
+
+### Fixed
+
+- `shipcheck check --format json` routed the JSON payload to a silent `./shipcheck-report.json` side-effect instead of stdout, so shell redirection (`> scan.json`) captured an empty stream and CI pipelines lost the result. JSON now prints to stdout and suppresses the Rich terminal report when `--out` is not set. (PF-01; Pilot: pilots/0001-poky-scarthgap-min/REPORT.md#re-run-2026-04-20)
+- `cve-tracking` and `yocto-cve-check` diverged on the same build because each check implemented its own discovery logic and only `yocto-cve-check` looked at `tmp/log/cve/cve-summary.json`. Both checks now share `shipcheck.checks._cve_discovery.discover_cve_output()` and agree on evidence presence. (PF-02; Pilot: pilots/0001-poky-scarthgap-min/REPORT.md#re-run-2026-04-20)
+- `license-audit` returned SKIP on real Yocto builds because `_discover_image_dir()` only searched the top level of `tmp/deploy/licenses/` and missed the per-architecture layout (`tmp/deploy/licenses/<arch>/<pkg-or-image>/license.manifest`). Discovery now walks the tree recursively via `Path.rglob("license.manifest")` and selects the newest-mtime manifest. (PF-03; Pilot: pilots/0001-poky-scarthgap-min/REPORT.md#re-run-2026-04-20)
 
 ## [0.1.0]
 
