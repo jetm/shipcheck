@@ -190,3 +190,55 @@ def test_issue_arrays_are_truncated_to_three(tmp_path: Path) -> None:
     by_name = {pkg["name"]: pkg for pkg in data["package"]}
     openssl_ids = [issue["id"] for issue in by_name["openssl"]["issue"]]
     assert openssl_ids == ["CVE-2024-0001", "CVE-2024-0002", "CVE-2024-0003"]
+
+
+@pytest.mark.unit
+def test_by_hash_spdx_paths_are_excluded(tmp_path: Path) -> None:
+    """sstate SPDX copies under by-hash/ must not leak into the fixture.
+
+    bitbake also stages recipe-*.spdx.json files under
+    tmp/deploy/spdx/<ver>/by-hash/<sstate-hash>/ (and similarly under
+    by-namespace/). Those are sstate-reuse copies of the canonical
+    per-arch artifacts - selecting them would poison the fixture with
+    paths that shipcheck never sees in a real image build.
+    """
+    build = tmp_path / "build"
+
+    # conf/local.conf
+    conf = build / "conf"
+    conf.mkdir(parents=True)
+    (conf / "local.conf").write_text('MACHINE ?= "qemux86-64"\n')
+
+    spdx_base = build / "tmp" / "deploy" / "spdx" / "2.2"
+
+    # Canonical per-arch layout.
+    canonical = spdx_base / "x86_64" / "recipes"
+    canonical.mkdir(parents=True)
+    (canonical / "recipe-foo.spdx.json").write_text(
+        json.dumps({"spdxVersion": "SPDX-2.2", "name": "recipe-foo"}, indent=2) + "\n"
+    )
+
+    # sstate by-hash copy. Use a filesystem-safe directory name (no colons).
+    by_hash = spdx_base / "by-hash" / "some-hash-dir"
+    by_hash.mkdir(parents=True)
+    (by_hash / "recipe-foo.spdx.json").write_text(
+        json.dumps({"spdxVersion": "SPDX-2.2", "name": "recipe-foo-by-hash"}, indent=2) + "\n"
+    )
+
+    out = tmp_path / "out"
+    result = _run(["--build-dir", str(build), "--out", str(out)])
+
+    assert result.returncode == 0, (
+        f"extractor failed: stdout={result.stdout!r} stderr={result.stderr!r}"
+    )
+
+    out_spdx_files = [p for p in out.rglob("recipe-*.spdx.json") if p.is_file()]
+    assert out_spdx_files, "extractor produced no SPDX files"
+
+    # Canonical path present, by-hash path absent.
+    assert (
+        out / "tmp" / "deploy" / "spdx" / "2.2" / "x86_64" / "recipes" / "recipe-foo.spdx.json"
+    ).is_file()
+    for path in out_spdx_files:
+        assert "by-hash" not in path.parts, f"by-hash leaked into fixture: {path}"
+        assert "by-namespace" not in path.parts, f"by-namespace leaked into fixture: {path}"

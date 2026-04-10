@@ -7,6 +7,7 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+!tests/fixtures/pilot_real/build/
 develop-eggs/
 dist/
 downloads/

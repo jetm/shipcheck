@@ -28,7 +28,11 @@ def _copy(src: Path, dst: Path) -> None:
 
 
 def _select_spdx(spdx_root: Path) -> list[Path]:
-    candidates = sorted(spdx_root.rglob("recipe-*.spdx.json"))
+    all_paths = spdx_root.rglob("recipe-*.spdx.json")
+    # Filter out sstate hash copies and by-namespace alternates; only keep the
+    # canonical per-arch layout at tmp/deploy/spdx/<ver>/<arch>/recipes/.
+    filtered = [p for p in all_paths if "by-hash" not in p.parts and "by-namespace" not in p.parts]
+    candidates = sorted(filtered)
     if not candidates:
         return []
     picks: list[Path] = []
