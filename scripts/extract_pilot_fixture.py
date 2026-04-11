@@ -11,10 +11,13 @@ import argparse
 import json
 import shutil
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 PREFERRED_RECIPES = ("tzdata", "openssl", "glibc", "busybox", "libxml2-native")
 DEFAULT_ALLOWLIST = "openssl,glibc,curl,busybox,linux-yocto,bash"
+KAS_YML_RELATIVE = "pilots/0001-poky-scarthgap-min/kas.yml"
+PROVENANCE_UNKNOWN_SHA = "unknown - kas.yml not found"
 
 
 def _die(msg: str) -> None:
@@ -110,6 +113,84 @@ def _rewrite_cve_summary(build_dir: Path, out: Path, allowlist: set[str]) -> boo
     return True
 
 
+def _read_poky_commit_from_kas(kas_path: Path) -> str:
+    """Return the first commit SHA found under a ``poky:`` entry in kas.yml.
+
+    Uses a small line scanner so the extractor stays dependency-free. Looks
+    for a ``poky:`` top-level repo key followed, within the same indented
+    block, by a ``commit: <sha>`` line. Returns the SHA or the unknown
+    placeholder if the file is absent, unreadable, or lacks the entry.
+    """
+    try:
+        lines = kas_path.read_text().splitlines()
+    except OSError:
+        return PROVENANCE_UNKNOWN_SHA
+
+    in_poky = False
+    poky_indent = -1
+    for raw in lines:
+        stripped = raw.lstrip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(raw) - len(stripped)
+        if not in_poky:
+            if stripped.startswith("poky:"):
+                in_poky = True
+                poky_indent = indent
+            continue
+        # Leaving the poky block when we return to poky_indent or shallower.
+        if indent <= poky_indent:
+            in_poky = False
+            continue
+        if stripped.startswith("commit:"):
+            value = stripped.split(":", 1)[1].strip()
+            # Strip inline comments and quotes.
+            if "#" in value:
+                value = value.split("#", 1)[0].strip()
+            value = value.strip("'\"")
+            if value:
+                return value
+    return PROVENANCE_UNKNOWN_SHA
+
+
+def _default_provenance(commit_sha: str, today: str) -> str:
+    """Render the default PROVENANCE.md body used when none is preserved."""
+    return (
+        "# Fixture provenance\n"
+        "\n"
+        "This fixture is a minimized slice of a real Yocto build, committed for\n"
+        "regression tests so shipcheck exercises real bitbake output paths in CI\n"
+        "without running a full pilot.\n"
+        "\n"
+        "## Source\n"
+        "\n"
+        f"- poky commit: `{commit_sha}`\n"
+        "- poky branch: `scarthgap` (LTS)\n"
+        "- build target: `core-image-minimal`\n"
+        "- machine: `qemux86-64`\n"
+        "- distro: `poky`\n"
+        f"- extraction date: `{today}`\n"
+        "\n"
+        "## Regenerate\n"
+        "\n"
+        "```bash\n"
+        "uv run scripts/extract_pilot_fixture.py --build-dir <path-to-populated-build>\n"
+        "```\n"
+        "\n"
+        "Refresh when poky Scarthgap point-releases shift file layouts (new\n"
+        "per-arch subdir names, renamed SPDX fields, relocated cve-summary.json),\n"
+        "or when shipcheck's discovery logic changes. See `docs/pilot.md` for\n"
+        "the full regeneration workflow.\n"
+    )
+
+
+def _generate_default_provenance(script_dir: Path) -> str:
+    kas_path = script_dir.parent / KAS_YML_RELATIVE
+    commit_sha = _read_poky_commit_from_kas(kas_path)
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    return _default_provenance(commit_sha, today)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build-dir", type=Path, default=Path("./build"))
@@ -132,6 +213,13 @@ def main() -> None:
 
     allowlist = {s.strip() for s in args.cve_allowlist.split(",") if s.strip()}
 
+    # Capture any existing PROVENANCE.md so the extractor can preserve it
+    # verbatim across a wipe-and-regenerate cycle.
+    provenance_path = out / "PROVENANCE.md"
+    preserved_provenance: str | None = None
+    if provenance_path.is_file():
+        preserved_provenance = provenance_path.read_text()
+
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -144,6 +232,12 @@ def main() -> None:
     _copy_newest_license_manifest(build_dir, out)
     _copy_image_artifacts(build_dir, out)
     _rewrite_cve_summary(build_dir, out, allowlist)
+
+    if preserved_provenance is not None:
+        provenance_path.write_text(preserved_provenance)
+    else:
+        script_dir = Path(__file__).resolve().parent
+        provenance_path.write_text(_generate_default_provenance(script_dir))
 
 
 if __name__ == "__main__":

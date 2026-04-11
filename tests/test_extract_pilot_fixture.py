@@ -242,3 +242,64 @@ def test_by_hash_spdx_paths_are_excluded(tmp_path: Path) -> None:
     for path in out_spdx_files:
         assert "by-hash" not in path.parts, f"by-hash leaked into fixture: {path}"
         assert "by-namespace" not in path.parts, f"by-namespace leaked into fixture: {path}"
+
+
+@pytest.mark.unit
+def test_provenance_is_preserved_on_rerun(tmp_path: Path) -> None:
+    """A pre-existing PROVENANCE.md must survive a wipe-and-regenerate cycle.
+
+    The extractor deletes the --out tree before repopulating it. Any
+    hand-maintained provenance note at <out>/PROVENANCE.md must be
+    round-tripped verbatim so fixture refreshes do not clobber the
+    human-authored record of where the fixture came from.
+    """
+    build = _make_minimal_build_dir(tmp_path)
+    out = tmp_path / "out"
+
+    first = _run(["--build-dir", str(build), "--out", str(out)])
+    assert first.returncode == 0, first.stderr
+
+    prov_path = out / "PROVENANCE.md"
+    assert prov_path.is_file(), "first run must create PROVENANCE.md"
+
+    marker = "# MARKER-preserve-me-42\n"
+    original = prov_path.read_text()
+    prov_path.write_text(original + marker)
+
+    second = _run(["--build-dir", str(build), "--out", str(out)])
+    assert second.returncode == 0, second.stderr
+
+    after = prov_path.read_text()
+    assert marker in after, "marker line was dropped across regeneration"
+    assert after == original + marker, "PROVENANCE.md was rewritten instead of preserved verbatim"
+
+
+@pytest.mark.unit
+def test_provenance_is_created_when_missing(tmp_path: Path) -> None:
+    """A fresh --out with no PROVENANCE.md must get a default one.
+
+    The default body should reference the poky commit SHA read from
+    pilots/0001-poky-scarthgap-min/kas.yml when that file is reachable,
+    or the documented placeholder when it is not.
+    """
+    build = _make_minimal_build_dir(tmp_path)
+    out = tmp_path / "fresh-out"
+    assert not out.exists()
+
+    result = _run(["--build-dir", str(build), "--out", str(out)])
+    assert result.returncode == 0, result.stderr
+
+    prov_path = out / "PROVENANCE.md"
+    assert prov_path.is_file()
+    body = prov_path.read_text()
+
+    kas_path = PROJECT_ROOT / "pilots" / "0001-poky-scarthgap-min" / "kas.yml"
+    if kas_path.is_file():
+        assert "cb2dcb4963e" in body, (
+            "default provenance should embed the poky commit SHA from kas.yml"
+        )
+    else:
+        assert "unknown - kas.yml not found" in body
+
+    # Sanity: the regenerated body is non-trivial and mentions the fixture.
+    assert "poky" in body.lower()
