@@ -96,6 +96,56 @@ limitations, not defects:
   `tmp/log/cve/cve-summary.json`. The reconciliation between the two is
   tracked as .
 
+
+## What shipcheck is not
+
+shipcheck organises the evidence your Yocto build already emits and
+formats it as a CRA-aligned dossier. It does not, and cannot, certify
+compliance. Specifically:
+
+- **Not an official CRA compliance tool.** No such tool exists at the
+  time of writing. The regulation does not define one, and Commission
+  mandate M/596 for CRA harmonised standards is still in progress.
+- **Not a Notified Body or certification authority.** Conformity
+  assessment under Annex VIII (for critical products) is a separate,
+  legally defined process. shipcheck has no role in it and does not
+  issue certificates, seals, or attestations.
+- **Not a replacement for legal review.** A compliance determination
+  is a legal judgement based on the regulation, product context, and
+  risk assessment. Lawyers and compliance officers make that call;
+  shipcheck provides inputs.
+- **Not a replacement for harmonised-standards testing** (once M/596
+  publishes). When harmonised standards are available, conformity with
+  them provides presumption of compliance under Article 27. shipcheck
+  may integrate harmonised-standards checks when they exist; it does
+  not today.
+- **Not complete coverage of CRA obligations.** See the `audits/`
+  directory for the coverage verdict per Annex. Process obligations,
+  user-documentation obligations, and several soft-property
+  requirements (Annex I Part I b, e, g, h, i, j, l, m) are partly or
+  wholly out of scope.
+
+An official CRA compliance tool would likely require accreditation
+under a harmonised standard (ISO/IEC 17025 or CRA-specific), Notified
+Body affiliation for critical products, and formal harmonised-standards
+conformance testing once those standards publish. shipcheck sits at
+the opposite end of the spectrum - lightweight, Yocto-native,
+open-source, and developer-facing.
+
+### Readiness is not compliance
+
+`shipcheck check` reports a readiness score (0-200). A perfect score
+means every registered shipcheck check passed on this build. It does
+not mean the product is CRA-compliant. Compliance is a legal judgement
+made by the manufacturer, not a tooling verdict.
+
+The readiness score is useful as an internal progress indicator. It
+correlates with compliance posture but does not attest it. The
+manufacturer's signature on the EU Declaration of Conformity is the
+attestation. For the full rationale, see
+[`audits/0001-cra-approach/REPORT.md`](audits/0001-cra-approach/REPORT.md)
+§§6-7.
+
 ## Subcommands
 
 | Command | Purpose |
