@@ -8,6 +8,7 @@ file report content, readiness score, and exit code.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -1529,3 +1530,42 @@ class TestPilotRealLayout:
 
     def test_json_to_stdout(self, tmp_path: Path):
         _assert_json_to_stdout(self._FIXTURE, tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Opt-in live-build test (SHIPCHECK_PILOT_BUILD_DIR)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+class TestPilotLiveBuild:
+    """Run the pilot assertions against a full bitbake tree when opted in.
+
+    Skipped unless ``SHIPCHECK_PILOT_BUILD_DIR`` points at an existing
+    directory. Lets developers exercise the full 39 GB ``./build/`` tree
+    locally without imposing that cost on CI.
+    """
+
+    def setup_method(self, method):
+        raw = os.environ.get("SHIPCHECK_PILOT_BUILD_DIR")
+        if raw is None:
+            pytest.skip("SHIPCHECK_PILOT_BUILD_DIR not set")
+        resolved = Path(raw).expanduser().resolve()
+        if not resolved.is_dir():
+            pytest.skip(f"SHIPCHECK_PILOT_BUILD_DIR={resolved} does not exist")
+        self._build_dir = resolved
+
+    def test_all_checks_run_live(self):
+        _assert_all_checks_run(self._build_dir)
+
+    def test_cve_checks_agree_live(self):
+        _assert_cve_agreement(self._build_dir)
+
+    def test_license_audit_warn_live(self):
+        _assert_license_audit_warn(self._build_dir)
+
+    def test_known_limit_statuses_live(self):
+        _assert_known_limit_statuses(self._build_dir)
+
+    def test_json_to_stdout_live(self, tmp_path: Path):
+        _assert_json_to_stdout(self._build_dir, tmp_path)
