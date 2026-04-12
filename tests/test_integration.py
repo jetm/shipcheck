@@ -14,7 +14,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from shipcheck.checks.registry import get_default_registry
 from shipcheck.cli import app
+from shipcheck.models import CheckStatus
 
 runner = CliRunner()
 
@@ -85,6 +87,91 @@ def _read_json_report(result) -> dict:  # type: ignore[no-untyped-def]
     tests read ``result.stdout`` from the ``CliRunner`` result directly.
     """
     return json.loads(result.stdout)
+
+
+def _assert_all_checks_run(build_dir: Path) -> None:
+    """Every registered check runs exactly once with a non-None status."""
+    registry = get_default_registry()
+    results = registry.run_checks(build_dir=build_dir, config={})
+    registered_ids = {c.id for c in registry.checks}
+    seen: list[str] = [r.check_id for r in results]
+    assert set(seen) == registered_ids, (
+        f"mismatch between registered and run check ids: "
+        f"missing={registered_ids - set(seen)}, extra={set(seen) - registered_ids}"
+    )
+    assert len(seen) == len(set(seen)), f"duplicate check ids in results: {seen}"
+    for r in results:
+        assert r.status is not None, f"{r.check_id} returned None status"
+
+
+def _assert_cve_agreement(build_dir: Path) -> None:
+    """cve-tracking and yocto-cve-check both produce findings citing cve-summary.json."""
+    results = get_default_registry().run_checks(build_dir=build_dir, config={})
+    by_id = {r.check_id: r for r in results}
+    for cid in ("cve-tracking", "yocto-cve-check"):
+        r = by_id.get(cid)
+        assert r is not None, f"{cid} did not run"
+        assert r.findings, f"{cid} produced no findings (status={r.status}, summary={r.summary!r})"
+        assert "cve-summary.json" in r.summary, (
+            f"{cid} summary missing cve-summary.json: {r.summary!r}"
+        )
+
+
+def _assert_license_audit_warn(build_dir: Path) -> None:
+    """license-audit returns WARN and summary mentions a non-zero package count."""
+    import re
+
+    results = get_default_registry().run_checks(build_dir=build_dir, config={})
+    by_id = {r.check_id: r for r in results}
+    r = by_id.get("license-audit")
+    assert r is not None, "license-audit did not run"
+    assert r.status == CheckStatus.WARN, (
+        f"license-audit status={r.status!r}, expected WARN (summary={r.summary!r})"
+    )
+    assert re.search(r"\b[1-9][0-9]*\s*package", r.summary), (
+        f"license-audit summary missing non-zero package count: {r.summary!r}"
+    )
+
+
+def _assert_known_limit_statuses(build_dir: Path) -> None:
+    """secure-boot/image-signing WARN, vuln-reporting ERROR with product.yaml diagnostic."""
+    results = get_default_registry().run_checks(build_dir=build_dir, config={})
+    by_id = {r.check_id: r for r in results}
+    for cid in ("secure-boot", "image-signing"):
+        r = by_id.get(cid)
+        assert r is not None, f"{cid} did not run"
+        assert r.status == CheckStatus.WARN, (
+            f"{cid} status={r.status!r}, expected WARN (summary={r.summary!r})"
+        )
+    vr = by_id.get("vuln-reporting")
+    assert vr is not None, "vuln-reporting did not run"
+    assert vr.status == CheckStatus.ERROR, (
+        f"vuln-reporting status={vr.status!r}, expected ERROR (summary={vr.summary!r})"
+    )
+    assert "product.yaml not found" in vr.summary, (
+        f"vuln-reporting summary missing 'product.yaml not found': {vr.summary!r}"
+    )
+
+
+def _assert_json_to_stdout(build_dir: Path, tmp_cwd: Path) -> None:
+    """`check --format json` writes parseable JSON to stdout with no file side-effect."""
+    import os
+
+    original_cwd = Path.cwd()
+    os.chdir(tmp_cwd)
+    try:
+        result = runner.invoke(
+            app,
+            ["check", "--build-dir", str(build_dir), "--format", "json"],
+        )
+    finally:
+        os.chdir(original_cwd)
+    assert result.exit_code == 0, f"CLI exited non-zero: {result.output}"
+    data = json.loads(result.stdout)
+    assert "checks" in data, f"stdout JSON missing 'checks' key: keys={list(data)}"
+    assert not (tmp_cwd / "shipcheck-report.json").exists(), (
+        f"unexpected side-effect file at {tmp_cwd / 'shipcheck-report.json'}"
+    )
 
 
 # ---------------------------------------------------------------------------
