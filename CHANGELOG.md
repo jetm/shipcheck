@@ -2,25 +2,7 @@
 
 ## [Unreleased]
 
-### Added
-
-- Pilot testing methodology (`docs/pilot.md`) documenting when pilots are required, kas-container bootstrap with cache reuse (`DL_DIR`, `SSTATE_DIR`, `KAS_REPO_REF_DIR`), NVD API key passthrough, the per-pilot artefact layout, and the gating rules that tie pilot completion to release tags.
-- First pilot report (`pilots/0001-poky-scarthgap-min/REPORT.md`) validating the v0.1 check set against a real poky Scarthgap `core-image-minimal` build with `INHERIT += "create-spdx cve-check"`. All seven registered check IDs executed without raising.
-- Pilots directory convention at repo root (`pilots/NNNN-<short-name>/`) containing `kas.yml`, `log.txt`, `scan.json`, `REPORT.md`, and a `dossier/` subdirectory with the full `--out` evidence bundle.
-
-### Changed
-
-- README Roadmap now links to `pilots/0001-poky-scarthgap-min/REPORT.md` instead of the "pending - first pilot run is in progress" placeholder.
-- Added a "Known limitations" subsection to README under "What it checks" enumerating documented scope boundaries surfaced by pilot 0001 (`vuln-reporting` requires `product.yaml`, `secure-boot` is config-level only, `image-signing` is config-level only, `sbom-generation` accepts SPDX 2.x, `cve-tracking` / `yocto-cve-check` file-lookup divergence).
-- **BREAKING**: `shipcheck check --format json` now writes the JSON payload to stdout instead of silently creating `./shipcheck-report.json` in the current working directory; callers that relied on the file side-effect must switch to shell redirection (`--format json > report.json`) or pass `--out DIR` for the dossier bundle. (Pilot: pilots/0001-poky-scarthgap-min/REPORT.md#re-run-2026-04-20)
-
-### Fixed
-
-- `shipcheck check --format json` routed the JSON payload to a silent `./shipcheck-report.json` side-effect instead of stdout, so shell redirection (`> scan.json`) captured an empty stream and CI pipelines lost the result. JSON now prints to stdout and suppresses the Rich terminal report when `--out` is not set. (PF-01; Pilot: pilots/0001-poky-scarthgap-min/REPORT.md#re-run-2026-04-20)
-- `cve-tracking` and `yocto-cve-check` diverged on the same build because each check implemented its own discovery logic and only `yocto-cve-check` looked at `tmp/log/cve/cve-summary.json`. Both checks now share `shipcheck.checks._cve_discovery.discover_cve_output()` and agree on evidence presence. (PF-02; Pilot: pilots/0001-poky-scarthgap-min/REPORT.md#re-run-2026-04-20)
-- `license-audit` returned SKIP on real Yocto builds because `_discover_image_dir()` only searched the top level of `tmp/deploy/licenses/` and missed the per-architecture layout (`tmp/deploy/licenses/<arch>/<pkg-or-image>/license.manifest`). Discovery now walks the tree recursively via `Path.rglob("license.manifest")` and selects the newest-mtime manifest. (PF-03; Pilot: pilots/0001-poky-scarthgap-min/REPORT.md#re-run-2026-04-20)
-
-## [0.1.0]
+## [0.0.3] - 2026-04-21
 
 ### Added
 
@@ -41,15 +23,25 @@
 - `vuln-reporting` check validating Article 14 / Annex I Part II §§4-8 documentation obligations (CVD policy, SPoC, support period, update distribution)
 - `shipcheck init` scaffold now lists all 7 v0.3 checks and templates the `license_audit`, `yocto_cve`, `history`, `vuln_reporting`, and `product_config_path` sections with v0.3 usage examples
 - README rewritten with install, quickstart, check catalog, subcommand summary, and a pointer to the OpenSSF CRA Yocto rules catalog (was a 5-line stub)
+- Pilot testing methodology (`docs/pilot.md`) documenting when pilots are required, kas-container bootstrap with cache reuse (`DL_DIR`, `SSTATE_DIR`, `KAS_REPO_REF_DIR`), NVD API key passthrough, the per-pilot artefact layout, and the gating rules that tie pilot completion to release tags.
+- First pilot report (`pilots/0001-poky-scarthgap-min/REPORT.md`) validating the v0.1 check set against a real poky Scarthgap `core-image-minimal` build with `INHERIT += "create-spdx cve-check"`. All seven registered check IDs executed without raising.
+- Pilots directory convention at repo root (`pilots/NNNN-<short-name>/`) containing `kas.yml`, `log.txt`, `scan.json`, `REPORT.md`, and a `dossier/` subdirectory with the full `--out` evidence bundle.
 
 ### Changed
 
 - `CheckStatus` enum extended with `ERROR` member for checks whose input is structurally unreadable (previously had PASS/WARN/FAIL/SKIP only)
 - `BaseCheck.produces_cve_findings: ClassVar[bool] = False` trait declares which checks emit CVE findings; the dossier CVE filter and CVE-velocity counter now derive their producer set from this flag instead of a hardcoded ID list
+- README Roadmap now links to `pilots/0001-poky-scarthgap-min/REPORT.md` instead of the "pending - first pilot run is in progress" placeholder.
+- Added a "Known limitations" subsection to README under "What it checks" enumerating documented scope boundaries surfaced by pilot 0001 (`vuln-reporting` requires `product.yaml`, `secure-boot` is config-level only, `image-signing` is config-level only, `sbom-generation` accepts SPDX 2.x, `cve-tracking` / `yocto-cve-check` file-lookup divergence).
+- **BREAKING**: `shipcheck check --format json` now writes the JSON payload to stdout instead of silently creating `./shipcheck-report.json` in the current working directory; callers that relied on the file side-effect must switch to shell redirection (`--format json > report.json`) or pass `--out DIR` for the dossier bundle. (Pilot: pilots/0001-poky-scarthgap-min/REPORT.md#re-run-2026-04-20)
+- README now explicitly distinguishes readiness score from CRA compliance and enumerates what shipcheck is NOT - see "What shipcheck is not" and "Readiness is not compliance" sections.
 
 ### Fixed
 
 - Dossier CVE-velocity counter now matches the registered `cve-tracking` check ID (previously matched the never-registered `cve-scan` and silently undercounted)
+- `shipcheck check --format json` routed the JSON payload to a silent `./shipcheck-report.json` side-effect instead of stdout, so shell redirection (`> scan.json`) captured an empty stream and CI pipelines lost the result. JSON now prints to stdout and suppresses the Rich terminal report when `--out` is not set. (PF-01; Pilot: pilots/0001-poky-scarthgap-min/REPORT.md#re-run-2026-04-20)
+- `cve-tracking` and `yocto-cve-check` diverged on the same build because each check implemented its own discovery logic and only `yocto-cve-check` looked at `tmp/log/cve/cve-summary.json`. Both checks now share `shipcheck.checks._cve_discovery.discover_cve_output()` and agree on evidence presence. (PF-02; Pilot: pilots/0001-poky-scarthgap-min/REPORT.md#re-run-2026-04-20)
+- `license-audit` returned SKIP on real Yocto builds because `_discover_image_dir()` only searched the top level of `tmp/deploy/licenses/` and missed the per-architecture layout (`tmp/deploy/licenses/<arch>/<pkg-or-image>/license.manifest`). Discovery now walks the tree recursively via `Path.rglob("license.manifest")` and selects the newest-mtime manifest. (PF-03; Pilot: pilots/0001-poky-scarthgap-min/REPORT.md#re-run-2026-04-20)
 
 ## [0.0.2] - 2026-04-01
 
