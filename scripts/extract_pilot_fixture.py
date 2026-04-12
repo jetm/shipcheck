@@ -89,11 +89,29 @@ def _copy_image_artifacts(build_dir: Path, out: Path) -> None:
             _copy(manifest, out / rel)
 
 
+def _issue_status_priority(issue: object) -> int:
+    """Return sort priority by status: 0=Unpatched, 1=Ignored, 2=otherwise."""
+    if not isinstance(issue, dict):
+        return 2
+    status = issue.get("status")
+    if status == "Unpatched":
+        return 0
+    if status == "Ignored":
+        return 1
+    return 2
+
+
 def _truncate_issues(package: dict) -> dict:
     issues = package.get("issue")
     if not isinstance(issues, list):
         return package
-    ordered = sorted(issues, key=lambda item: item.get("id", "") if isinstance(item, dict) else "")
+    ordered = sorted(
+        issues,
+        key=lambda item: (
+            _issue_status_priority(item),
+            item.get("id", "") if isinstance(item, dict) else "",
+        ),
+    )
     package["issue"] = ordered[:3]
     return package
 

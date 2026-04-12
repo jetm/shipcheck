@@ -185,11 +185,24 @@ def test_issue_arrays_are_truncated_to_three(tmp_path: Path) -> None:
             f"package {package.get('name')!r} retained {len(package['issue'])} issues"
         )
 
-    # openssl had 5 issues in the fixture - verify deterministic sort-by-id
-    # keeps the three lowest-id entries.
+    # openssl had 5 issues with mixed statuses (3 Patched, 1 Unpatched, 1 Ignored).
+    # The truncation sort key is (status_priority, id) where
+    # Unpatched=0, Ignored=1, Patched/other=2. Under that key the 3 kept entries
+    # must include the Unpatched and Ignored ones, not only Patched.
     by_name = {pkg["name"]: pkg for pkg in data["package"]}
-    openssl_ids = [issue["id"] for issue in by_name["openssl"]["issue"]]
-    assert openssl_ids == ["CVE-2024-0001", "CVE-2024-0002", "CVE-2024-0003"]
+    openssl_issues = by_name["openssl"]["issue"]
+    openssl_statuses = [issue["status"] for issue in openssl_issues]
+    assert "Unpatched" in openssl_statuses, (
+        f"Unpatched issue was dropped from kept 3: {openssl_issues!r}"
+    )
+    assert "Ignored" in openssl_statuses, (
+        f"Ignored issue was dropped from kept 3: {openssl_issues!r}"
+    )
+    # Ordering within the kept 3 stays by (status_priority, id):
+    # Unpatched CVE-2024-0003 first, Ignored CVE-2024-0002 second,
+    # lowest-id Patched CVE-2024-0001 third.
+    openssl_ids = [issue["id"] for issue in openssl_issues]
+    assert openssl_ids == ["CVE-2024-0003", "CVE-2024-0002", "CVE-2024-0001"]
 
 
 @pytest.mark.unit

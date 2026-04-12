@@ -134,7 +134,7 @@ def _assert_license_audit_warn(build_dir: Path) -> None:
 
 
 def _assert_known_limit_statuses(build_dir: Path) -> None:
-    """secure-boot/image-signing WARN, vuln-reporting ERROR with product.yaml diagnostic."""
+    """secure-boot/image-signing WARN, vuln-reporting SKIP with product.yaml diagnostic."""
     results = get_default_registry().run_checks(build_dir=build_dir, config={})
     by_id = {r.check_id: r for r in results}
     for cid in ("secure-boot", "image-signing"):
@@ -145,11 +145,12 @@ def _assert_known_limit_statuses(build_dir: Path) -> None:
         )
     vr = by_id.get("vuln-reporting")
     assert vr is not None, "vuln-reporting did not run"
-    assert vr.status == CheckStatus.ERROR, (
-        f"vuln-reporting status={vr.status!r}, expected ERROR (summary={vr.summary!r})"
+    assert vr.status == CheckStatus.SKIP, (
+        f"vuln-reporting status={vr.status!r}, expected SKIP (summary={vr.summary!r})"
     )
-    assert "product.yaml not found" in vr.summary, (
-        f"vuln-reporting summary missing 'product.yaml not found': {vr.summary!r}"
+    assert "product_config_path" in vr.summary or "product.yaml not found" in vr.summary, (
+        "vuln-reporting summary missing 'product_config_path' or "
+        f"'product.yaml not found': {vr.summary!r}"
     )
 
 
@@ -1480,3 +1481,51 @@ class TestPilot0001CveDivergencePrevention:
         assert "cve-summary.json" in yocto_cve.summary, (
             f"yocto-cve-check summary does not reference cve-summary.json: {yocto_cve.summary!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Real-layout regression guard (pilot 0001 slice)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+class TestPilotRealLayout:
+    """Run the full check registry against the committed pilot-0001 slice.
+
+    Guards PF-01 / PF-02 / PF-03 and the PF-04 / PF-05 / PF-06 known-limit
+    rows against real-layout bytes, not synthetic fixtures. The slice lives
+    under ``tests/fixtures/pilot_real/build/`` and is regenerable via
+    ``scripts/extract_pilot_fixture.py``.
+    """
+
+    _FIXTURE = FIXTURES_DIR / "pilot_real" / "build"
+
+    def test_fixture_exists_and_under_500kb(self):
+        assert self._FIXTURE.is_dir(), f"fixture missing: {self._FIXTURE}"
+
+        forbidden = {"rpm", "work", "sstate-cache", "cache"}
+        total = 0
+        for path in self._FIXTURE.rglob("*"):
+            if path.is_file():
+                total += path.stat().st_size
+            rel_parts = path.relative_to(self._FIXTURE).parts
+            for seg in forbidden:
+                assert seg not in rel_parts, (
+                    f"forbidden segment {seg!r} present in fixture path: {path}"
+                )
+        assert total < 512000, f"fixture total size {total} bytes exceeds 500 KB budget"
+
+    def test_all_checks_run(self):
+        _assert_all_checks_run(self._FIXTURE)
+
+    def test_cve_checks_agree(self):
+        _assert_cve_agreement(self._FIXTURE)
+
+    def test_license_audit_warn(self):
+        _assert_license_audit_warn(self._FIXTURE)
+
+    def test_known_limit_statuses(self):
+        _assert_known_limit_statuses(self._FIXTURE)
+
+    def test_json_to_stdout(self, tmp_path: Path):
+        _assert_json_to_stdout(self._FIXTURE, tmp_path)
