@@ -71,9 +71,12 @@ limitations, not defects:
 
 - **`vuln-reporting` requires `product.yaml`** - without a `product.yaml`
   providing Article 14 / Annex I Part II §§4-8 data (CVD policy, SPoC,
-  support period, update distribution), the check returns an ERROR status
-  with "product.yaml not found". Supply the file via
-  `product_config_path` in `.shipcheck.yaml` to exercise the check.
+  support period, update distribution), the check returns SKIP with
+  "product_config_path not configured" when `product_config_path` is
+  absent from `.shipcheck.yaml`, or ERROR with "product.yaml not found"
+  when the path is set but the file does not exist. Supply a valid
+  `product.yaml` via `product_config_path` in `.shipcheck.yaml` to
+  exercise the check.
 - **`secure-boot` is config-level only** - detects the signing-class
   inheritance and flags known test keys in `.shipcheck.yaml`, but does
   NOT perform PE/COFF binary signature verification, PKI chain validation
