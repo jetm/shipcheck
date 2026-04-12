@@ -287,6 +287,46 @@ kas-container shell pilots/NNNN-<name>/kas.yml -c \
     'bitbake -c cleanall lzlib && bitbake core-image-minimal'
 ```
 
+## Refreshing the real-layout fixture
+
+A ~44 KB slice of the pilot 0001 `./build/` tree is committed under
+`tests/fixtures/pilot_real/build/` so the check registry runs against
+real bitbake output in CI. A 500 KB hard budget is enforced by
+`TestPilotRealLayout::test_fixture_exists_and_under_500kb`. Source
+commit and extraction date live in
+`tests/fixtures/pilot_real/build/PROVENANCE.md`.
+
+Regenerate from a populated `./build/` with a single command run
+from the shipcheck repo root:
+
+```bash
+uv run scripts/extract_pilot_fixture.py
+```
+
+The script wipes the out directory, copies only the files shipcheck
+reads, truncates `cve-summary.json` to a fixed package allowlist,
+and is byte-identical across back-to-back runs. Review `git diff`
+and commit.
+
+Developers who want to run the pilot assertions against a full
+bitbake tree (rather than the committed slice) can point
+`TestPilotLiveBuild` at one by exporting `SHIPCHECK_PILOT_BUILD_DIR`:
+
+```bash
+SHIPCHECK_PILOT_BUILD_DIR=~/repos/personal/shipcheck/build \
+    uv run pytest tests/test_integration.py::TestPilotLiveBuild -v
+```
+
+When `SHIPCHECK_PILOT_BUILD_DIR` is unset the class skips silently,
+so regular CI is unaffected.
+
+Refresh the committed fixture when a new poky LTS point-release
+lands, when a check's output format changes in a way that
+invalidates the pinned assertions, or when CI fails because of
+fixture drift. To change the CVE packages retained in the truncated
+`cve-summary.json`, edit the default allowlist at the top of
+`scripts/extract_pilot_fixture.py` and regenerate.
+
 ## 6. Report template
 
 Every pilot report uses the same structure. The template below is the canonical shape; instantiate it under `pilots/NNNN-<name>/REPORT.md`.
