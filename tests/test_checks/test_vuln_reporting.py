@@ -273,3 +273,208 @@ class TestCraMappingCoverage:
                 f"CheckResult.cra_mapping entry {entry!r} outside allowed set "
                 f"{sorted(ALLOWED_CRA_IDS)}"
             )
+
+
+# --- (h) Placeholder token detection ----------------------------------------
+
+
+class TestPlaceholderDetection:
+    """Placeholder tokens in required fields must be reported as findings."""
+
+    # Single-field placeholder fixtures: one finding each.
+
+    def test_placeholder_policy_url_produces_one_finding(self, tmp_path: Path) -> None:
+        result = _run("placeholder_policy_url.yaml", tmp_path)
+
+        ph_findings = [f for f in result.findings if "cvd.policy_url" in _flatten_text(f)]
+        assert len(ph_findings) == 1, (
+            f"expected exactly one finding about cvd.policy_url; got {result.findings!r}"
+        )
+
+    def test_placeholder_policy_url_severity_is_high(self, tmp_path: Path) -> None:
+        result = _run("placeholder_policy_url.yaml", tmp_path)
+
+        ph_findings = [f for f in result.findings if "cvd.policy_url" in _flatten_text(f)]
+        assert ph_findings, "placeholder_policy_url.yaml must produce a cvd.policy_url finding"
+        assert ph_findings[0].severity == "high", (
+            f"expected high severity for cvd.policy_url placeholder; got {ph_findings[0].severity}"
+        )
+
+    def test_placeholder_policy_url_cra_mapping(self, tmp_path: Path) -> None:
+        result = _run("placeholder_policy_url.yaml", tmp_path)
+
+        ph_findings = [f for f in result.findings if "cvd.policy_url" in _flatten_text(f)]
+        assert ph_findings, "placeholder_policy_url.yaml must produce a cvd.policy_url finding"
+        assert "I.P2.5" in ph_findings[0].cra_mapping, (
+            f"expected I.P2.5 in cra_mapping; got {ph_findings[0].cra_mapping}"
+        )
+
+    def test_placeholder_contact_produces_one_finding(self, tmp_path: Path) -> None:
+        result = _run("placeholder_contact.yaml", tmp_path)
+
+        ph_findings = [
+            f for f in result.findings
+            if "cvd.contact" in _flatten_text(f) or (
+                "cvd" in _flatten_text(f) and "contact" in _flatten_text(f)
+            )
+        ]
+        assert len(ph_findings) == 1, (
+            f"expected exactly one finding about cvd.contact; got {result.findings!r}"
+        )
+
+    def test_placeholder_contact_severity_is_high(self, tmp_path: Path) -> None:
+        result = _run("placeholder_contact.yaml", tmp_path)
+
+        ph_findings = [
+            f for f in result.findings
+            if "cvd.contact" in _flatten_text(f) or (
+                "cvd" in _flatten_text(f) and "contact" in _flatten_text(f)
+            )
+        ]
+        assert ph_findings, "placeholder_contact.yaml must produce a cvd.contact finding"
+        assert ph_findings[0].severity == "high", (
+            f"expected high severity for cvd.contact placeholder; got {ph_findings[0].severity}"
+        )
+
+    def test_placeholder_contact_cra_mapping(self, tmp_path: Path) -> None:
+        result = _run("placeholder_contact.yaml", tmp_path)
+
+        ph_findings = [
+            f for f in result.findings
+            if "cvd.contact" in _flatten_text(f) or (
+                "cvd" in _flatten_text(f) and "contact" in _flatten_text(f)
+            )
+        ]
+        assert ph_findings, "placeholder_contact.yaml must produce a cvd.contact finding"
+        assert "II.2" in ph_findings[0].cra_mapping, (
+            f"expected II.2 in cra_mapping; got {ph_findings[0].cra_mapping}"
+        )
+
+    def test_placeholder_end_date_produces_one_finding(self, tmp_path: Path) -> None:
+        result = _run("placeholder_end_date.yaml", tmp_path)
+
+        ph_findings = [f for f in result.findings if "end_date" in _flatten_text(f)]
+        assert len(ph_findings) == 1, (
+            f"expected exactly one finding about end_date; got {result.findings!r}"
+        )
+
+    def test_placeholder_end_date_severity_is_high(self, tmp_path: Path) -> None:
+        result = _run("placeholder_end_date.yaml", tmp_path)
+
+        ph_findings = [f for f in result.findings if "end_date" in _flatten_text(f)]
+        assert ph_findings, "placeholder_end_date.yaml must produce an end_date finding"
+        assert ph_findings[0].severity == "high", (
+            f"expected high severity for end_date placeholder; got {ph_findings[0].severity}"
+        )
+
+    def test_placeholder_end_date_cra_mapping(self, tmp_path: Path) -> None:
+        result = _run("placeholder_end_date.yaml", tmp_path)
+
+        ph_findings = [f for f in result.findings if "end_date" in _flatten_text(f)]
+        assert ph_findings, "placeholder_end_date.yaml must produce an end_date finding"
+        assert "II.7" in ph_findings[0].cra_mapping, (
+            f"expected II.7 in cra_mapping; got {ph_findings[0].cra_mapping}"
+        )
+
+    def test_placeholder_mechanism_produces_one_finding(self, tmp_path: Path) -> None:
+        result = _run("placeholder_mechanism.yaml", tmp_path)
+
+        ph_findings = [f for f in result.findings if "mechanism" in _flatten_text(f)]
+        assert len(ph_findings) == 1, (
+            f"expected exactly one finding about mechanism; got {result.findings!r}"
+        )
+
+    def test_placeholder_mechanism_severity_is_medium(self, tmp_path: Path) -> None:
+        result = _run("placeholder_mechanism.yaml", tmp_path)
+
+        ph_findings = [f for f in result.findings if "mechanism" in _flatten_text(f)]
+        assert ph_findings, "placeholder_mechanism.yaml must produce a mechanism finding"
+        assert ph_findings[0].severity == "medium", (
+            f"expected medium severity for mechanism placeholder; got {ph_findings[0].severity}"
+        )
+
+    def test_placeholder_mechanism_cra_mapping(self, tmp_path: Path) -> None:
+        result = _run("placeholder_mechanism.yaml", tmp_path)
+
+        ph_findings = [f for f in result.findings if "mechanism" in _flatten_text(f)]
+        assert ph_findings, "placeholder_mechanism.yaml must produce a mechanism finding"
+        assert "I.P2.7" in ph_findings[0].cra_mapping, (
+            f"expected I.P2.7 in cra_mapping; got {ph_findings[0].cra_mapping}"
+        )
+
+    # all_placeholders.yaml: four findings, FAIL status, score 10/50.
+
+    def test_all_placeholders_finding_count(self, tmp_path: Path) -> None:
+        result = _run("all_placeholders.yaml", tmp_path)
+
+        assert len(result.findings) == 4, (
+            f"all_placeholders.yaml must produce exactly 4 findings; got {result.findings!r}"
+        )
+
+    def test_all_placeholders_status_is_fail(self, tmp_path: Path) -> None:
+        result = _run("all_placeholders.yaml", tmp_path)
+
+        assert result.status == CheckStatus.FAIL, (
+            f"expected FAIL status for all_placeholders.yaml; got {result.status}"
+        )
+
+    def test_all_placeholders_score(self, tmp_path: Path) -> None:
+        result = _run("all_placeholders.yaml", tmp_path)
+
+        assert result.score == 10, (
+            f"expected score 10 (50 - 4*10) for all_placeholders.yaml; got {result.score}"
+        )
+        assert result.max_score == 50, (
+            f"expected max_score 50; got {result.max_score}"
+        )
+
+    # Case-insensitivity: vendor / Vendor / "  VENDOR  " all fire the same finding.
+
+    @pytest.mark.parametrize(
+        "contact_value",
+        ["vendor", "Vendor", "  VENDOR  "],
+        ids=["lowercase", "capitalized", "whitespace_padded"],
+    )
+    def test_placeholder_case_insensitivity(self, tmp_path: Path, contact_value: str) -> None:
+        product_yaml = tmp_path / "product.yaml"
+        product_yaml.write_text(
+            f"""schema_version: 1
+product:
+  name: "Acme Gateway GW-100"
+  type: "Industrial IoT edge gateway"
+  version: "2.4.1"
+manufacturer:
+  name: "Acme Embedded Systems GmbH"
+  address: "Karlstrasse 42, 80333 Munich, Germany"
+  contact: "compliance@acme-embedded.example"
+support_period:
+  end_date: "2031-12-31"
+cvd:
+  policy_url: "https://acme-embedded.example/security/cvd-policy"
+  contact: {contact_value!r}
+update_distribution:
+  mechanism: "Signed OTA updates over HTTPS via the Acme Update Service"
+"""
+        )
+        check = VulnerabilityReportingCheck()
+        cfg = {"product_config_path": str(product_yaml)}
+        result = check.run(tmp_path, cfg)
+
+        contact_findings = [
+            f for f in result.findings
+            if "cvd.contact" in _flatten_text(f) or (
+                "cvd" in _flatten_text(f) and "contact" in _flatten_text(f)
+            )
+        ]
+        assert len(contact_findings) == 1, (
+            f"contact value {contact_value!r} must produce exactly one finding; "
+            f"got {result.findings!r}"
+        )
+        assert contact_findings[0].severity == "high", (
+            f"expected high severity for contact placeholder {contact_value!r}; "
+            f"got {contact_findings[0].severity}"
+        )
+        assert "II.2" in contact_findings[0].cra_mapping, (
+            f"expected II.2 in cra_mapping for contact placeholder {contact_value!r}; "
+            f"got {contact_findings[0].cra_mapping}"
+        )
