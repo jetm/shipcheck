@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- `vuln-reporting` now emits findings for placeholder tokens (`VENDOR`, `TODO`, `FIXME`, `[TO BE FILLED]`, `[VENDOR]`) in any required field, and for malformed values in `product.yaml` fields previously accepted on presence alone: `cvd.policy_url` must parse as `http://`, `https://`, or `mailto:`; `cvd.contact` must be email-shaped (`local@domain.tld`) or URL-shaped; `support_period.end_date` must parse as ISO 8601 `YYYY-MM-DD`. Placeholder matching is case-insensitive against the trimmed value. Findings cite Annex I Part II §5 (CVD policy), Annex II §2 (SPoC), Annex II §7 (support period), and Annex I Part II §7 (update distribution).
+
+### Fixed
+
+- Unparseable `support_period.end_date` in `product.yaml` now emits a `high`-severity finding citing Annex II §7 rather than silently skipping the expired-date branch.
+
 ## [0.0.3] - 2026-04-21
 
 ### Added
