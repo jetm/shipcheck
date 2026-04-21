@@ -86,3 +86,6 @@ Thumbs.db
 !tests/fixtures/pilot_real/**
 !tests/fixtures/license_manifests/
 !tests/fixtures/license_manifests/**
+
+# Yocto/OE
+poky/
