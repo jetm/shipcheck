@@ -84,3 +84,5 @@ Thumbs.db
 # Test fixtures (keep at end so negations override all prior ignore patterns)
 !tests/fixtures/pilot_real/
 !tests/fixtures/pilot_real/**
+!tests/fixtures/license_manifests/
+!tests/fixtures/license_manifests/**
