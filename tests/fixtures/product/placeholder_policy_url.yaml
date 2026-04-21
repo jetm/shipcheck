@@ -1,0 +1,21 @@
+schema_version: 1
+
+product:
+  name: "Acme Gateway GW-100"
+  type: "Industrial IoT edge gateway"
+  version: "2.4.1"
+
+manufacturer:
+  name: "Acme Embedded Systems GmbH"
+  address: "Karlstrasse 42, 80333 Munich, Germany"
+  contact: "compliance@acme-embedded.example"
+
+support_period:
+  end_date: "2031-12-31"
+
+cvd:
+  policy_url: "VENDOR"
+  contact: "security@acme-embedded.example"
+
+update_distribution:
+  mechanism: "Signed OTA updates over HTTPS via the Acme Update Service"
