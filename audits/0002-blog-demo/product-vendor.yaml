@@ -1,0 +1,21 @@
+schema_version: 1
+
+product:
+  name: "VENDOR"
+  type: "VENDOR"
+  version: "VENDOR"
+
+manufacturer:
+  name: "VENDOR"
+  address: "VENDOR"
+  contact: "VENDOR"
+
+support_period:
+  end_date: "VENDOR"
+
+cvd:
+  policy_url: "VENDOR"
+  contact: "VENDOR"
+
+update_distribution:
+  mechanism: "VENDOR"
