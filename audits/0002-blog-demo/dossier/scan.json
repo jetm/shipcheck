@@ -1,0 +1,479 @@
+{
+  "framework": "CRA",
+  "framework_version": "2024/2847",
+  "bsi_tr_version": "TR-03183-2 v2.1.0",
+  "build_dir": "tests/fixtures/pilot_real/build",
+  "timestamp": "2026-04-23T22:29:42.865524+00:00",
+  "shipcheck_version": "0.0.3",
+  "readiness_score": {
+    "score": 60,
+    "max_score": 350
+  },
+  "checks": [
+    {
+      "check_id": "cve-tracking",
+      "check_name": "CVE Tracking",
+      "status": "fail",
+      "score": 0,
+      "max_score": 50,
+      "summary": "9 unpatched CVE(s) found in cve-summary.json (6 packages, 18 issues)",
+      "findings": [
+        {
+          "message": "CVE-1999-0524: ICMP information such as (1) netmask and (2) timestamp is allowed from arbitrary hosts.",
+          "severity": "low",
+          "remediation": "Patch or mitigate CVE-1999-0524 in package linux-yocto. Check upstream for fixes or apply a CVE patch.",
+          "details": {
+            "cve_id": "CVE-1999-0524",
+            "cvss": 2.1,
+            "package": "linux-yocto",
+            "version": "6.6.123+git"
+          },
+          "cra_mapping": [
+            "I.P2.2",
+            "I.P2.3"
+          ],
+          "sources": [
+            "cve-tracking",
+            "yocto-cve-check"
+          ]
+        },
+        {
+          "message": "CVE-2008-4609: The TCP implementation in (1) Linux, (2) platforms based on BSD Unix, (3) Microsoft Windows, (4) Cisco products, and probably other operating systems allows remote attackers to cause a denial of service (connection queue exhaustion) via multiple vectors that manipulate information in the TCP state table, as demonstrated by sockstress.",
+          "severity": "high",
+          "remediation": "Patch or mitigate CVE-2008-4609 in package linux-yocto. Check upstream for fixes or apply a CVE patch.",
+          "details": {
+            "cve_id": "CVE-2008-4609",
+            "cvss": 7.1,
+            "package": "linux-yocto",
+            "version": "6.6.123+git"
+          },
+          "cra_mapping": [
+            "I.P2.2",
+            "I.P2.3"
+          ],
+          "sources": [
+            "cve-tracking",
+            "yocto-cve-check"
+          ]
+        },
+        {
+          "message": "CVE-2010-4563: The Linux kernel, when using IPv6, allows remote attackers to determine whether a host is sniffing the network by sending an ICMPv6 Echo Request to a multicast address and determining whether an Echo Reply is sent, as demonstrated by thcping.",
+          "severity": "medium",
+          "remediation": "Patch or mitigate CVE-2010-4563 in package linux-yocto. Check upstream for fixes or apply a CVE patch.",
+          "details": {
+            "cve_id": "CVE-2010-4563",
+            "cvss": 5.0,
+            "package": "linux-yocto",
+            "version": "6.6.123+git"
+          },
+          "cra_mapping": [
+            "I.P2.2",
+            "I.P2.3"
+          ],
+          "sources": [
+            "cve-tracking",
+            "yocto-cve-check"
+          ]
+        },
+        {
+          "message": "CVE-2010-4756: The glob implementation in the GNU C Library (aka glibc or libc6) allows remote authenticated users to cause a denial of service (CPU and memory consumption) via crafted glob expressions that do not match any pathnames, as demonstrated by glob expressions in STAT commands to an FTP daemon, a different vulnerability than CVE-2010-2632.",
+          "severity": "medium",
+          "remediation": "Patch or mitigate CVE-2010-4756 in package glibc. Check upstream for fixes or apply a CVE patch.",
+          "details": {
+            "cve_id": "CVE-2010-4756",
+            "cvss": 4.0,
+            "package": "glibc",
+            "version": "2.39+git"
+          },
+          "cra_mapping": [
+            "I.P2.2",
+            "I.P2.3"
+          ],
+          "sources": [
+            "cve-tracking",
+            "yocto-cve-check"
+          ]
+        },
+        {
+          "message": "CVE-2026-1965: libcurl can in some circumstances reuse the wrong connection when asked to do\nan Negotiate-authenticated HTTP or HTTPS request.\n\nlibcurl features a pool of recent connections so that subsequent requests can\nreuse an existing connection to avoid overhead.\n\nWhen reusing a connection a range of criterion must first be met. Due to a\nlogical error in the code, a request that was issued by an application could\nwrongfully reuse an existing connection to the same server that was\nauthenticated using different credentials. One underlying reason being that\nNegotiate sometimes authenticates *connections* and not *requests*, contrary\nto how HTTP is designed to work.\n\nAn application that allows Negotiate authentication to a server (that responds\nwanting Negotiate) with `user1:password1` and then does another operation to\nthe same server also using Negotiate but with `user2:password2` (while the\nprevious connection is still alive) - the second request wrongly reused the\nsame connection and since it then sees that the Negotiate negotiation is\nalready made, it just sends the request over that connection thinking it uses\nthe user2 credentials when it is in fact still using the connection\nauthenticated for user1...\n\nThe set of authentication methods to use is set with  `CURLOPT_HTTPAUTH`.\n\nApplications can disable libcurl's reuse of connections and thus mitigate this\nproblem, by using one of the following libcurl options to alter how\nconnections are or are not reused: `CURLOPT_FRESH_CONNECT`,\n`CURLOPT_MAXCONNECTS` and `CURLMOPT_MAX_HOST_CONNECTIONS` (if using the\ncurl_multi API).",
+          "severity": "medium",
+          "remediation": "Patch or mitigate CVE-2026-1965 in package curl. Check upstream for fixes or apply a CVE patch.",
+          "details": {
+            "cve_id": "CVE-2026-1965",
+            "cvss": 6.5,
+            "package": "curl",
+            "version": "8.7.1"
+          },
+          "cra_mapping": [
+            "I.P2.2",
+            "I.P2.3"
+          ],
+          "sources": [
+            "cve-tracking",
+            "yocto-cve-check"
+          ]
+        },
+        {
+          "message": "CVE-2026-3783: When an OAuth2 bearer token is used for an HTTP(S) transfer, and that transfer\nperforms a redirect to a second URL, curl could leak that token to the second\nhostname under some circumstances.\n\nIf the hostname that the first request is redirected to has information in the\nused .netrc file, with either of the `machine` or `default` keywords, curl\nwould pass on the bearer token set for the first host also to the second one.",
+          "severity": "medium",
+          "remediation": "Patch or mitigate CVE-2026-3783 in package curl. Check upstream for fixes or apply a CVE patch.",
+          "details": {
+            "cve_id": "CVE-2026-3783",
+            "cvss": 5.3,
+            "package": "curl",
+            "version": "8.7.1"
+          },
+          "cra_mapping": [
+            "I.P2.2",
+            "I.P2.3"
+          ],
+          "sources": [
+            "cve-tracking",
+            "yocto-cve-check"
+          ]
+        },
+        {
+          "message": "CVE-2026-3784: curl would wrongly reuse an existing HTTP proxy connection doing CONNECT to a\nserver, even if the new request uses different credentials for the HTTP proxy.\nThe proper behavior is to create or use a separate connection.",
+          "severity": "medium",
+          "remediation": "Patch or mitigate CVE-2026-3784 in package curl. Check upstream for fixes or apply a CVE patch.",
+          "details": {
+            "cve_id": "CVE-2026-3784",
+            "cvss": 6.5,
+            "package": "curl",
+            "version": "8.7.1"
+          },
+          "cra_mapping": [
+            "I.P2.2",
+            "I.P2.3"
+          ],
+          "sources": [
+            "cve-tracking",
+            "yocto-cve-check"
+          ]
+        },
+        {
+          "message": "CVE-2026-4046: The iconv() function in the GNU C Library versions 2.43 and earlier may crash due to an assertion failure when converting inputs from the IBM1390 or IBM1399 character sets, which may be used to remotely crash an application.\n\n\n\nThis vulnerability can be trivially mitigated by removing the IBM1390 and IBM1399 character sets from systems that do not need them.",
+          "severity": "high",
+          "remediation": "Patch or mitigate CVE-2026-4046 in package glibc. Check upstream for fixes or apply a CVE patch.",
+          "details": {
+            "cve_id": "CVE-2026-4046",
+            "cvss": 7.5,
+            "package": "glibc",
+            "version": "2.39+git"
+          },
+          "cra_mapping": [
+            "I.P2.2",
+            "I.P2.3"
+          ],
+          "sources": [
+            "cve-tracking",
+            "yocto-cve-check"
+          ]
+        },
+        {
+          "message": "CVE-2026-4437: Calling gethostbyaddr or gethostbyaddr_r with a configured nsswitch.conf that specifies the library's DNS backend in the GNU C Library version 2.34 to version 2.43 could, with a crafted response from the configured DNS server, result in a violation of the DNS specification that causes the application to treat a non-answer section of the DNS response as a valid answer.",
+          "severity": "high",
+          "remediation": "Patch or mitigate CVE-2026-4437 in package glibc. Check upstream for fixes or apply a CVE patch.",
+          "details": {
+            "cve_id": "CVE-2026-4437",
+            "cvss": 7.5,
+            "package": "glibc",
+            "version": "2.39+git"
+          },
+          "cra_mapping": [
+            "I.P2.2",
+            "I.P2.3"
+          ],
+          "sources": [
+            "cve-tracking",
+            "yocto-cve-check"
+          ]
+        }
+      ]
+    },
+    {
+      "check_id": "image-signing",
+      "check_name": "Image Signing",
+      "status": "warn",
+      "score": 0,
+      "max_score": 50,
+      "summary": "Image signing: checked FIT and verity, score 0/50",
+      "findings": [
+        {
+          "message": "No FIT image files (.itb, .fit) found in deploy directory",
+          "severity": "medium",
+          "remediation": null,
+          "details": null,
+          "cra_mapping": [
+            "I.P1.f"
+          ],
+          "sources": []
+        },
+        {
+          "message": "No dm-verity configuration or hash files found",
+          "severity": "medium",
+          "remediation": null,
+          "details": null,
+          "cra_mapping": [
+            "I.P1.f",
+            "I.P1.k"
+          ],
+          "sources": []
+        }
+      ]
+    },
+    {
+      "check_id": "license-audit",
+      "check_name": "License Audit",
+      "status": "warn",
+      "score": 25,
+      "max_score": 50,
+      "summary": "37 package(s) in core-image-minimal-qemux86-64.rootfs-20260417211226/license.manifest; permissive: 9; weak-copyleft: 2; strong-copyleft: 21; unknown: 5",
+      "findings": [
+        {
+          "message": "Unknown licence for package 'busybox': 'GPL-2.0-only & bzip2-1.0.4' not in canonical category map",
+          "severity": "medium",
+          "remediation": "Add the licence ID to `src/shipcheck/checks/license_categories.yaml` under the correct category, or correct the package's LICENSE field.",
+          "details": {
+            "package": "busybox",
+            "license": "GPL-2.0-only & bzip2-1.0.4",
+            "category": "unknown"
+          },
+          "cra_mapping": [
+            "I.P2.1",
+            "VII.2"
+          ],
+          "sources": []
+        },
+        {
+          "message": "Unknown licence for package 'busybox-hwclock': 'GPL-2.0-only & bzip2-1.0.4' not in canonical category map",
+          "severity": "medium",
+          "remediation": "Add the licence ID to `src/shipcheck/checks/license_categories.yaml` under the correct category, or correct the package's LICENSE field.",
+          "details": {
+            "package": "busybox-hwclock",
+            "license": "GPL-2.0-only & bzip2-1.0.4",
+            "category": "unknown"
+          },
+          "cra_mapping": [
+            "I.P2.1",
+            "VII.2"
+          ],
+          "sources": []
+        },
+        {
+          "message": "Unknown licence for package 'busybox-syslog': 'GPL-2.0-only & bzip2-1.0.4' not in canonical category map",
+          "severity": "medium",
+          "remediation": "Add the licence ID to `src/shipcheck/checks/license_categories.yaml` under the correct category, or correct the package's LICENSE field.",
+          "details": {
+            "package": "busybox-syslog",
+            "license": "GPL-2.0-only & bzip2-1.0.4",
+            "category": "unknown"
+          },
+          "cra_mapping": [
+            "I.P2.1",
+            "VII.2"
+          ],
+          "sources": []
+        },
+        {
+          "message": "Unknown licence for package 'busybox-udhcpc': 'GPL-2.0-only & bzip2-1.0.4' not in canonical category map",
+          "severity": "medium",
+          "remediation": "Add the licence ID to `src/shipcheck/checks/license_categories.yaml` under the correct category, or correct the package's LICENSE field.",
+          "details": {
+            "package": "busybox-udhcpc",
+            "license": "GPL-2.0-only & bzip2-1.0.4",
+            "category": "unknown"
+          },
+          "cra_mapping": [
+            "I.P2.1",
+            "VII.2"
+          ],
+          "sources": []
+        },
+        {
+          "message": "Unknown licence for package 'liblzma': 'PD' not in canonical category map",
+          "severity": "medium",
+          "remediation": "Add the licence ID to `src/shipcheck/checks/license_categories.yaml` under the correct category, or correct the package's LICENSE field.",
+          "details": {
+            "package": "liblzma",
+            "license": "PD",
+            "category": "unknown"
+          },
+          "cra_mapping": [
+            "I.P2.1",
+            "VII.2"
+          ],
+          "sources": []
+        }
+      ]
+    },
+    {
+      "check_id": "sbom-generation",
+      "check_name": "SBOM Generation",
+      "status": "warn",
+      "score": 20,
+      "max_score": 50,
+      "summary": "SPDX 2.x found at recipe-tzdata.spdx.json (3 packages)",
+      "findings": [
+        {
+          "message": "Package 'tzdata': missing or invalid checksum",
+          "severity": "low",
+          "remediation": null,
+          "details": null,
+          "cra_mapping": [
+            "I.P2.1",
+            "VII.2"
+          ],
+          "sources": []
+        },
+        {
+          "message": "Package 'tzdata-source-1': missing or invalid licenseDeclared",
+          "severity": "low",
+          "remediation": null,
+          "details": null,
+          "cra_mapping": [
+            "I.P2.1",
+            "VII.2"
+          ],
+          "sources": []
+        },
+        {
+          "message": "Package 'tzdata-source-1': missing or invalid supplier",
+          "severity": "low",
+          "remediation": null,
+          "details": null,
+          "cra_mapping": [
+            "I.P2.1",
+            "VII.2"
+          ],
+          "sources": []
+        },
+        {
+          "message": "Package 'tzdata-source-1': missing or invalid versionInfo",
+          "severity": "low",
+          "remediation": null,
+          "details": null,
+          "cra_mapping": [
+            "I.P2.1",
+            "VII.2"
+          ],
+          "sources": []
+        },
+        {
+          "message": "Package 'tzdata-source-2': missing or invalid licenseDeclared",
+          "severity": "low",
+          "remediation": null,
+          "details": null,
+          "cra_mapping": [
+            "I.P2.1",
+            "VII.2"
+          ],
+          "sources": []
+        },
+        {
+          "message": "Package 'tzdata-source-2': missing or invalid supplier",
+          "severity": "low",
+          "remediation": null,
+          "details": null,
+          "cra_mapping": [
+            "I.P2.1",
+            "VII.2"
+          ],
+          "sources": []
+        },
+        {
+          "message": "Package 'tzdata-source-2': missing or invalid versionInfo",
+          "severity": "low",
+          "remediation": null,
+          "details": null,
+          "cra_mapping": [
+            "I.P2.1",
+            "VII.2"
+          ],
+          "sources": []
+        }
+      ]
+    },
+    {
+      "check_id": "secure-boot",
+      "check_name": "Secure Boot",
+      "status": "warn",
+      "score": 5,
+      "max_score": 50,
+      "summary": "No Secure Boot configuration detected",
+      "findings": [
+        {
+          "message": "No Secure Boot signing class found in IMAGE_CLASSES",
+          "severity": "medium",
+          "remediation": "Add a signing class to IMAGE_CLASSES in conf/local.conf. For UEFI Secure Boot, use 'image-uefi-sign' or 'sbsign' from meta-arm/meta-secure-core.",
+          "details": null,
+          "cra_mapping": [
+            "I.P1.d",
+            "I.P1.f"
+          ],
+          "sources": []
+        }
+      ]
+    },
+    {
+      "check_id": "vuln-reporting",
+      "check_name": "Vulnerability Reporting",
+      "status": "fail",
+      "score": 10,
+      "max_score": 50,
+      "summary": "Vulnerability reporting: 4 finding(s), score 10/50",
+      "findings": [
+        {
+          "message": "product.yaml cvd.contact is a placeholder token 'VENDOR' (Annex II \u00a72): a real single point of contact for vulnerability reports is required",
+          "severity": "high",
+          "remediation": "Add a cvd.contact entry to product.yaml (email or URL) where security researchers can report vulnerabilities.",
+          "details": null,
+          "cra_mapping": [
+            "II.2"
+          ],
+          "sources": []
+        },
+        {
+          "message": "product.yaml cvd.policy_url is a placeholder token 'VENDOR' (Annex I Part II \u00a75): a real coordinated vulnerability disclosure policy URL must be declared",
+          "severity": "high",
+          "remediation": "Add a cvd.policy_url entry to product.yaml pointing to the published coordinated vulnerability disclosure policy.",
+          "details": null,
+          "cra_mapping": [
+            "I.P2.5"
+          ],
+          "sources": []
+        },
+        {
+          "message": "product.yaml support_period.end_date is a placeholder token 'VENDOR' (Annex II \u00a77): a real ISO 8601 YYYY-MM-DD support period end date must be declared",
+          "severity": "high",
+          "remediation": "Add support_period.end_date in ISO 8601 YYYY-MM-DD form to product.yaml; it must not be in the past.",
+          "details": null,
+          "cra_mapping": [
+            "II.7"
+          ],
+          "sources": []
+        },
+        {
+          "message": "product.yaml update_distribution.mechanism is a placeholder token 'VENDOR' (Annex I Part II \u00a77): a real secure update distribution mechanism must be declared",
+          "severity": "medium",
+          "remediation": "Add update_distribution.mechanism to product.yaml (e.g. 'swupdate', 'RAUC', 'capsule-update', 'manual').",
+          "details": null,
+          "cra_mapping": [
+            "I.P2.7"
+          ],
+          "sources": []
+        }
+      ]
+    },
+    {
+      "check_id": "yocto-cve-check",
+      "check_name": "Yocto CVE Check",
+      "status": "fail",
+      "score": 0,
+      "max_score": 50,
+      "summary": "cve-check summary cve-summary.json: 9 unpatched, 9 patched, 0 ignored",
+      "findings": []
+    }
+  ],
+  "suppressed": []
+}
