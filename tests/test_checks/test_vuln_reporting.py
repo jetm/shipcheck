@@ -478,3 +478,205 @@ update_distribution:
             f"expected II.2 in cra_mapping for contact placeholder {contact_value!r}; "
             f"got {contact_findings[0].cra_mapping}"
         )
+
+
+# --- (i) Shape validation (malformed values, not missing) -------------------
+
+
+class TestShapeValidation:
+    """Malformed field values must produce findings even if the field is non-empty."""
+
+    # --- negative path: malformed fixtures ---
+
+    def test_malformed_policy_url_exactly_one_finding(self, tmp_path: Path) -> None:
+        result = _run("malformed_policy_url.yaml", tmp_path)
+
+        ph_findings = [f for f in result.findings if "cvd.policy_url" in _flatten_text(f)]
+        assert len(ph_findings) == 1, (
+            f"expected exactly one finding about cvd.policy_url; got {result.findings!r}"
+        )
+
+    def test_malformed_policy_url_severity_is_high(self, tmp_path: Path) -> None:
+        result = _run("malformed_policy_url.yaml", tmp_path)
+
+        ph_findings = [f for f in result.findings if "cvd.policy_url" in _flatten_text(f)]
+        assert ph_findings, "malformed_policy_url.yaml must produce a cvd.policy_url finding"
+        assert ph_findings[0].severity == "high", (
+            f"expected high severity; got {ph_findings[0].severity}"
+        )
+
+    def test_malformed_policy_url_cra_mapping_includes_i_p2_5(self, tmp_path: Path) -> None:
+        result = _run("malformed_policy_url.yaml", tmp_path)
+
+        ph_findings = [f for f in result.findings if "cvd.policy_url" in _flatten_text(f)]
+        assert ph_findings, "malformed_policy_url.yaml must produce a cvd.policy_url finding"
+        assert "I.P2.5" in ph_findings[0].cra_mapping, (
+            f"expected I.P2.5 in cra_mapping; got {ph_findings[0].cra_mapping}"
+        )
+
+    def test_malformed_contact_exactly_one_finding(self, tmp_path: Path) -> None:
+        result = _run("malformed_contact.yaml", tmp_path)
+
+        ph_findings = [
+            f for f in result.findings
+            if "cvd.contact" in _flatten_text(f) or (
+                "cvd" in _flatten_text(f) and "contact" in _flatten_text(f)
+            )
+        ]
+        assert len(ph_findings) == 1, (
+            f"expected exactly one finding about cvd.contact; got {result.findings!r}"
+        )
+
+    def test_malformed_contact_severity_is_high(self, tmp_path: Path) -> None:
+        result = _run("malformed_contact.yaml", tmp_path)
+
+        ph_findings = [
+            f for f in result.findings
+            if "cvd.contact" in _flatten_text(f) or (
+                "cvd" in _flatten_text(f) and "contact" in _flatten_text(f)
+            )
+        ]
+        assert ph_findings, "malformed_contact.yaml must produce a cvd.contact finding"
+        assert ph_findings[0].severity == "high", (
+            f"expected high severity; got {ph_findings[0].severity}"
+        )
+
+    def test_malformed_contact_cra_mapping_includes_ii_2(self, tmp_path: Path) -> None:
+        result = _run("malformed_contact.yaml", tmp_path)
+
+        ph_findings = [
+            f for f in result.findings
+            if "cvd.contact" in _flatten_text(f) or (
+                "cvd" in _flatten_text(f) and "contact" in _flatten_text(f)
+            )
+        ]
+        assert ph_findings, "malformed_contact.yaml must produce a cvd.contact finding"
+        assert "II.2" in ph_findings[0].cra_mapping, (
+            f"expected II.2 in cra_mapping; got {ph_findings[0].cra_mapping}"
+        )
+
+    def test_unparseable_end_date_exactly_one_finding(self, tmp_path: Path) -> None:
+        """Unparseable end_date must emit a finding (not silently skip)."""
+        result = _run("unparseable_end_date.yaml", tmp_path)
+
+        ph_findings = [f for f in result.findings if "end_date" in _flatten_text(f)]
+        assert len(ph_findings) == 1, (
+            f"expected exactly one finding about end_date; got {result.findings!r}"
+        )
+
+    def test_unparseable_end_date_severity_is_high(self, tmp_path: Path) -> None:
+        result = _run("unparseable_end_date.yaml", tmp_path)
+
+        ph_findings = [f for f in result.findings if "end_date" in _flatten_text(f)]
+        assert ph_findings, "unparseable_end_date.yaml must produce an end_date finding"
+        assert ph_findings[0].severity == "high", (
+            f"expected high severity for unparseable end_date; got {ph_findings[0].severity}"
+        )
+
+    def test_unparseable_end_date_cra_mapping_includes_ii_7(self, tmp_path: Path) -> None:
+        result = _run("unparseable_end_date.yaml", tmp_path)
+
+        ph_findings = [f for f in result.findings if "end_date" in _flatten_text(f)]
+        assert ph_findings, "unparseable_end_date.yaml must produce an end_date finding"
+        assert "II.7" in ph_findings[0].cra_mapping, (
+            f"expected II.7 in cra_mapping; got {ph_findings[0].cra_mapping}"
+        )
+
+    # --- positive path: valid alternative shapes ---
+
+    def test_mailto_url_in_policy_url_passes(self, tmp_path: Path) -> None:
+        """A mailto: URL is a valid policy_url shape."""
+        product_yaml = tmp_path / "product.yaml"
+        product_yaml.write_text(
+            """schema_version: 1
+product:
+  name: "Acme Gateway GW-100"
+  type: "Industrial IoT edge gateway"
+  version: "2.4.1"
+manufacturer:
+  name: "Acme Embedded Systems GmbH"
+  address: "Karlstrasse 42, 80333 Munich, Germany"
+  contact: "compliance@acme-embedded.example"
+support_period:
+  end_date: "2031-12-31"
+cvd:
+  policy_url: "mailto:security@acme.example"
+  contact: "security@acme-embedded.example"
+update_distribution:
+  mechanism: "Signed OTA updates over HTTPS via the Acme Update Service"
+"""
+        )
+        check = VulnerabilityReportingCheck()
+        result = check.run(tmp_path, {"product_config_path": str(product_yaml)})
+
+        policy_url_findings = [
+            f for f in result.findings if "cvd.policy_url" in _flatten_text(f)
+        ]
+        assert not policy_url_findings, (
+            f"mailto: policy_url must not produce a finding; got {policy_url_findings!r}"
+        )
+
+    def test_url_shaped_contact_passes(self, tmp_path: Path) -> None:
+        """An https:// URL in cvd.contact is accepted."""
+        product_yaml = tmp_path / "product.yaml"
+        product_yaml.write_text(
+            """schema_version: 1
+product:
+  name: "Acme Gateway GW-100"
+  type: "Industrial IoT edge gateway"
+  version: "2.4.1"
+manufacturer:
+  name: "Acme Embedded Systems GmbH"
+  address: "Karlstrasse 42, 80333 Munich, Germany"
+  contact: "compliance@acme-embedded.example"
+support_period:
+  end_date: "2031-12-31"
+cvd:
+  policy_url: "https://acme-embedded.example/security/cvd-policy"
+  contact: "https://acme.example/security"
+update_distribution:
+  mechanism: "Signed OTA updates over HTTPS via the Acme Update Service"
+"""
+        )
+        check = VulnerabilityReportingCheck()
+        result = check.run(tmp_path, {"product_config_path": str(product_yaml)})
+
+        contact_findings = [
+            f for f in result.findings
+            if "cvd.contact" in _flatten_text(f) or (
+                "cvd" in _flatten_text(f) and "contact" in _flatten_text(f)
+            )
+        ]
+        assert not contact_findings, (
+            f"URL-shaped contact must not produce a finding; got {contact_findings!r}"
+        )
+
+    def test_email_shaped_contact_passes(self, tmp_path: Path) -> None:
+        """An email address in cvd.contact is accepted (default case from complete.yaml)."""
+        result = _run("complete.yaml", tmp_path)
+
+        contact_findings = [
+            f for f in result.findings
+            if "cvd.contact" in _flatten_text(f) or (
+                "cvd" in _flatten_text(f) and "contact" in _flatten_text(f)
+            )
+        ]
+        assert not contact_findings, (
+            f"email-shaped contact must not produce a finding; got {contact_findings!r}"
+        )
+
+    # --- regression guard: complete.yaml must still pass at full score ---
+
+    def test_complete_yaml_status_is_pass(self, tmp_path: Path) -> None:
+        result = _run("complete.yaml", tmp_path)
+
+        assert result.status == CheckStatus.PASS, (
+            f"complete.yaml must return PASS; got {result.status}"
+        )
+
+    def test_complete_yaml_score_is_50(self, tmp_path: Path) -> None:
+        result = _run("complete.yaml", tmp_path)
+
+        assert result.score == 50, (
+            f"complete.yaml must score 50/50; got {result.score}/{result.max_score}"
+        )
