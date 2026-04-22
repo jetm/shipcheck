@@ -313,10 +313,10 @@ class TestPlaceholderDetection:
         result = _run("placeholder_contact.yaml", tmp_path)
 
         ph_findings = [
-            f for f in result.findings
-            if "cvd.contact" in _flatten_text(f) or (
-                "cvd" in _flatten_text(f) and "contact" in _flatten_text(f)
-            )
+            f
+            for f in result.findings
+            if "cvd.contact" in _flatten_text(f)
+            or ("cvd" in _flatten_text(f) and "contact" in _flatten_text(f))
         ]
         assert len(ph_findings) == 1, (
             f"expected exactly one finding about cvd.contact; got {result.findings!r}"
@@ -326,10 +326,10 @@ class TestPlaceholderDetection:
         result = _run("placeholder_contact.yaml", tmp_path)
 
         ph_findings = [
-            f for f in result.findings
-            if "cvd.contact" in _flatten_text(f) or (
-                "cvd" in _flatten_text(f) and "contact" in _flatten_text(f)
-            )
+            f
+            for f in result.findings
+            if "cvd.contact" in _flatten_text(f)
+            or ("cvd" in _flatten_text(f) and "contact" in _flatten_text(f))
         ]
         assert ph_findings, "placeholder_contact.yaml must produce a cvd.contact finding"
         assert ph_findings[0].severity == "high", (
@@ -340,10 +340,10 @@ class TestPlaceholderDetection:
         result = _run("placeholder_contact.yaml", tmp_path)
 
         ph_findings = [
-            f for f in result.findings
-            if "cvd.contact" in _flatten_text(f) or (
-                "cvd" in _flatten_text(f) and "contact" in _flatten_text(f)
-            )
+            f
+            for f in result.findings
+            if "cvd.contact" in _flatten_text(f)
+            or ("cvd" in _flatten_text(f) and "contact" in _flatten_text(f))
         ]
         assert ph_findings, "placeholder_contact.yaml must produce a cvd.contact finding"
         assert "II.2" in ph_findings[0].cra_mapping, (
@@ -424,9 +424,7 @@ class TestPlaceholderDetection:
         assert result.score == 10, (
             f"expected score 10 (50 - 4*10) for all_placeholders.yaml; got {result.score}"
         )
-        assert result.max_score == 50, (
-            f"expected max_score 50; got {result.max_score}"
-        )
+        assert result.max_score == 50, f"expected max_score 50; got {result.max_score}"
 
     # Case-insensitivity: vendor / Vendor / "  VENDOR  " all fire the same finding.
 
@@ -461,10 +459,10 @@ update_distribution:
         result = check.run(tmp_path, cfg)
 
         contact_findings = [
-            f for f in result.findings
-            if "cvd.contact" in _flatten_text(f) or (
-                "cvd" in _flatten_text(f) and "contact" in _flatten_text(f)
-            )
+            f
+            for f in result.findings
+            if "cvd.contact" in _flatten_text(f)
+            or ("cvd" in _flatten_text(f) and "contact" in _flatten_text(f))
         ]
         assert len(contact_findings) == 1, (
             f"contact value {contact_value!r} must produce exactly one finding; "
@@ -518,10 +516,10 @@ class TestShapeValidation:
         result = _run("malformed_contact.yaml", tmp_path)
 
         ph_findings = [
-            f for f in result.findings
-            if "cvd.contact" in _flatten_text(f) or (
-                "cvd" in _flatten_text(f) and "contact" in _flatten_text(f)
-            )
+            f
+            for f in result.findings
+            if "cvd.contact" in _flatten_text(f)
+            or ("cvd" in _flatten_text(f) and "contact" in _flatten_text(f))
         ]
         assert len(ph_findings) == 1, (
             f"expected exactly one finding about cvd.contact; got {result.findings!r}"
@@ -531,10 +529,10 @@ class TestShapeValidation:
         result = _run("malformed_contact.yaml", tmp_path)
 
         ph_findings = [
-            f for f in result.findings
-            if "cvd.contact" in _flatten_text(f) or (
-                "cvd" in _flatten_text(f) and "contact" in _flatten_text(f)
-            )
+            f
+            for f in result.findings
+            if "cvd.contact" in _flatten_text(f)
+            or ("cvd" in _flatten_text(f) and "contact" in _flatten_text(f))
         ]
         assert ph_findings, "malformed_contact.yaml must produce a cvd.contact finding"
         assert ph_findings[0].severity == "high", (
@@ -545,10 +543,10 @@ class TestShapeValidation:
         result = _run("malformed_contact.yaml", tmp_path)
 
         ph_findings = [
-            f for f in result.findings
-            if "cvd.contact" in _flatten_text(f) or (
-                "cvd" in _flatten_text(f) and "contact" in _flatten_text(f)
-            )
+            f
+            for f in result.findings
+            if "cvd.contact" in _flatten_text(f)
+            or ("cvd" in _flatten_text(f) and "contact" in _flatten_text(f))
         ]
         assert ph_findings, "malformed_contact.yaml must produce a cvd.contact finding"
         assert "II.2" in ph_findings[0].cra_mapping, (
@@ -609,9 +607,7 @@ update_distribution:
         check = VulnerabilityReportingCheck()
         result = check.run(tmp_path, {"product_config_path": str(product_yaml)})
 
-        policy_url_findings = [
-            f for f in result.findings if "cvd.policy_url" in _flatten_text(f)
-        ]
+        policy_url_findings = [f for f in result.findings if "cvd.policy_url" in _flatten_text(f)]
         assert not policy_url_findings, (
             f"mailto: policy_url must not produce a finding; got {policy_url_findings!r}"
         )
@@ -642,10 +638,10 @@ update_distribution:
         result = check.run(tmp_path, {"product_config_path": str(product_yaml)})
 
         contact_findings = [
-            f for f in result.findings
-            if "cvd.contact" in _flatten_text(f) or (
-                "cvd" in _flatten_text(f) and "contact" in _flatten_text(f)
-            )
+            f
+            for f in result.findings
+            if "cvd.contact" in _flatten_text(f)
+            or ("cvd" in _flatten_text(f) and "contact" in _flatten_text(f))
         ]
         assert not contact_findings, (
             f"URL-shaped contact must not produce a finding; got {contact_findings!r}"
@@ -656,10 +652,10 @@ update_distribution:
         result = _run("complete.yaml", tmp_path)
 
         contact_findings = [
-            f for f in result.findings
-            if "cvd.contact" in _flatten_text(f) or (
-                "cvd" in _flatten_text(f) and "contact" in _flatten_text(f)
-            )
+            f
+            for f in result.findings
+            if "cvd.contact" in _flatten_text(f)
+            or ("cvd" in _flatten_text(f) and "contact" in _flatten_text(f))
         ]
         assert not contact_findings, (
             f"email-shaped contact must not produce a finding; got {contact_findings!r}"
