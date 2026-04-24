@@ -119,7 +119,7 @@ Fits the workflow embedded Linux teams already use. No parallel build, no agent 
 
 ### 3.6 Auditable stack
 
-Python + YAML + Jinja2. No LLM in the critical path. No proprietary heuristics. Open source, Apache-2.0. An auditor reviews code, templates, and the verbatim regulation YAML — not a black box.
+Python + YAML + Jinja2. No LLM or AI inference anywhere in the pipeline - shipcheck is fully deterministic. No proprietary heuristics. Open source, Apache-2.0. An auditor reviews code, templates, and the verbatim regulation YAML — not a black box.
 
 ### 3.7 Alternatives are worse
 
@@ -247,7 +247,7 @@ These gaps are not shipcheck's problem to solve, but the dossier must **say so l
 2. **Mapping validation is unconditional**. `validate_cra_mappings` runs in the CLI pipeline (`cli.py:315`) with a distinct exit code. Skipping it requires a code change, reviewable in git history.
 3. **Annex VII completeness is enforced**. The generator raises `RuntimeError` if any of items 1-8 is missing from the catalog. The document is either structurally complete or the run aborts.
 4. **Harmonised-standards placeholder is verbatim**. The DoC §6 field is hard-coded to `[TO BE FILLED BY MANUFACTURER: list applicable harmonised standards]`. shipcheck cannot silently claim conformance with a harmonised standard that does not yet exist.
-5. **All code is Apache-2.0 and reviewable**. 861 tests at 90% line coverage. No closed components, no LLM in the critical path.
+5. **All code is Apache-2.0 and reviewable**. 893 tests at 90% line coverage. No closed components, and no LLM or AI inference anywhere in the pipeline.
 
 ### Known weaknesses
 
