@@ -2,7 +2,7 @@
 
 **Version:** 0.0.3
 **Build directory:** tests/fixtures/pilot_real/build
-**Timestamp:** 2026-04-23T22:29:42.865524+00:00
+**Timestamp:** 2026-04-24T20:31:38.915962+00:00
 **Framework:** CRA (2024/2847)
 
 ## I.P1.d - Protection from unauthorised access
@@ -56,55 +56,11 @@
 
 > in relation to the risks posed to products with digital elements, address and remediate vulnerabilities without delay, including by providing security updates; where technically feasible, new security updates shall be provided separately from functionality updates;
 
-- **[low]** (cve-tracking) CVE-1999-0524: ICMP information such as (1) netmask and (2) timestamp is allowed from arbitrary hosts.
-- **[high]** (cve-tracking) CVE-2008-4609: The TCP implementation in (1) Linux, (2) platforms based on BSD Unix, (3) Microsoft Windows, (4) Cisco products, and probably other operating systems allows remote attackers to cause a denial of service (connection queue exhaustion) via multiple vectors that manipulate information in the TCP state table, as demonstrated by sockstress.
-- **[medium]** (cve-tracking) CVE-2010-4563: The Linux kernel, when using IPv6, allows remote attackers to determine whether a host is sniffing the network by sending an ICMPv6 Echo Request to a multicast address and determining whether an Echo Reply is sent, as demonstrated by thcping.
-- **[medium]** (cve-tracking) CVE-2010-4756: The glob implementation in the GNU C Library (aka glibc or libc6) allows remote authenticated users to cause a denial of service (CPU and memory consumption) via crafted glob expressions that do not match any pathnames, as demonstrated by glob expressions in STAT commands to an FTP daemon, a different vulnerability than CVE-2010-2632.
-- **[medium]** (cve-tracking) CVE-2026-1965: libcurl can in some circumstances reuse the wrong connection when asked to do
-an Negotiate-authenticated HTTP or HTTPS request.
-
-libcurl features a pool of recent connections so that subsequent requests can
-reuse an existing connection to avoid overhead.
-
-When reusing a connection a range of criterion must first be met. Due to a
-logical error in the code, a request that was issued by an application could
-wrongfully reuse an existing connection to the same server that was
-authenticated using different credentials. One underlying reason being that
-Negotiate sometimes authenticates *connections* and not *requests*, contrary
-to how HTTP is designed to work.
-
-An application that allows Negotiate authentication to a server (that responds
-wanting Negotiate) with `user1:password1` and then does another operation to
-the same server also using Negotiate but with `user2:password2` (while the
-previous connection is still alive) - the second request wrongly reused the
-same connection and since it then sees that the Negotiate negotiation is
-already made, it just sends the request over that connection thinking it uses
-the user2 credentials when it is in fact still using the connection
-authenticated for user1...
-
-The set of authentication methods to use is set with  `CURLOPT_HTTPAUTH`.
-
-Applications can disable libcurl's reuse of connections and thus mitigate this
-problem, by using one of the following libcurl options to alter how
-connections are or are not reused: `CURLOPT_FRESH_CONNECT`,
-`CURLOPT_MAXCONNECTS` and `CURLMOPT_MAX_HOST_CONNECTIONS` (if using the
-curl_multi API).
-- **[medium]** (cve-tracking) CVE-2026-3783: When an OAuth2 bearer token is used for an HTTP(S) transfer, and that transfer
-performs a redirect to a second URL, curl could leak that token to the second
-hostname under some circumstances.
-
-If the hostname that the first request is redirected to has information in the
-used .netrc file, with either of the `machine` or `default` keywords, curl
-would pass on the bearer token set for the first host also to the second one.
-- **[medium]** (cve-tracking) CVE-2026-3784: curl would wrongly reuse an existing HTTP proxy connection doing CONNECT to a
-server, even if the new request uses different credentials for the HTTP proxy.
-The proper behavior is to create or use a separate connection.
-- **[high]** (cve-tracking) CVE-2026-4046: The iconv() function in the GNU C Library versions 2.43 and earlier may crash due to an assertion failure when converting inputs from the IBM1390 or IBM1399 character sets, which may be used to remotely crash an application.
-
-
-
-This vulnerability can be trivially mitigated by removing the IBM1390 and IBM1399 character sets from systems that do not need them.
-- **[high]** (cve-tracking) CVE-2026-4437: Calling gethostbyaddr or gethostbyaddr_r with a configured nsswitch.conf that specifies the library's DNS backend in the GNU C Library version 2.34 to version 2.43 could, with a crafted response from the configured DNS server, result in a violation of the DNS specification that causes the application to treat a non-answer section of the DNS response as a valid answer.
+- **[high]** (cve-tracking) CVE-2018-6557: The MOTD update script in the base-files package in Ubuntu 18.04 LTS before 10.1ubuntu2.2, and Ubuntu 18.10 before 10.1ubuntu6 incorrectly handled temporary files. A local attacker could use this issue to cause a denial of service, or possibly escalate privileges if kernel symlink restrictions were disabled.
+- **[medium]** (cve-tracking) CVE-2024-47611: XZ Utils provide a general-purpose data-compression library plus command-line tools. When built for native Windows (MinGW-w64 or MSVC), the command line tools from XZ Utils 5.6.2 and older have a command line argument injection vulnerability. If a command line contains Unicode characters (for example, filenames) that don't exist in the current legacy code page, the characters are converted to similar-looking characters with best-fit mapping. Some best-fit mappings result in ASCII characters that change the meaning of the command line, which can be exploited with malicious filenames to do argument injection or directory traversal attacks. This vulnerability is fixed in 5.6.3. Command line tools built for Cygwin or MSYS2 are unaffected. liblzma is unaffected.
+- **[medium]** (cve-tracking) CVE-2025-58058: xz is a pure golang package for reading and writing xz-compressed files. Prior to version 0.5.14, it is possible to put data in front of an LZMA-encoded byte stream without detecting the situation while reading the header. This can lead to increased memory consumption because the current implementation allocates the full decoding buffer directly after reading the header. The LZMA header doesn't include a magic number or has a checksum to detect such an issue according to the specification. Note that the code recognizes the issue later while reading the stream, but at this time the memory allocation has already been done. This issue has been patched in version 0.5.14.
+- **[medium]** (cve-tracking) CVE-2026-22184: zlib versions up to and including 1.3.1.2 include a global buffer overflow in the untgz utility located under contrib/untgz. The vulnerability is limited to the standalone demonstration utility and does not affect the core zlib compression library. The flaw occurs when a user executes the untgz command with an excessively long archive name supplied via the command line, leading to an out-of-bounds write in a fixed-size global buffer.
+- **[low]** (cve-tracking) CVE-2026-34743: XZ Utils provide a general-purpose data-compression library plus command-line tools. Prior to version 5.8.3, if lzma_index_decoder() was used to decode an Index that contained no Records, the resulting lzma_index was left in a state where where a subsequent lzma_index_append() would allocate too little memory, and a buffer overflow would occur. This issue has been patched in version 5.8.3.
 
 ## I.P2.3 - Regular security tests and reviews
 
@@ -112,55 +68,11 @@ This vulnerability can be trivially mitigated by removing the IBM1390 and IBM139
 
 > apply effective and regular tests and reviews of the security of the product with digital elements;
 
-- **[low]** (cve-tracking) CVE-1999-0524: ICMP information such as (1) netmask and (2) timestamp is allowed from arbitrary hosts.
-- **[high]** (cve-tracking) CVE-2008-4609: The TCP implementation in (1) Linux, (2) platforms based on BSD Unix, (3) Microsoft Windows, (4) Cisco products, and probably other operating systems allows remote attackers to cause a denial of service (connection queue exhaustion) via multiple vectors that manipulate information in the TCP state table, as demonstrated by sockstress.
-- **[medium]** (cve-tracking) CVE-2010-4563: The Linux kernel, when using IPv6, allows remote attackers to determine whether a host is sniffing the network by sending an ICMPv6 Echo Request to a multicast address and determining whether an Echo Reply is sent, as demonstrated by thcping.
-- **[medium]** (cve-tracking) CVE-2010-4756: The glob implementation in the GNU C Library (aka glibc or libc6) allows remote authenticated users to cause a denial of service (CPU and memory consumption) via crafted glob expressions that do not match any pathnames, as demonstrated by glob expressions in STAT commands to an FTP daemon, a different vulnerability than CVE-2010-2632.
-- **[medium]** (cve-tracking) CVE-2026-1965: libcurl can in some circumstances reuse the wrong connection when asked to do
-an Negotiate-authenticated HTTP or HTTPS request.
-
-libcurl features a pool of recent connections so that subsequent requests can
-reuse an existing connection to avoid overhead.
-
-When reusing a connection a range of criterion must first be met. Due to a
-logical error in the code, a request that was issued by an application could
-wrongfully reuse an existing connection to the same server that was
-authenticated using different credentials. One underlying reason being that
-Negotiate sometimes authenticates *connections* and not *requests*, contrary
-to how HTTP is designed to work.
-
-An application that allows Negotiate authentication to a server (that responds
-wanting Negotiate) with `user1:password1` and then does another operation to
-the same server also using Negotiate but with `user2:password2` (while the
-previous connection is still alive) - the second request wrongly reused the
-same connection and since it then sees that the Negotiate negotiation is
-already made, it just sends the request over that connection thinking it uses
-the user2 credentials when it is in fact still using the connection
-authenticated for user1...
-
-The set of authentication methods to use is set with  `CURLOPT_HTTPAUTH`.
-
-Applications can disable libcurl's reuse of connections and thus mitigate this
-problem, by using one of the following libcurl options to alter how
-connections are or are not reused: `CURLOPT_FRESH_CONNECT`,
-`CURLOPT_MAXCONNECTS` and `CURLMOPT_MAX_HOST_CONNECTIONS` (if using the
-curl_multi API).
-- **[medium]** (cve-tracking) CVE-2026-3783: When an OAuth2 bearer token is used for an HTTP(S) transfer, and that transfer
-performs a redirect to a second URL, curl could leak that token to the second
-hostname under some circumstances.
-
-If the hostname that the first request is redirected to has information in the
-used .netrc file, with either of the `machine` or `default` keywords, curl
-would pass on the bearer token set for the first host also to the second one.
-- **[medium]** (cve-tracking) CVE-2026-3784: curl would wrongly reuse an existing HTTP proxy connection doing CONNECT to a
-server, even if the new request uses different credentials for the HTTP proxy.
-The proper behavior is to create or use a separate connection.
-- **[high]** (cve-tracking) CVE-2026-4046: The iconv() function in the GNU C Library versions 2.43 and earlier may crash due to an assertion failure when converting inputs from the IBM1390 or IBM1399 character sets, which may be used to remotely crash an application.
-
-
-
-This vulnerability can be trivially mitigated by removing the IBM1390 and IBM1399 character sets from systems that do not need them.
-- **[high]** (cve-tracking) CVE-2026-4437: Calling gethostbyaddr or gethostbyaddr_r with a configured nsswitch.conf that specifies the library's DNS backend in the GNU C Library version 2.34 to version 2.43 could, with a crafted response from the configured DNS server, result in a violation of the DNS specification that causes the application to treat a non-answer section of the DNS response as a valid answer.
+- **[high]** (cve-tracking) CVE-2018-6557: The MOTD update script in the base-files package in Ubuntu 18.04 LTS before 10.1ubuntu2.2, and Ubuntu 18.10 before 10.1ubuntu6 incorrectly handled temporary files. A local attacker could use this issue to cause a denial of service, or possibly escalate privileges if kernel symlink restrictions were disabled.
+- **[medium]** (cve-tracking) CVE-2024-47611: XZ Utils provide a general-purpose data-compression library plus command-line tools. When built for native Windows (MinGW-w64 or MSVC), the command line tools from XZ Utils 5.6.2 and older have a command line argument injection vulnerability. If a command line contains Unicode characters (for example, filenames) that don't exist in the current legacy code page, the characters are converted to similar-looking characters with best-fit mapping. Some best-fit mappings result in ASCII characters that change the meaning of the command line, which can be exploited with malicious filenames to do argument injection or directory traversal attacks. This vulnerability is fixed in 5.6.3. Command line tools built for Cygwin or MSYS2 are unaffected. liblzma is unaffected.
+- **[medium]** (cve-tracking) CVE-2025-58058: xz is a pure golang package for reading and writing xz-compressed files. Prior to version 0.5.14, it is possible to put data in front of an LZMA-encoded byte stream without detecting the situation while reading the header. This can lead to increased memory consumption because the current implementation allocates the full decoding buffer directly after reading the header. The LZMA header doesn't include a magic number or has a checksum to detect such an issue according to the specification. Note that the code recognizes the issue later while reading the stream, but at this time the memory allocation has already been done. This issue has been patched in version 0.5.14.
+- **[medium]** (cve-tracking) CVE-2026-22184: zlib versions up to and including 1.3.1.2 include a global buffer overflow in the untgz utility located under contrib/untgz. The vulnerability is limited to the standalone demonstration utility and does not affect the core zlib compression library. The flaw occurs when a user executes the untgz command with an excessively long archive name supplied via the command line, leading to an out-of-bounds write in a fixed-size global buffer.
+- **[low]** (cve-tracking) CVE-2026-34743: XZ Utils provide a general-purpose data-compression library plus command-line tools. Prior to version 5.8.3, if lzma_index_decoder() was used to decode an Index that contained no Records, the resulting lzma_index was left in a state where where a subsequent lzma_index_append() would allocate too little memory, and a buffer overflow would occur. This issue has been patched in version 5.8.3.
 
 ## I.P2.5 - Coordinated vulnerability disclosure policy
 

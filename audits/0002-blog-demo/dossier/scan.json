@@ -3,10 +3,10 @@
   "framework_version": "2024/2847",
   "bsi_tr_version": "TR-03183-2 v2.1.0",
   "build_dir": "tests/fixtures/pilot_real/build",
-  "timestamp": "2026-04-23T22:29:42.865524+00:00",
+  "timestamp": "2026-04-24T20:31:38.915962+00:00",
   "shipcheck_version": "0.0.3",
   "readiness_score": {
-    "score": 60,
+    "score": 106,
     "max_score": 350
   },
   "checks": [
@@ -14,38 +14,19 @@
       "check_id": "cve-tracking",
       "check_name": "CVE Tracking",
       "status": "fail",
-      "score": 0,
+      "score": 23,
       "max_score": 50,
-      "summary": "9 unpatched CVE(s) found in cve-summary.json (6 packages, 18 issues)",
+      "summary": "5 unpatched CVE(s) found in core-image-minimal-qemux86-64.sbom-cve-check.yocto.json (22 packages, 108 issues)",
       "findings": [
         {
-          "message": "CVE-1999-0524: ICMP information such as (1) netmask and (2) timestamp is allowed from arbitrary hosts.",
-          "severity": "low",
-          "remediation": "Patch or mitigate CVE-1999-0524 in package linux-yocto. Check upstream for fixes or apply a CVE patch.",
-          "details": {
-            "cve_id": "CVE-1999-0524",
-            "cvss": 2.1,
-            "package": "linux-yocto",
-            "version": "6.6.123+git"
-          },
-          "cra_mapping": [
-            "I.P2.2",
-            "I.P2.3"
-          ],
-          "sources": [
-            "cve-tracking",
-            "yocto-cve-check"
-          ]
-        },
-        {
-          "message": "CVE-2008-4609: The TCP implementation in (1) Linux, (2) platforms based on BSD Unix, (3) Microsoft Windows, (4) Cisco products, and probably other operating systems allows remote attackers to cause a denial of service (connection queue exhaustion) via multiple vectors that manipulate information in the TCP state table, as demonstrated by sockstress.",
+          "message": "CVE-2018-6557: The MOTD update script in the base-files package in Ubuntu 18.04 LTS before 10.1ubuntu2.2, and Ubuntu 18.10 before 10.1ubuntu6 incorrectly handled temporary files. A local attacker could use this issue to cause a denial of service, or possibly escalate privileges if kernel symlink restrictions were disabled.",
           "severity": "high",
-          "remediation": "Patch or mitigate CVE-2008-4609 in package linux-yocto. Check upstream for fixes or apply a CVE patch.",
+          "remediation": "Patch or mitigate CVE-2018-6557 in package base-files. Check upstream for fixes or apply a CVE patch.",
           "details": {
-            "cve_id": "CVE-2008-4609",
-            "cvss": 7.1,
-            "package": "linux-yocto",
-            "version": "6.6.123+git"
+            "cve_id": "CVE-2018-6557",
+            "cvss": 7.0,
+            "package": "base-files",
+            "version": "3.0.14"
           },
           "cra_mapping": [
             "I.P2.2",
@@ -57,14 +38,14 @@
           ]
         },
         {
-          "message": "CVE-2010-4563: The Linux kernel, when using IPv6, allows remote attackers to determine whether a host is sniffing the network by sending an ICMPv6 Echo Request to a multicast address and determining whether an Echo Reply is sent, as demonstrated by thcping.",
+          "message": "CVE-2024-47611: XZ Utils provide a general-purpose data-compression library plus command-line tools. When built for native Windows (MinGW-w64 or MSVC), the command line tools from XZ Utils 5.6.2 and older have a command line argument injection vulnerability. If a command line contains Unicode characters (for example, filenames) that don't exist in the current legacy code page, the characters are converted to similar-looking characters with best-fit mapping. Some best-fit mappings result in ASCII characters that change the meaning of the command line, which can be exploited with malicious filenames to do argument injection or directory traversal attacks. This vulnerability is fixed in 5.6.3. Command line tools built for Cygwin or MSYS2 are unaffected. liblzma is unaffected.",
           "severity": "medium",
-          "remediation": "Patch or mitigate CVE-2010-4563 in package linux-yocto. Check upstream for fixes or apply a CVE patch.",
+          "remediation": "Patch or mitigate CVE-2024-47611 in package xz. Check upstream for fixes or apply a CVE patch.",
           "details": {
-            "cve_id": "CVE-2010-4563",
-            "cvss": 5.0,
-            "package": "linux-yocto",
-            "version": "6.6.123+git"
+            "cve_id": "CVE-2024-47611",
+            "cvss": 6.3,
+            "package": "xz",
+            "version": "5.4.7"
           },
           "cra_mapping": [
             "I.P2.2",
@@ -76,52 +57,14 @@
           ]
         },
         {
-          "message": "CVE-2010-4756: The glob implementation in the GNU C Library (aka glibc or libc6) allows remote authenticated users to cause a denial of service (CPU and memory consumption) via crafted glob expressions that do not match any pathnames, as demonstrated by glob expressions in STAT commands to an FTP daemon, a different vulnerability than CVE-2010-2632.",
+          "message": "CVE-2025-58058: xz is a pure golang package for reading and writing xz-compressed files. Prior to version 0.5.14, it is possible to put data in front of an LZMA-encoded byte stream without detecting the situation while reading the header. This can lead to increased memory consumption because the current implementation allocates the full decoding buffer directly after reading the header. The LZMA header doesn't include a magic number or has a checksum to detect such an issue according to the specification. Note that the code recognizes the issue later while reading the stream, but at this time the memory allocation has already been done. This issue has been patched in version 0.5.14.",
           "severity": "medium",
-          "remediation": "Patch or mitigate CVE-2010-4756 in package glibc. Check upstream for fixes or apply a CVE patch.",
+          "remediation": "Patch or mitigate CVE-2025-58058 in package xz. Check upstream for fixes or apply a CVE patch.",
           "details": {
-            "cve_id": "CVE-2010-4756",
-            "cvss": 4.0,
-            "package": "glibc",
-            "version": "2.39+git"
-          },
-          "cra_mapping": [
-            "I.P2.2",
-            "I.P2.3"
-          ],
-          "sources": [
-            "cve-tracking",
-            "yocto-cve-check"
-          ]
-        },
-        {
-          "message": "CVE-2026-1965: libcurl can in some circumstances reuse the wrong connection when asked to do\nan Negotiate-authenticated HTTP or HTTPS request.\n\nlibcurl features a pool of recent connections so that subsequent requests can\nreuse an existing connection to avoid overhead.\n\nWhen reusing a connection a range of criterion must first be met. Due to a\nlogical error in the code, a request that was issued by an application could\nwrongfully reuse an existing connection to the same server that was\nauthenticated using different credentials. One underlying reason being that\nNegotiate sometimes authenticates *connections* and not *requests*, contrary\nto how HTTP is designed to work.\n\nAn application that allows Negotiate authentication to a server (that responds\nwanting Negotiate) with `user1:password1` and then does another operation to\nthe same server also using Negotiate but with `user2:password2` (while the\nprevious connection is still alive) - the second request wrongly reused the\nsame connection and since it then sees that the Negotiate negotiation is\nalready made, it just sends the request over that connection thinking it uses\nthe user2 credentials when it is in fact still using the connection\nauthenticated for user1...\n\nThe set of authentication methods to use is set with  `CURLOPT_HTTPAUTH`.\n\nApplications can disable libcurl's reuse of connections and thus mitigate this\nproblem, by using one of the following libcurl options to alter how\nconnections are or are not reused: `CURLOPT_FRESH_CONNECT`,\n`CURLOPT_MAXCONNECTS` and `CURLMOPT_MAX_HOST_CONNECTIONS` (if using the\ncurl_multi API).",
-          "severity": "medium",
-          "remediation": "Patch or mitigate CVE-2026-1965 in package curl. Check upstream for fixes or apply a CVE patch.",
-          "details": {
-            "cve_id": "CVE-2026-1965",
-            "cvss": 6.5,
-            "package": "curl",
-            "version": "8.7.1"
-          },
-          "cra_mapping": [
-            "I.P2.2",
-            "I.P2.3"
-          ],
-          "sources": [
-            "cve-tracking",
-            "yocto-cve-check"
-          ]
-        },
-        {
-          "message": "CVE-2026-3783: When an OAuth2 bearer token is used for an HTTP(S) transfer, and that transfer\nperforms a redirect to a second URL, curl could leak that token to the second\nhostname under some circumstances.\n\nIf the hostname that the first request is redirected to has information in the\nused .netrc file, with either of the `machine` or `default` keywords, curl\nwould pass on the bearer token set for the first host also to the second one.",
-          "severity": "medium",
-          "remediation": "Patch or mitigate CVE-2026-3783 in package curl. Check upstream for fixes or apply a CVE patch.",
-          "details": {
-            "cve_id": "CVE-2026-3783",
+            "cve_id": "CVE-2025-58058",
             "cvss": 5.3,
-            "package": "curl",
-            "version": "8.7.1"
+            "package": "xz",
+            "version": "5.4.7"
           },
           "cra_mapping": [
             "I.P2.2",
@@ -133,14 +76,14 @@
           ]
         },
         {
-          "message": "CVE-2026-3784: curl would wrongly reuse an existing HTTP proxy connection doing CONNECT to a\nserver, even if the new request uses different credentials for the HTTP proxy.\nThe proper behavior is to create or use a separate connection.",
+          "message": "CVE-2026-22184: zlib versions up to and including 1.3.1.2 include a global buffer overflow in the untgz utility located under contrib/untgz. The vulnerability is limited to the standalone demonstration utility and does not affect the core zlib compression library. The flaw occurs when a user executes the untgz command with an excessively long archive name supplied via the command line, leading to an out-of-bounds write in a fixed-size global buffer.",
           "severity": "medium",
-          "remediation": "Patch or mitigate CVE-2026-3784 in package curl. Check upstream for fixes or apply a CVE patch.",
+          "remediation": "Patch or mitigate CVE-2026-22184 in package zlib. Check upstream for fixes or apply a CVE patch.",
           "details": {
-            "cve_id": "CVE-2026-3784",
-            "cvss": 6.5,
-            "package": "curl",
-            "version": "8.7.1"
+            "cve_id": "CVE-2026-22184",
+            "cvss": 4.6,
+            "package": "zlib",
+            "version": "1.3.1"
           },
           "cra_mapping": [
             "I.P2.2",
@@ -152,33 +95,14 @@
           ]
         },
         {
-          "message": "CVE-2026-4046: The iconv() function in the GNU C Library versions 2.43 and earlier may crash due to an assertion failure when converting inputs from the IBM1390 or IBM1399 character sets, which may be used to remotely crash an application.\n\n\n\nThis vulnerability can be trivially mitigated by removing the IBM1390 and IBM1399 character sets from systems that do not need them.",
-          "severity": "high",
-          "remediation": "Patch or mitigate CVE-2026-4046 in package glibc. Check upstream for fixes or apply a CVE patch.",
+          "message": "CVE-2026-34743: XZ Utils provide a general-purpose data-compression library plus command-line tools. Prior to version 5.8.3, if lzma_index_decoder() was used to decode an Index that contained no Records, the resulting lzma_index was left in a state where where a subsequent lzma_index_append() would allocate too little memory, and a buffer overflow would occur. This issue has been patched in version 5.8.3.",
+          "severity": "low",
+          "remediation": "Patch or mitigate CVE-2026-34743 in package xz. Check upstream for fixes or apply a CVE patch.",
           "details": {
-            "cve_id": "CVE-2026-4046",
-            "cvss": 7.5,
-            "package": "glibc",
-            "version": "2.39+git"
-          },
-          "cra_mapping": [
-            "I.P2.2",
-            "I.P2.3"
-          ],
-          "sources": [
-            "cve-tracking",
-            "yocto-cve-check"
-          ]
-        },
-        {
-          "message": "CVE-2026-4437: Calling gethostbyaddr or gethostbyaddr_r with a configured nsswitch.conf that specifies the library's DNS backend in the GNU C Library version 2.34 to version 2.43 could, with a crafted response from the configured DNS server, result in a violation of the DNS specification that causes the application to treat a non-answer section of the DNS response as a valid answer.",
-          "severity": "high",
-          "remediation": "Patch or mitigate CVE-2026-4437 in package glibc. Check upstream for fixes or apply a CVE patch.",
-          "details": {
-            "cve_id": "CVE-2026-4437",
-            "cvss": 7.5,
-            "package": "glibc",
-            "version": "2.39+git"
+            "cve_id": "CVE-2026-34743",
+            "cvss": 1.7,
+            "package": "xz",
+            "version": "5.4.7"
           },
           "cra_mapping": [
             "I.P2.2",
@@ -469,9 +393,9 @@
       "check_id": "yocto-cve-check",
       "check_name": "Yocto CVE Check",
       "status": "fail",
-      "score": 0,
+      "score": 23,
       "max_score": 50,
-      "summary": "cve-check summary cve-summary.json: 9 unpatched, 9 patched, 0 ignored",
+      "summary": "cve-check summary core-image-minimal-qemux86-64.sbom-cve-check.yocto.json: 5 unpatched, 103 patched, 0 ignored",
       "findings": []
     }
   ],

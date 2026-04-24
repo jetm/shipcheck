@@ -5,8 +5,8 @@
 **Subject**: Strict validation for the vuln-reporting check
 **Audited commits**:
 
-- `908f712` — `checks/vuln-reporting: validate shape and reject placeholder tokens` (the behavioural rewrite this audit is validating)
-- `3cd11bc` — `audits/0002-blog-demo: capture VENDOR-placeholder dossier` (the run that produced the files under `dossier/`)
+- `29f29d7` — `checks/vuln-reporting: validate shape and reject placeholder tokens` (the behavioural rewrite this audit is validating)
+- `5c28066` — `audits/0002-blog-demo: capture VENDOR-placeholder dossier` (the run that produced the files under `dossier/`)
 
 **Reviewer**: John Doe
 
@@ -16,7 +16,7 @@
 
 This artifact is the worked example behind the vuln-reporting strict-validation work. The change tightened `src/shipcheck/checks/vuln_reporting.py` from presence-only validation to shape-plus-placeholder validation: a `product.yaml` whose vendor-committed fields carry placeholder tokens (`VENDOR`, `TODO`, `FIXME`, `[TO BE FILLED]`, `[VENDOR]`) or malformed values must now be enumerated as findings rather than silently accepted.
 
-The audit demonstrates that shift end-to-end. It feeds shipcheck a `product.yaml` with every manufacturer-committed field set to the literal string `VENDOR`, runs an evidence-format scan against the committed pilot-0001 build slice, and confirms the evidence report calls out every unfilled paperwork field while still populating the build-derived sections from real bitbake output.
+The audit demonstrates that shift end-to-end. It feeds shipcheck a `product.yaml` with every manufacturer-committed field set to the literal string `VENDOR`, runs an evidence-format scan against the committed pilot-0001 build slice, and confirms the evidence report calls out every unfilled paperwork field while still populating the build-derived sections from real bitbake output. The fixture includes a trimmed [`sbom-cve-check`](https://github.com/bootlin/sbom-cve-check) output under `tmp/deploy/images/`, so shipcheck's CVE reconciliation runs against the preferred CVE source rather than the legacy `cve-check.bbclass` summary alone.
 
 ## 2. Command invoked
 
@@ -56,7 +56,7 @@ This is the visual argument for the blog post: "CRA compliance is paperwork, not
 The full run is captured under `audits/0002-blog-demo/dossier/`:
 
 - `evidence-report.md` — findings pivoted by CRA requirement (the primary artifact the blog post will screenshot).
-- `cve-report.md` — CVE reconciliation per the `cve-tracking` and `yocto-cve-check` checks.
+- `cve-report.md` — CVE reconciliation per the `cve-tracking` and `yocto-cve-check` checks, both running against the committed `sbom-cve-check.yocto.json` output in the fixture.
 - `license-audit.md` — license manifest summary from the `license-audit` check.
 - `technical-documentation.md` — Annex VII draft, with visible `VENDOR` placeholders in items 1 and 4.
 - `declaration-of-conformity.md` — DoC draft (Annex V full), marked `DRAFT - FOR MANUFACTURER REVIEW`.
@@ -68,4 +68,4 @@ The blog post cites this audit as the worked example of the thesis "CRA complian
 
 ## Sign-off
 
-Reviewed-by: John Doe, 2026-04-24, commits `908f712` (behaviour) and `3cd11bc` (dossier).
+Reviewed-by: John Doe, 2026-04-24, commits `29f29d7` (behaviour) and `5c28066` (dossier).

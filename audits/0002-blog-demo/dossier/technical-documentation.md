@@ -14,7 +14,7 @@
 **Type:** VENDOR
 **Version:** VENDOR
 **Manufacturer:** VENDOR
-**Generated:** 2026-04-23T22:29:42.865524+00:00
+**Generated:** 2026-04-24T20:31:38.915962+00:00
 **Shipcheck version:** 0.0.3
 **Regulation:** CRA 2024/2847
 
@@ -64,18 +64,18 @@ includes `I.P2.1` (Annex I Part II §1 SBOM requirement) or `VII.2`
 
 | check | finding title | severity | cra_mapping | timestamp |
 |-------|---------------|----------|-------------|-----------|
-| license-audit | Unknown licence for package 'busybox': 'GPL-2.0-only & bzip2-1.0.4' not in canonical category map | medium | I.P2.1, VII.2 | 2026-04-23T22:29:42.865524+00:00 |
-| license-audit | Unknown licence for package 'busybox-hwclock': 'GPL-2.0-only & bzip2-1.0.4' not in canonical category map | medium | I.P2.1, VII.2 | 2026-04-23T22:29:42.865524+00:00 |
-| license-audit | Unknown licence for package 'busybox-syslog': 'GPL-2.0-only & bzip2-1.0.4' not in canonical category map | medium | I.P2.1, VII.2 | 2026-04-23T22:29:42.865524+00:00 |
-| license-audit | Unknown licence for package 'busybox-udhcpc': 'GPL-2.0-only & bzip2-1.0.4' not in canonical category map | medium | I.P2.1, VII.2 | 2026-04-23T22:29:42.865524+00:00 |
-| license-audit | Unknown licence for package 'liblzma': 'PD' not in canonical category map | medium | I.P2.1, VII.2 | 2026-04-23T22:29:42.865524+00:00 |
-| sbom-generation | Package 'tzdata': missing or invalid checksum | low | I.P2.1, VII.2 | 2026-04-23T22:29:42.865524+00:00 |
-| sbom-generation | Package 'tzdata-source-1': missing or invalid licenseDeclared | low | I.P2.1, VII.2 | 2026-04-23T22:29:42.865524+00:00 |
-| sbom-generation | Package 'tzdata-source-1': missing or invalid supplier | low | I.P2.1, VII.2 | 2026-04-23T22:29:42.865524+00:00 |
-| sbom-generation | Package 'tzdata-source-1': missing or invalid versionInfo | low | I.P2.1, VII.2 | 2026-04-23T22:29:42.865524+00:00 |
-| sbom-generation | Package 'tzdata-source-2': missing or invalid licenseDeclared | low | I.P2.1, VII.2 | 2026-04-23T22:29:42.865524+00:00 |
-| sbom-generation | Package 'tzdata-source-2': missing or invalid supplier | low | I.P2.1, VII.2 | 2026-04-23T22:29:42.865524+00:00 |
-| sbom-generation | Package 'tzdata-source-2': missing or invalid versionInfo | low | I.P2.1, VII.2 | 2026-04-23T22:29:42.865524+00:00 |
+| license-audit | Unknown licence for package 'busybox': 'GPL-2.0-only & bzip2-1.0.4' not in canonical category map | medium | I.P2.1, VII.2 | 2026-04-24T20:31:38.915962+00:00 |
+| license-audit | Unknown licence for package 'busybox-hwclock': 'GPL-2.0-only & bzip2-1.0.4' not in canonical category map | medium | I.P2.1, VII.2 | 2026-04-24T20:31:38.915962+00:00 |
+| license-audit | Unknown licence for package 'busybox-syslog': 'GPL-2.0-only & bzip2-1.0.4' not in canonical category map | medium | I.P2.1, VII.2 | 2026-04-24T20:31:38.915962+00:00 |
+| license-audit | Unknown licence for package 'busybox-udhcpc': 'GPL-2.0-only & bzip2-1.0.4' not in canonical category map | medium | I.P2.1, VII.2 | 2026-04-24T20:31:38.915962+00:00 |
+| license-audit | Unknown licence for package 'liblzma': 'PD' not in canonical category map | medium | I.P2.1, VII.2 | 2026-04-24T20:31:38.915962+00:00 |
+| sbom-generation | Package 'tzdata': missing or invalid checksum | low | I.P2.1, VII.2 | 2026-04-24T20:31:38.915962+00:00 |
+| sbom-generation | Package 'tzdata-source-1': missing or invalid licenseDeclared | low | I.P2.1, VII.2 | 2026-04-24T20:31:38.915962+00:00 |
+| sbom-generation | Package 'tzdata-source-1': missing or invalid supplier | low | I.P2.1, VII.2 | 2026-04-24T20:31:38.915962+00:00 |
+| sbom-generation | Package 'tzdata-source-1': missing or invalid versionInfo | low | I.P2.1, VII.2 | 2026-04-24T20:31:38.915962+00:00 |
+| sbom-generation | Package 'tzdata-source-2': missing or invalid licenseDeclared | low | I.P2.1, VII.2 | 2026-04-24T20:31:38.915962+00:00 |
+| sbom-generation | Package 'tzdata-source-2': missing or invalid supplier | low | I.P2.1, VII.2 | 2026-04-24T20:31:38.915962+00:00 |
+| sbom-generation | Package 'tzdata-source-2': missing or invalid versionInfo | low | I.P2.1, VII.2 | 2026-04-24T20:31:38.915962+00:00 |
 
 ### Vulnerability handling processes
 
@@ -231,13 +231,13 @@ and contribute evidence of conformity testing:
 
 | Check | Status | Score | Findings | CRA mapping |
 |-------|--------|-------|----------|-------------|
-| CVE Tracking (cve-tracking) | fail | 0/50 | 9 | I.P2.2, I.P2.3 |
+| CVE Tracking (cve-tracking) | fail | 23/50 | 5 | I.P2.2, I.P2.3 |
 | Image Signing (image-signing) | warn | 0/50 | 2 | I.P1.f |
 | License Audit (license-audit) | warn | 25/50 | 5 | I.P2.1, VII.2 |
 | SBOM Generation (sbom-generation) | warn | 20/50 | 7 | I.P2.1, VII.2 |
 | Secure Boot (secure-boot) | warn | 5/50 | 1 | I.P1.d, I.P1.f |
 | Vulnerability Reporting (vuln-reporting) | fail | 10/50 | 4 | I.P2.5, II.2, II.7, I.P2.7 |
-| Yocto CVE Check (yocto-cve-check) | fail | 0/50 | 0 | I.P2.2, I.P2.3 |
+| Yocto CVE Check (yocto-cve-check) | fail | 23/50 | 0 | I.P2.2, I.P2.3 |
 
 [TO BE FILLED BY MANUFACTURER: include reports of any additional tests
 performed outside shipcheck, such as penetration testing, static

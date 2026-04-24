@@ -4,7 +4,7 @@
 
 _Issued under Annex V of Regulation (EU) 2024/2847 (Cyber Resilience Act)._
 
-**Date of issue:** 2026-04-23
+**Date of issue:** 2026-04-24
 
 ## 1. Product identification
 
