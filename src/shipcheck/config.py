@@ -34,18 +34,19 @@ class CveConfig:
 
 
 @dataclass
-class SecureBootConfig:
-    """Secure Boot check configuration."""
+class CodeIntegrityConfig:
+    """Code integrity check configuration.
+
+    Replaces the retired ``SecureBootConfig`` and ``ImageSigningConfig``
+    dataclasses. Carries the union of fields the merged ``code-integrity``
+    check needs across its four mechanism detectors (UEFI Secure Boot,
+    signed FIT, dm-verity, IMA/EVM).
+    """
 
     known_test_keys: list[str] = field(default_factory=list)
-
-
-@dataclass
-class ImageSigningConfig:
-    """Image Signing check configuration."""
-
     expect_fit: bool = True
     expect_verity: bool = True
+    expect_ima: bool = False
 
 
 @dataclass
@@ -99,8 +100,7 @@ class ShipcheckConfig:
     checks: list[str] | None = None
     sbom: SbomConfig = field(default_factory=SbomConfig)
     cve: CveConfig = field(default_factory=CveConfig)
-    secure_boot: SecureBootConfig = field(default_factory=SecureBootConfig)
-    image_signing: ImageSigningConfig = field(default_factory=ImageSigningConfig)
+    code_integrity: CodeIntegrityConfig = field(default_factory=CodeIntegrityConfig)
     license_audit: LicenseAuditConfig = field(default_factory=LicenseAuditConfig)
     yocto_cve: YoctoCVEConfig = field(default_factory=YoctoCVEConfig)
     history: HistoryConfig = field(default_factory=HistoryConfig)
@@ -131,15 +131,16 @@ class ShipcheckConfig:
             fail_on=report_data.get("fail_on"),
         )
 
-        secure_boot_data = data.get("secure_boot", {})
-        secure_boot = SecureBootConfig(
-            known_test_keys=secure_boot_data.get("known_test_keys", []),
-        )
-
-        image_signing_data = data.get("image_signing", {})
-        image_signing = ImageSigningConfig(
-            expect_fit=image_signing_data.get("expect_fit", True),
-            expect_verity=image_signing_data.get("expect_verity", True),
+        # The retired `secure_boot:` and `image_signing:` keys are silently
+        # ignored. Migration is documented in the CHANGELOG; users still
+        # carrying these blocks are not crashed but their values do not flow
+        # into `code_integrity:`.
+        code_integrity_data = data.get("code_integrity", {})
+        code_integrity = CodeIntegrityConfig(
+            known_test_keys=code_integrity_data.get("known_test_keys", []),
+            expect_fit=code_integrity_data.get("expect_fit", True),
+            expect_verity=code_integrity_data.get("expect_verity", True),
+            expect_ima=code_integrity_data.get("expect_ima", False),
         )
 
         license_audit_data = data.get("license_audit", {})
@@ -172,8 +173,7 @@ class ShipcheckConfig:
             checks=data.get("checks"),
             sbom=sbom,
             cve=cve,
-            secure_boot=secure_boot,
-            image_signing=image_signing,
+            code_integrity=code_integrity,
             license_audit=license_audit,
             yocto_cve=yocto_cve,
             history=history,

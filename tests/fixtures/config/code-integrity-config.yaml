@@ -1,0 +1,9 @@
+build_dir: ./build
+
+code_integrity:
+  known_test_keys:
+    - vendor-test-key
+    - ci-signing-key
+  expect_fit: true
+  expect_verity: true
+  expect_ima: false
