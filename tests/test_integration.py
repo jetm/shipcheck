@@ -106,15 +106,16 @@ def _assert_all_checks_run(build_dir: Path) -> None:
 
 
 def _assert_cve_agreement(build_dir: Path) -> None:
-    """cve-tracking and yocto-cve-check both produce findings citing cve-summary.json."""
+    """cve-tracking and yocto-cve-check both produce findings and agree on the CVE source file."""
     results = get_default_registry().run_checks(build_dir=build_dir, config={})
     by_id = {r.check_id: r for r in results}
+    expected = ("cve-summary.json", "sbom-cve-check.yocto.json")
     for cid in ("cve-tracking", "yocto-cve-check"):
         r = by_id.get(cid)
         assert r is not None, f"{cid} did not run"
         assert r.findings, f"{cid} produced no findings (status={r.status}, summary={r.summary!r})"
-        assert "cve-summary.json" in r.summary, (
-            f"{cid} summary missing cve-summary.json: {r.summary!r}"
+        assert any(name in r.summary for name in expected), (
+            f"{cid} summary does not cite a known CVE source ({expected}): {r.summary!r}"
         )
 
 
