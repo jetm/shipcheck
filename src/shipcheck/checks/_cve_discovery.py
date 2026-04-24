@@ -2,7 +2,7 @@
 
 Both checks consume the same evidence files; this module is the single source
 of truth for where those files live in a Yocto build tree.  Extracted as part
-of pilot-0001 fix  so the two checks cannot diverge on the same build
+of the pilot-0001 fix so the two checks cannot diverge on the same build
 (see specs/shipcheck-v01-pilot/design.md, decision D2).
 
 The lookup order matches design D2, priority 1 = highest:

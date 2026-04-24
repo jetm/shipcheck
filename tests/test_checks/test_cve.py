@@ -1005,7 +1005,7 @@ class TestCVECheckCRAMapping:
 
 
 class TestSharedDiscoveryYoctoSummary:
-    """Integration coverage for  shared discovery (pilot-0001 PF-02).
+    """Integration coverage for shared CVE discovery (pilot-0001 PF-02).
 
     Ensures that ``cve-tracking`` treats the Scarthgap aggregate summary at
     ``tmp/log/cve/cve-summary.json`` as valid CVE evidence, staying in sync

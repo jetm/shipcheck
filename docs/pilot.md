@@ -375,18 +375,18 @@ Note any artefact regeneration here (for example, "regenerated after fixing <bug
 
 | id | summary | bucket | follow-up |
 |----|---------|--------|-----------|
-| F1 | <one-line summary> | bug \| known-limit \| quirk | SHCK-NN or README anchor |
+| F1 | <one-line summary> | bug \| known-limit \| quirk | tracker ref or README anchor |
 | F2 | ... | ... | ... |
 
 Bucket definitions:
 
-- **bug**: shipcheck misreported on real output in a way that would mislead an auditor. File a + task and link it in the follow-up column.
+- **bug**: shipcheck misreported on real output in a way that would mislead an auditor. File a tracker task and link it in the follow-up column.
 - **known-limit**: shipcheck's scope does not cover this case today (for example, SPDX 3.0 detection-only, secure-boot config-level only, no PE/COFF or PKI verification, no CI-file detection). Link to the README "Known limitations" anchor.
 - **quirk**: BSP-specific or environment-specific behaviour worth recording but not actionable. Record in the table, no follow-up.
 
 ## Conclusion
 
-State whether the registered checks all executed without raising and produced parseable output. Confirm the SHCK pilot-meta task exit criterion is met (the report is written and every Findings row has a bucket assignment). If any Findings row is in the bug bucket, list the blocking SHCK task numbers and call the v0.1 release gate status explicitly ("v0.1 release gate: blocked by SHCK-NN").
+State whether the registered checks all executed without raising and produced parseable output. Confirm the pilot-meta tracker-task exit criterion is met (the report is written and every Findings row has a bucket assignment). If any Findings row is in the bug bucket, list the blocking tracker tasks and call the v0.1 release gate status explicitly ("v0.1 release gate: blocked by <tracker refs>").
 ````
 
 The frontmatter pins the exact run so that an auditor comparing two pilots can see at a glance what changed. The Inputs section lets a reader re-fetch the inputs from this repo alone. The Run section freezes the commands so that a future reader re-running the pilot compares apples to apples. The Findings table is the triage output. The Conclusion is the explicit gate check that drives task closure and release gating.
@@ -395,12 +395,12 @@ The frontmatter pins the exact run so that an auditor comparing two pilots can s
 
 Two gates attach to every pilot:
 
-- **Pilot task closure.** The devtool-meta task that tracks the pilot itself (for pilot 0001 this is ) closes once `pilots/NNNN-<name>/REPORT.md` is written and every Findings row has a bucket assignment. Bug count is not part of the closure criterion; bug resolution is tracked by separate SHCK-NN tasks. Without this rule the pilot-meta task risks becoming a forever task that absorbs unrelated bug work.
-- **Release gate.** Every pilot-surfaced bug, at any severity, blocks the v0.1 release tag. A Findings row classified as "bug" becomes a SHCK task with a `related: ` link and a note that it blocks v0.1. The release tag is cut only once every such task is resolved. This gate is strict on purpose: v0.1 is the first version whose claim ("ready for CRA evidence") is made publicly, so any misreport surfaced by pilot 0001 invalidates the claim until fixed. The gate applies to every pilot cut as part of a minor or major release.
+- **Pilot task closure.** The tracker task for the pilot itself closes once `pilots/NNNN-<name>/REPORT.md` is written and every Findings row has a bucket assignment. Bug count is not part of the closure criterion; bug resolution is tracked by separate tracker tasks. Without this rule the pilot-meta task risks becoming a forever task that absorbs unrelated bug work.
+- **Release gate.** Every pilot-surfaced bug, at any severity, blocks the v0.1 release tag. A Findings row classified as "bug" becomes a tracker task linked back to the pilot methodology task, with a note that it blocks v0.1. The release tag is cut only once every such task is resolved. This gate is strict on purpose: v0.1 is the first version whose claim ("ready for CRA evidence") is made publicly, so any misreport surfaced by pilot 0001 invalidates the claim until fixed. The gate applies to every pilot cut as part of a minor or major release.
 
 Enforcement is **soft** today. It rests on two mechanisms:
 
-- **Task-template discipline**: every SHCK task that registers a new check ID or touches input parsing in an existing check includes a pilot subtask in the task body. The subtask reads "produce a `pilots/NNNN-<name>/REPORT.md` against a real Yocto build before marking done", and it is enforced by reviewers when the task closes. The eight existing open check tasks (, , , , , , ) have this subtask appended as part of the shipcheck-v01-pilot change.
+- **Task-template discipline**: every tracker task that registers a new check ID or touches input parsing in an existing check includes a pilot subtask in the task body. The subtask reads "produce a `pilots/NNNN-<name>/REPORT.md` against a real Yocto build before marking done", and it is enforced by reviewers when the task closes. The open check tasks have this subtask appended as part of the shipcheck-v01-pilot change.
 - **Reviewer check**: any PR that adds a `### Added` or `### Changed` CHANGELOG entry for a registered check must also add or update the matching `Pilot:` reference in the README Roadmap. PR reviewers enforce this in the review comment thread.
 
 A reviewer who catches a missing pilot reference blocks the PR and requests either the pilot run or a conversation about whether this is the rare case that warrants skipping (for example, a patch release with no input-parser change).

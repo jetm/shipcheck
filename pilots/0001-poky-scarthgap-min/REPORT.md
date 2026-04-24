@@ -26,7 +26,7 @@ build_host: CachyOS (kas-container runs the build inside a Debian trixie
   SPDX and cve-check via `INHERIT += "create-spdx cve-check"` in the
   `local_conf_header:` section. No override of
   `CVE_CHECK_LOG_JSON` / `CVE_CHECK_SUMMARY_DIR` (see Troubleshooting
-  PF-TB2 below). Note: the original  task 3.1 specified branch
+  PF-TB2 below). Note: the original pilot task 3.1 specified branch
   `my-scarthgap` pointing at the local poky checkout at
   `~/repos/work/poky`; this pilot uses upstream `scarthgap` instead so
   `kas-container` can clone poky cleanly into its own `/work/poky`
@@ -104,15 +104,15 @@ from the partial image-signing WARN band).
 
 ## Findings triage
 
-Buckets: **bug** (file SHCK-NN task; v0.1 release blocker),
+Buckets: **bug** (file tracker task; v0.1 release blocker),
 **known-limit** (document in README "Known limitations"),
 **quirk** (record but no action).
 
 | ID | Summary | Bucket | Follow-up |
 |----|---------|--------|-----------|
-| PF-01 | `shipcheck check --format json` writes to `./shipcheck-report.json` in cwd instead of stdout; shell redirection captures the Rich terminal report, not the JSON payload | bug |  (to file in task 4.3) - blocks v0.1 |
-| PF-02 | `cve-tracking` and `yocto-cve-check` disagree on CVE file lookup: cve-tracking returned FAIL "No CVE scan output found" while yocto-cve-check found 584 unpatched CVEs in the same build via `tmp/log/cve/cve-summary.json` | bug |  (to file in task 4.3) - blocks v0.1 |
-| PF-03 | `license-audit` does not find Yocto's per-arch license layout (`tmp/deploy/licenses/qemux86_64/`, `core2-64/`, `allarch/`, `native/`); the check likely searches `tmp/deploy/licenses/<image>/` only, which is how synthetic fixtures are laid out | bug |  (to file in task 4.3) - blocks v0.1 |
+| PF-01 | `shipcheck check --format json` writes to `./shipcheck-report.json` in cwd instead of stdout; shell redirection captures the Rich terminal report, not the JSON payload | bug | tracker task (to file in task 4.3) - blocks v0.1 |
+| PF-02 | `cve-tracking` and `yocto-cve-check` disagree on CVE file lookup: cve-tracking returned FAIL "No CVE scan output found" while yocto-cve-check found 584 unpatched CVEs in the same build via `tmp/log/cve/cve-summary.json` | bug | tracker task (to file in task 4.3) - blocks v0.1 |
+| PF-03 | `license-audit` does not find Yocto's per-arch license layout (`tmp/deploy/licenses/qemux86_64/`, `core2-64/`, `allarch/`, `native/`); the check likely searches `tmp/deploy/licenses/<image>/` only, which is how synthetic fixtures are laid out | bug | tracker task (to file in task 4.3) - blocks v0.1 |
 | PF-04 | `vuln-reporting` reports `ERROR` with summary "product.yaml not found: product.yaml" when no product.yaml is supplied; expected behaviour, but ERROR status is stronger than the handoff-documented UNKNOWN and may warrant reclassification as SKIP | known-limit | [README.md#known-limitations](../../README.md#known-limitations) - document the product.yaml requirement. Also see note below on status classification. |
 | PF-05 | `image-signing` returns WARN with summary "Image signing: checked FIT and verity, score 0/50" plus two medium findings ("No FIT image files (.itb, .fit) found in deploy directory", "No dm-verity configuration or hash files found"). qemux86-64 `core-image-minimal` has no signing configured, so this is the correct diagnostic - the check completed without raising and reported the expected absence | known-limit | [README.md#known-limitations](../../README.md#known-limitations) - image-signing is config-level; no PE/COFF binary or FIT signature verification |
 | PF-06 | `secure-boot` returns WARN with summary "No Secure Boot configuration detected" plus one medium finding ("No Secure Boot signing class found in IMAGE_CLASSES"). qemux86-64 has no Secure Boot; the check correctly identifies the absent signing class | known-limit | [README.md#known-limitations](../../README.md#known-limitations) - secure-boot is config-level only; no PKI chain validation, no PE/COFF verification, no CI-file detection |
@@ -185,16 +185,17 @@ cause and the fix applied.
   `scan.json['checks']` with non-empty `status`, `summary`, and
   `findings` fields. The Rich terminal log in `log.txt` reflects the
   same state. No Python tracebacks anywhere in the pilot dossier.
-- ** exit criterion is met.** The methodology meta-task's
+- **Methodology exit criterion is met.** The methodology meta-task's
   instrumental exit criterion (REPORT.md written + every Findings
   row bucketed) is satisfied: eight rows, every row assigned one of
   `bug` / `known-limit` / `quirk`, with follow-up links or tasks
-  recorded in-line.  may be transitioned to `done` once task
-  4.4 verifies this.
+  recorded in-line. The methodology task may be transitioned to `done`
+  once task 4.4 verifies this.
 - **v0.1 release gate: BLOCKED**. Three pilot-surfaced bugs gate the
   v0.1 release tag per the gating rule recorded in
-  `specs/shipcheck-v01-pilot/design.md`: PF-01, PF-02, PF-03. All three will be filed as separate
-  SHCK tasks under task 4.3 with `related: ` frontmatter and
+  `specs/shipcheck-v01-pilot/design.md`: PF-01, PF-02, PF-03. All
+  three will be filed as separate tracker tasks under task 4.3 with
+  `related: pilot-0001-methodology` frontmatter and
   `blocks v0.1 release` tags. The known-limit rows (PF-04, PF-05,
   PF-06) are not release blockers; they are documented in the README
   "Known limitations" subsection added in task 4.1. The quirk rows
@@ -213,8 +214,8 @@ cause and the fix applied.
 ## Re-run (2026-04-20)
 
 This re-run exercises the same cached kas-container build used in the
-original pilot against shipcheck after the , , and
- fixes landed. The goal is to confirm that the three
+original pilot against shipcheck after the PF-01, PF-02, and PF-03
+fixes landed. The goal is to confirm that the three
 release-gating bugs (PF-01, PF-02, PF-03) no longer reproduce on a real
 Yocto tree. Artefacts are captured in `scan-rerun.json` and
 `dossier-rerun/`.

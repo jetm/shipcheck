@@ -152,7 +152,7 @@ Cross-reference derived from the code. "Mapped" = at least one shipped finding c
 | I.P1.l | Security logging and monitoring | ❌ Not mapped |
 | I.P1.m | Secure data/settings removal | ❌ Not mapped |
 
-Tracked as . Each of the 9 unmapped items must resolve to one of: new check, partial mapping via existing check, or documented out of scope.
+Tracked as a roadmap follow-up. Each of the 9 unmapped items must resolve to one of: new check, partial mapping via existing check, or documented out of scope.
 
 ### Annex I Part II — 5/8 items mapped (63%)
 
@@ -198,7 +198,7 @@ Tracked as . Each of the 9 unmapped items must resolve to one of: new check, par
 
 shipcheck covers the **machine-verifiable subset** of CRA obligations well: SBOM, CVE tracking, cryptographic signing, and the update-policy metadata a manufacturer must declare. It does not cover:
 
-- **Soft-property obligations** (most of Annex I Part I unmapped items) — data minimisation, DoS resilience, architecture-level attack-surface limitation, logging policy, secure decommissioning. Some of these may become machine-verifiable ( investigates); others are design/UX questions that require human review regardless of tooling.
+- **Soft-property obligations** (most of Annex I Part I unmapped items) — data minimisation, DoS resilience, architecture-level attack-surface limitation, logging policy, secure decommissioning. Some of these may become machine-verifiable (roadmap follow-up); others are design/UX questions that require human review regardless of tooling.
 - **Process obligations** (I.P2.4 public disclosure, I.P2.8 timely free dissemination) — evidence lives in manufacturer policy documents and release-management practice, not in build artefacts.
 - **User-facing documentation obligations** (II.4, II.5, II.8) — require prose content review, not pattern matching.
 
@@ -251,7 +251,7 @@ These gaps are not shipcheck's problem to solve, but the dossier must **say so l
 
 ### Known weaknesses
 
-- **Semantic mapping validity is not verified**. `validate_cra_mappings` only checks that IDs exist, not that a finding actually evidences the requirement. If a check author mapped a finding to I.P1.d when the evidence only supports I.P1.f, nothing catches it. Human review of each check's mapping choices remains required. (Addressed by  Phase 1 and this document.)
+- **Semantic mapping validity is not verified**. `validate_cra_mappings` only checks that IDs exist, not that a finding actually evidences the requirement. If a check author mapped a finding to I.P1.d when the evidence only supports I.P1.f, nothing catches it. Human review of each check's mapping choices remains required. (Addressed by Phase 1 of the CRA approach review and this document.)
 - **The catalog is a manual transcription**. A typo would propagate silently. No automated line-by-line diff against EUR-Lex is currently in place. See §8 for the proposed closure.
 - **Dossier quality degrades with empty reports**. An empty build emits a dossier full of "N/A - no evidence" sections. Technically honest; potentially misleading to a reviewer reading out of context.
 - **Readiness score is not a compliance score**. See §6.
@@ -350,16 +350,16 @@ This does not guarantee the original transcription was correct (the initial cata
 
 ### Tracking
 
-Catalog integrity is not on the v0.1.0 gate but should land shortly after, as a dedicated devspec change. Phase 1 of  performs a one-off manual diff of the current `requirements.yaml` against Formex XML; the automated workflow above prevents drift going forward.
+Catalog integrity is not on the v0.1.0 gate but should land shortly after, as a dedicated change. Phase 1 of the CRA approach review performs a one-off manual diff of the current `requirements.yaml` against Formex XML; the automated workflow above prevents drift going forward.
 
 ## 9. Findings
 
-<to be populated during sign-off; findings land in the single bundle devspec change per  guidance>
+<to be populated during sign-off; findings land as a single bundle per the CRA approach review guidance>
 
 Anticipated findings:
 
 - **F-001**: README lacks a "What shipcheck is not" section and does not distinguish readiness from compliance. (Addressed in this change via new README sections.)
-- **F-002**: Annex I Part I has 9 unmapped items; decisions required per-item. (Tracked as .)
+- **F-002**: Annex I Part I has 9 unmapped items; decisions required per-item. (Tracked as a roadmap follow-up.)
 - **F-003**: Catalog integrity workflow not yet in place; manual transcription is unverified against an authoritative XML source. (Tracked for a post-v0.1.0 devspec change.)
 - **F-004**: Readiness score weighting is not explained in the dossier or README; users may read 200/200 as compliance attestation. (Addressed in this change via new README sections.)
 

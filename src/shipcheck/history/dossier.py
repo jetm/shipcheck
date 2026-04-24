@@ -27,7 +27,7 @@ relies on.
 
 CLI wiring of ``shipcheck dossier`` lives in task group 10; this module
 stays renderer-agnostic so the same data can be re-used by the web
-dashboard story in  without duplicating aggregation logic.
+dashboard story without duplicating aggregation logic.
 """
 
 from __future__ import annotations

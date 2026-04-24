@@ -218,12 +218,12 @@ def _finding_for_ignored(issue: dict) -> Finding:
 def _resolve_summary_path(build_dir: Path, config_path: str | None) -> Path:
     """Resolve the summary path honoring the ``summary_path`` override.
 
-    Absolute paths are used verbatim; relative paths are resolved under
-    ``build_dir``.  ``None`` delegates to
-    :func:`shipcheck.checks._cve_discovery.discover_cve_output` so the CVE
-    checks agree on evidence location (pilot-0001 fix ); when the
-    shared helper also finds nothing, the canonical Yocto default is
-    returned so the SKIP message still names the expected path.
+        Absolute paths are used verbatim; relative paths are resolved under
+        ``build_dir``.  ``None`` delegates to
+        :func:`shipcheck.checks._cve_discovery.discover_cve_output` so the CVE
+    checks agree on evidence location (pilot-0001 fix); when the
+        shared helper also finds nothing, the canonical Yocto default is
+        returned so the SKIP message still names the expected path.
     """
     if config_path is None:
         discovered = discover_cve_output(build_dir)

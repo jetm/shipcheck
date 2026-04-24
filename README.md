@@ -81,7 +81,7 @@ limitations, not defects:
   inheritance and flags known test keys in `.shipcheck.yaml`, but does
   NOT perform PE/COFF binary signature verification, PKI chain validation
   (PK/KEK/DB enrollment), or CI-file signing-step detection. Those depths
-  are tracked as roadmap follow-ups (, ).
+  are tracked as roadmap follow-ups.
 - **`image-signing` is config-level only** - detects FIT image signatures
   and dm-verity configuration from the build tree layout, but does NOT
   verify the cryptographic integrity of the signed artefacts. Cryptographic
@@ -92,9 +92,9 @@ limitations, not defects:
   is detected but not field-validated.
 - **`cve-tracking` looks for specific Yocto output locations** - pilot 0001
   surfaced that `cve-tracking` and `yocto-cve-check` use different lookup
-  logic; the more reliable path is `yocto-cve-check`, which reads
-  `tmp/log/cve/cve-summary.json`. The reconciliation between the two is
-  tracked as .
+  logic; the two checks now share a common CVE-discovery helper and
+  agree on evidence presence. The more reliable path is
+  `yocto-cve-check`, which reads `tmp/log/cve/cve-summary.json`.
 
 
 ## What shipcheck is not

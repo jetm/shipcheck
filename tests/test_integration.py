@@ -1427,9 +1427,9 @@ def _write_yocto_summary_only_tree(build_dir: Path) -> Path:
 
 @pytest.mark.integration
 class TestPilot0001CveDivergencePrevention:
-    """Regression guard for the pilot-0001 divergence.
+    """Regression guard for the pilot-0001 CVE-discovery divergence.
 
-    Before , cve-tracking and yocto-cve-check disagreed on whether a
+    Before the fix, cve-tracking and yocto-cve-check disagreed on whether a
     Scarthgap build with only ``tmp/log/cve/cve-summary.json`` had CVE
     evidence: cve-tracking reported "No CVE scan output found" (FAIL) while
     yocto-cve-check happily parsed the same file.  Running both checks

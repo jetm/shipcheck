@@ -2,7 +2,7 @@
 
 **Document status**: Human sign-off for a generated dossier. Not an official compliance attestation.
 **Date**: 2026-04-24
-**Change**: `vuln-reporting strict validation`
+**Subject**: Strict validation for the vuln-reporting check
 **Audited commits**:
 
 - `908f712` — `checks/vuln-reporting: validate shape and reject placeholder tokens` (the behavioural rewrite this audit is validating)
@@ -14,7 +14,7 @@
 
 ## 1. Purpose
 
-This artifact is the worked example behind the `vuln-reporting strict validation` change. The change tightened `src/shipcheck/checks/vuln_reporting.py` from presence-only validation to shape-plus-placeholder validation: a `product.yaml` whose vendor-committed fields carry placeholder tokens (`VENDOR`, `TODO`, `FIXME`, `[TO BE FILLED]`, `[VENDOR]`) or malformed values must now be enumerated as findings rather than silently accepted.
+This artifact is the worked example behind the vuln-reporting strict-validation work. The change tightened `src/shipcheck/checks/vuln_reporting.py` from presence-only validation to shape-plus-placeholder validation: a `product.yaml` whose vendor-committed fields carry placeholder tokens (`VENDOR`, `TODO`, `FIXME`, `[TO BE FILLED]`, `[VENDOR]`) or malformed values must now be enumerated as findings rather than silently accepted.
 
 The audit demonstrates that shift end-to-end. It feeds shipcheck a `product.yaml` with every manufacturer-committed field set to the literal string `VENDOR`, runs an evidence-format scan against the committed pilot-0001 build slice, and confirms the evidence report calls out every unfilled paperwork field while still populating the build-derived sections from real bitbake output.
 
@@ -45,11 +45,11 @@ Product identity fields (`product.name`, `manufacturer.name`, `manufacturer.addr
 
 ## 4. Sign-off
 
-The dossier under `dossier/` demonstrates the build-derived vs. vendor-committed split exactly as the  blog thesis requires. Shipcheck populated the SBOM section, the CVE reconciliation table, the license manifest audit, the Secure Boot posture summary, and the image signing posture summary automatically from the pilot-0001 fixture — no manufacturer input needed.
+The dossier under `dossier/` demonstrates the build-derived vs. vendor-committed split that the blog thesis requires. Shipcheck populated the SBOM section, the CVE reconciliation table, the license manifest audit, the Secure Boot posture summary, and the image signing posture summary automatically from the pilot-0001 fixture — no manufacturer input needed.
 
 It also refused to fill in product identity, the CVD policy URL, the CVD single point of contact, the support-period end date, and the update-distribution mechanism. Each of those vendor-committed fields became an enumerated finding at the severity its owning Annex requirement dictates, and the Annex VII / DoC drafts render the unfilled identity fields as visible `VENDOR` strings rather than silently passing through.
 
-This is the visual argument for the  blog post: "CRA compliance is paperwork, not scanning." Scanning is solved — SBOM, CVE, licensing, signing posture all land automatically. The paperwork remains the manufacturer's job, and shipcheck now makes the paperwork gap loud rather than silent.
+This is the visual argument for the blog post: "CRA compliance is paperwork, not scanning." Scanning is solved — SBOM, CVE, licensing, signing posture all land automatically. The paperwork remains the manufacturer's job, and shipcheck now makes the paperwork gap loud rather than silent.
 
 ## 5. Pointer to the dossier
 
@@ -64,7 +64,7 @@ The full run is captured under `audits/0002-blog-demo/dossier/`:
 
 ## 6. Context
 
-The  blog post will cite this audit as the worked example of the thesis "CRA compliance is paperwork, not scanning." The audit pre-dates the blog so the post can screenshot a stable, committed evidence report instead of an ad-hoc run. Any re-run of the command in §2 against the same commits should reproduce the same four findings and the same placeholder renderings in the Annex VII / DoC drafts.
+The blog post cites this audit as the worked example of the thesis "CRA compliance is paperwork, not scanning." The audit pre-dates the blog so the post can screenshot a stable, committed evidence report instead of an ad-hoc run. Any re-run of the command in §2 against the same commits should reproduce the same four findings and the same placeholder renderings in the Annex VII / DoC drafts.
 
 ## Sign-off
 
