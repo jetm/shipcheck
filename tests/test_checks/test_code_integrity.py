@@ -395,3 +395,193 @@ class TestUefiDetector:
         # UEFI signing class detection is a deterministic config-file
         # signal -- when present, confidence is high.
         assert result.confidence == "high"
+
+
+# ---------------------------------------------------------------------------
+# FIT signature detector (task 1.4)
+# ---------------------------------------------------------------------------
+
+
+# FIT image signature marker: FDT magic + "signature" node indicator.
+FIT_SIGNATURE_MARKER = b"\xd0\x0d\xfe\xed" + b"\x00" * 32 + b"signature"
+FIT_UNSIGNED_CONTENT = b"\xd0\x0d\xfe\xed" + b"\x00" * 64
+
+
+def _create_deploy_dir(build_dir: Path) -> Path:
+    """Create tmp/deploy/images/<machine>/ and return it."""
+    deploy = build_dir / "tmp" / "deploy" / "images" / "machine"
+    deploy.mkdir(parents=True, exist_ok=True)
+    return deploy
+
+
+class TestFitDetector:
+    """Signed FIT detector returning ``MechanismResult``.
+
+    Covers the FIT scenario in ``specs/code-integrity/spec.md``:
+    a ``.itb`` or ``.fit`` file under ``tmp/deploy/images/`` whose
+    first four bytes are FDT magic (``0xD00DFEED``) and whose body
+    contains the literal byte string ``signature`` -> ``present=True``.
+    Also covers the ``UBOOT_SIGN_ENABLE`` config-only path and the
+    unsigned-FIT misconfiguration path.
+
+    The detector lives at ``shipcheck.checks.code_integrity.fit`` and
+    exposes a ``detect(build_dir, config)`` callable that returns a
+    ``MechanismResult``.
+    """
+
+    def _detect(self, build_dir: Path, config: dict | None = None) -> MechanismResult:
+        from shipcheck.checks.code_integrity.fit import detect
+
+        return detect(build_dir, config or {})
+
+    # --- Scenario: signed FIT artifact detection ---------------------------
+
+    def test_signed_itb_marks_present(self, tmp_path: Path) -> None:
+        deploy = _create_deploy_dir(tmp_path)
+        itb = deploy / "fitImage.itb"
+        itb.write_bytes(FIT_SIGNATURE_MARKER)
+        result = self._detect(tmp_path)
+        assert result.present is True
+        # The artifact path (or its name) must appear in evidence so the
+        # aggregator can mention it in its summary.
+        joined = " ".join(result.evidence)
+        assert "fitImage.itb" in joined or str(itb) in joined
+
+    def test_signed_fit_extension_marks_present(self, tmp_path: Path) -> None:
+        deploy = _create_deploy_dir(tmp_path)
+        fit = deploy / "image.fit"
+        fit.write_bytes(FIT_SIGNATURE_MARKER)
+        result = self._detect(tmp_path)
+        assert result.present is True
+        joined = " ".join(result.evidence)
+        assert "image.fit" in joined or str(fit) in joined
+
+    def test_returns_mechanism_result(self, tmp_path: Path) -> None:
+        deploy = _create_deploy_dir(tmp_path)
+        (deploy / "fitImage.itb").write_bytes(FIT_SIGNATURE_MARKER)
+        result = self._detect(tmp_path)
+        assert isinstance(result, MechanismResult)
+
+    def test_signed_fit_no_misconfiguration(self, tmp_path: Path) -> None:
+        deploy = _create_deploy_dir(tmp_path)
+        (deploy / "fitImage.itb").write_bytes(FIT_SIGNATURE_MARKER)
+        result = self._detect(tmp_path)
+        # A signed FIT is the happy path: present, no findings.
+        assert result.present is True
+        assert result.misconfigurations == []
+
+    def test_confidence_high_when_signed_artifact_present(self, tmp_path: Path) -> None:
+        deploy = _create_deploy_dir(tmp_path)
+        (deploy / "fitImage.itb").write_bytes(FIT_SIGNATURE_MARKER)
+        result = self._detect(tmp_path)
+        # A signed FIT artifact on disk is the strongest signal.
+        assert result.confidence == "high"
+
+    # --- Scenario: unsigned FIT artifact -----------------------------------
+
+    def test_unsigned_fit_emits_finding(self, tmp_path: Path) -> None:
+        deploy = _create_deploy_dir(tmp_path)
+        (deploy / "fitImage.itb").write_bytes(FIT_UNSIGNED_CONTENT)
+        result = self._detect(tmp_path)
+        # Unsigned FIT with FDT magic but no signature node is a
+        # misconfiguration -- present is False (no integrity mechanism)
+        # but the aggregator should see the finding.
+        assert result.present is False
+        assert result.misconfigurations, "expected a finding for unsigned FIT artifact"
+        assert any(f.severity == "high" for f in result.misconfigurations)
+        joined = " ".join(f.message.lower() for f in result.misconfigurations)
+        assert "unsigned" in joined and "fit" in joined
+
+    def test_unsigned_fit_finding_carries_cra_mapping(self, tmp_path: Path) -> None:
+        deploy = _create_deploy_dir(tmp_path)
+        (deploy / "fitImage.itb").write_bytes(FIT_UNSIGNED_CONTENT)
+        result = self._detect(tmp_path)
+        unsigned = [f for f in result.misconfigurations if "unsigned" in f.message.lower()]
+        assert unsigned
+        for f in unsigned:
+            assert "I.P1.f" in f.cra_mapping
+
+    def test_short_file_not_treated_as_unsigned(self, tmp_path: Path) -> None:
+        deploy = _create_deploy_dir(tmp_path)
+        (deploy / "fitImage.itb").write_bytes(b"\x00")
+        result = self._detect(tmp_path)
+        # File too short to carry FDT magic -- no FIT signal at all.
+        assert result.present is False
+        assert all("unsigned" not in f.message.lower() for f in result.misconfigurations)
+
+    def test_wrong_magic_not_treated_as_unsigned(self, tmp_path: Path) -> None:
+        deploy = _create_deploy_dir(tmp_path)
+        (deploy / "fitImage.itb").write_bytes(b"\xde\xad\xbe\xef" + b"\x00" * 32)
+        result = self._detect(tmp_path)
+        # Wrong magic means it is not a FIT image; not our problem.
+        assert result.present is False
+        assert all("unsigned" not in f.message.lower() for f in result.misconfigurations)
+
+    # --- Scenario: UBOOT_SIGN_ENABLE config-only --------------------------
+
+    def test_uboot_sign_enable_in_local_conf(self, tmp_path: Path) -> None:
+        _create_deploy_dir(tmp_path)
+        _write_conf(
+            tmp_path,
+            "local.conf",
+            'UBOOT_SIGN_ENABLE = "1"\nUBOOT_SIGN_KEYDIR = "/path/to/keys"\n',
+        )
+        result = self._detect(tmp_path)
+        assert result.present is True
+        joined = " ".join(result.evidence)
+        assert "UBOOT_SIGN_ENABLE" in joined
+
+    def test_uboot_sign_enable_in_auto_conf(self, tmp_path: Path) -> None:
+        _create_deploy_dir(tmp_path)
+        _write_conf(tmp_path, "auto.conf", 'UBOOT_SIGN_ENABLE = "1"\n')
+        result = self._detect(tmp_path)
+        assert result.present is True
+
+    def test_commented_uboot_sign_enable_ignored(self, tmp_path: Path) -> None:
+        _create_deploy_dir(tmp_path)
+        _write_conf(tmp_path, "local.conf", '# UBOOT_SIGN_ENABLE = "1"\n')
+        result = self._detect(tmp_path)
+        assert result.present is False
+
+    def test_config_only_without_artifacts_marks_medium_confidence(self, tmp_path: Path) -> None:
+        _create_deploy_dir(tmp_path)
+        _write_conf(tmp_path, "local.conf", 'UBOOT_SIGN_ENABLE = "1"\n')
+        result = self._detect(tmp_path)
+        # Config alone (no signed artifact yet on disk) is a weaker
+        # signal than a signed FIT file: medium confidence.
+        assert result.present is True
+        assert result.confidence == "medium"
+
+    # --- Scenario: absence -------------------------------------------------
+
+    def test_absent_when_no_config_and_no_artifacts(self, tmp_path: Path) -> None:
+        result = self._detect(tmp_path)
+        assert result.present is False
+        assert result.evidence == []
+        assert result.misconfigurations == []
+
+    def test_absent_when_only_unrelated_files_in_deploy(self, tmp_path: Path) -> None:
+        deploy = _create_deploy_dir(tmp_path)
+        (deploy / "image.ext4").write_bytes(b"\x00" * 16)
+        (deploy / "image.cpio").write_bytes(b"\x00" * 16)
+        result = self._detect(tmp_path)
+        assert result.present is False
+
+    def test_signed_fit_anywhere_under_images(self, tmp_path: Path) -> None:
+        # FIT artifacts may sit under per-machine subdirectories; the
+        # detector must recurse into tmp/deploy/images/.
+        nested = tmp_path / "tmp" / "deploy" / "images" / "qemux86-64"
+        nested.mkdir(parents=True)
+        (nested / "fitImage.itb").write_bytes(FIT_SIGNATURE_MARKER)
+        result = self._detect(tmp_path)
+        assert result.present is True
+
+    # --- Edge cases --------------------------------------------------------
+
+    def test_empty_fit_file_does_not_crash(self, tmp_path: Path) -> None:
+        deploy = _create_deploy_dir(tmp_path)
+        # Empty file: open succeeds but read returns no bytes.
+        (deploy / "empty.itb").write_bytes(b"")
+        result = self._detect(tmp_path)
+        assert isinstance(result, MechanismResult)
+        assert result.present is False
