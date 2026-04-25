@@ -585,3 +585,143 @@ class TestFitDetector:
         result = self._detect(tmp_path)
         assert isinstance(result, MechanismResult)
         assert result.present is False
+
+
+# ---------------------------------------------------------------------------
+# dm-verity detector (task 1.5)
+# ---------------------------------------------------------------------------
+
+
+class TestDmVerityDetector:
+    """dm-verity detector returning ``MechanismResult``.
+
+    Covers the dm-verity scenario in ``specs/code-integrity/spec.md``:
+    ``conf/local.conf`` or ``conf/auto.conf`` containing
+    ``DM_VERITY_IMAGE`` or ``DM_VERITY_IMAGE_TYPE``, or
+    ``tmp/deploy/images/`` containing files with ``.verity`` or
+    ``.hashtree`` extensions -> ``present=True``.
+
+    The detector lives at ``shipcheck.checks.code_integrity.dm_verity``
+    and exposes a ``detect(build_dir, config)`` callable that returns a
+    ``MechanismResult``.
+    """
+
+    def _detect(self, build_dir: Path, config: dict | None = None) -> MechanismResult:
+        from shipcheck.checks.code_integrity.dm_verity import detect
+
+        return detect(build_dir, config or {})
+
+    # --- Scenario: config-variable detection -------------------------------
+
+    def test_dm_verity_image_in_local_conf(self, tmp_path: Path) -> None:
+        _write_conf(tmp_path, "local.conf", 'DM_VERITY_IMAGE = "core-image-minimal"\n')
+        result = self._detect(tmp_path)
+        assert result.present is True
+        joined = " ".join(result.evidence)
+        assert "DM_VERITY_IMAGE" in joined
+
+    def test_dm_verity_image_type_in_local_conf(self, tmp_path: Path) -> None:
+        _write_conf(tmp_path, "local.conf", 'DM_VERITY_IMAGE_TYPE = "ext4"\n')
+        result = self._detect(tmp_path)
+        assert result.present is True
+        joined = " ".join(result.evidence)
+        assert "DM_VERITY_IMAGE_TYPE" in joined
+
+    def test_dm_verity_image_in_auto_conf(self, tmp_path: Path) -> None:
+        _write_conf(tmp_path, "auto.conf", 'DM_VERITY_IMAGE = "core-image-full"\n')
+        result = self._detect(tmp_path)
+        assert result.present is True
+
+    def test_returns_mechanism_result(self, tmp_path: Path) -> None:
+        _write_conf(tmp_path, "local.conf", 'DM_VERITY_IMAGE = "core-image-minimal"\n')
+        result = self._detect(tmp_path)
+        assert isinstance(result, MechanismResult)
+
+    def test_commented_dm_verity_image_ignored(self, tmp_path: Path) -> None:
+        _write_conf(tmp_path, "local.conf", '# DM_VERITY_IMAGE = "core-image-minimal"\n')
+        result = self._detect(tmp_path)
+        assert result.present is False
+
+    def test_commented_dm_verity_image_type_ignored(self, tmp_path: Path) -> None:
+        _write_conf(tmp_path, "local.conf", '# DM_VERITY_IMAGE_TYPE = "ext4"\n')
+        result = self._detect(tmp_path)
+        assert result.present is False
+
+    # --- Scenario: artifact detection --------------------------------------
+
+    def test_verity_file_marks_present(self, tmp_path: Path) -> None:
+        deploy = _create_deploy_dir(tmp_path)
+        verity = deploy / "core-image-minimal.verity"
+        verity.write_bytes(b"\x00" * 32)
+        result = self._detect(tmp_path)
+        assert result.present is True
+        joined = " ".join(result.evidence)
+        assert "core-image-minimal.verity" in joined or str(verity) in joined
+
+    def test_hashtree_file_marks_present(self, tmp_path: Path) -> None:
+        deploy = _create_deploy_dir(tmp_path)
+        ht = deploy / "core-image-minimal.hashtree"
+        ht.write_bytes(b"\x00" * 32)
+        result = self._detect(tmp_path)
+        assert result.present is True
+        joined = " ".join(result.evidence)
+        assert "core-image-minimal.hashtree" in joined or str(ht) in joined
+
+    def test_verity_artifact_anywhere_under_images(self, tmp_path: Path) -> None:
+        # Verity artifacts may sit under per-machine subdirectories; the
+        # detector must recurse into tmp/deploy/images/.
+        nested = tmp_path / "tmp" / "deploy" / "images" / "qemux86-64"
+        nested.mkdir(parents=True)
+        (nested / "core-image-minimal.verity").write_bytes(b"\x00" * 32)
+        result = self._detect(tmp_path)
+        assert result.present is True
+
+    def test_present_when_both_config_and_artifact(self, tmp_path: Path) -> None:
+        deploy = _create_deploy_dir(tmp_path)
+        (deploy / "core-image-minimal.verity").write_bytes(b"\x00" * 32)
+        _write_conf(tmp_path, "local.conf", 'DM_VERITY_IMAGE = "core-image-minimal"\n')
+        result = self._detect(tmp_path)
+        assert result.present is True
+        # Both signals should be reflected in evidence.
+        joined = " ".join(result.evidence)
+        assert "DM_VERITY_IMAGE" in joined
+        assert ".verity" in joined or "core-image-minimal.verity" in joined
+
+    # --- Scenario: absence -------------------------------------------------
+
+    def test_absent_when_no_config_and_no_artifacts(self, tmp_path: Path) -> None:
+        result = self._detect(tmp_path)
+        assert result.present is False
+        assert result.evidence == []
+        assert result.misconfigurations == []
+
+    def test_absent_when_unrelated_conf(self, tmp_path: Path) -> None:
+        _write_conf(tmp_path, "local.conf", 'MACHINE = "qemux86-64"\n')
+        result = self._detect(tmp_path)
+        assert result.present is False
+
+    def test_absent_when_only_unrelated_files_in_deploy(self, tmp_path: Path) -> None:
+        deploy = _create_deploy_dir(tmp_path)
+        (deploy / "image.ext4").write_bytes(b"\x00" * 16)
+        (deploy / "image.cpio").write_bytes(b"\x00" * 16)
+        result = self._detect(tmp_path)
+        assert result.present is False
+
+    # --- Confidence --------------------------------------------------------
+
+    def test_confidence_high_when_present(self, tmp_path: Path) -> None:
+        _write_conf(tmp_path, "local.conf", 'DM_VERITY_IMAGE = "core-image-minimal"\n')
+        result = self._detect(tmp_path)
+        # dm-verity detection is a deterministic config / file-extension
+        # signal -- when present, confidence is high.
+        assert result.confidence == "high"
+
+    # --- Edge cases --------------------------------------------------------
+
+    def test_binary_conf_file_does_not_crash(self, tmp_path: Path) -> None:
+        conf_dir = tmp_path / "conf"
+        conf_dir.mkdir()
+        (conf_dir / "local.conf").write_bytes(b"\x00\xff\xfe" * 100)
+        result = self._detect(tmp_path)
+        assert isinstance(result, MechanismResult)
+        assert result.present is False
