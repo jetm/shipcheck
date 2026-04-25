@@ -725,3 +725,297 @@ class TestDmVerityDetector:
         result = self._detect(tmp_path)
         assert isinstance(result, MechanismResult)
         assert result.present is False
+
+
+# ---------------------------------------------------------------------------
+# IMA/EVM detector (task 1.6)
+# ---------------------------------------------------------------------------
+
+
+def _write_kernel_config(build_dir: Path, content: str, *, recipe: str = "linux-yocto") -> Path:
+    """Write a kernel ``.config`` under tmp/work/<arch>/<recipe>/<ver>/.config."""
+    work = build_dir / "tmp" / "work" / "qemux86_64-poky-linux" / recipe / "6.6.30+git0+abc-r0"
+    work.mkdir(parents=True, exist_ok=True)
+    cfg = work / ".config"
+    cfg.write_text(content)
+    return cfg
+
+
+def _write_license_manifest(
+    build_dir: Path, content: str, *, image: str = "core-image-minimal"
+) -> Path:
+    """Write a license.manifest under tmp/deploy/licenses/<image>/license.manifest."""
+    lic_dir = build_dir / "tmp" / "deploy" / "licenses" / image
+    lic_dir.mkdir(parents=True, exist_ok=True)
+    manifest = lic_dir / "license.manifest"
+    manifest.write_text(content)
+    return manifest
+
+
+def _write_bootargs(build_dir: Path, content: str, *, machine: str = "machine") -> Path:
+    """Write a bootargs file under tmp/deploy/images/<machine>/bootargs."""
+    deploy = build_dir / "tmp" / "deploy" / "images" / machine
+    deploy.mkdir(parents=True, exist_ok=True)
+    bootargs = deploy / "bootargs"
+    bootargs.write_text(content)
+    return bootargs
+
+
+class TestImaEvmDetector:
+    """IMA/EVM detector returning ``MechanismResult``.
+
+    Covers the four-signal hierarchy in design.md "IMA/EVM detection
+    signal hierarchy":
+
+    1. Kernel ``.config`` symbols (``CONFIG_IMA=y``,
+       ``CONFIG_IMA_APPRAISE=y``, ``CONFIG_EVM=y``) under
+       ``tmp/work/.../linux-yocto*/.config``. Two or more → high; single → medium.
+    2. License manifest entry ``ima-evm-utils`` under
+       ``tmp/deploy/licenses/*/license.manifest``. Combined with kernel
+       config → high; alone → medium.
+    3. ``IMAGE_INSTALL`` reference to ``ima-evm-utils`` or
+       ``ima-policy-*`` in ``conf/local.conf`` / ``conf/auto.conf``.
+       Reported as low confidence when no other signal is present.
+    4. Boot-arg evidence (``ima_policy=`` in
+       ``tmp/deploy/images/*/bootargs``). Best-effort supplementary;
+       raises confidence one tier when combined with another signal but
+       does not stand alone.
+
+    The detector lives at ``shipcheck.checks.code_integrity.ima_evm`` and
+    exposes a ``detect(build_dir, config)`` callable that returns a
+    ``MechanismResult``.
+    """
+
+    def _detect(self, build_dir: Path, config: dict | None = None) -> MechanismResult:
+        from shipcheck.checks.code_integrity.ima_evm import detect
+
+        return detect(build_dir, config or {})
+
+    # --- Scenario: absence -------------------------------------------------
+
+    def test_returns_mechanism_result(self, tmp_path: Path) -> None:
+        result = self._detect(tmp_path)
+        assert isinstance(result, MechanismResult)
+
+    def test_absent_when_no_signals(self, tmp_path: Path) -> None:
+        result = self._detect(tmp_path)
+        assert result.present is False
+        assert result.evidence == []
+        assert result.misconfigurations == []
+
+    def test_absent_when_unrelated_conf_only(self, tmp_path: Path) -> None:
+        _write_conf(tmp_path, "local.conf", 'MACHINE = "qemux86-64"\n')
+        result = self._detect(tmp_path)
+        assert result.present is False
+
+    # --- Scenario 1: kernel .config symbols --------------------------------
+
+    def test_two_kernel_symbols_high_confidence(self, tmp_path: Path) -> None:
+        _write_kernel_config(
+            tmp_path,
+            "CONFIG_IMA=y\nCONFIG_IMA_APPRAISE=y\n# CONFIG_EVM is not set\n",
+        )
+        result = self._detect(tmp_path)
+        assert result.present is True
+        assert result.confidence == "high"
+
+    def test_three_kernel_symbols_high_confidence(self, tmp_path: Path) -> None:
+        _write_kernel_config(
+            tmp_path,
+            "CONFIG_IMA=y\nCONFIG_IMA_APPRAISE=y\nCONFIG_EVM=y\n",
+        )
+        result = self._detect(tmp_path)
+        assert result.present is True
+        assert result.confidence == "high"
+
+    def test_single_kernel_symbol_medium_confidence(self, tmp_path: Path) -> None:
+        _write_kernel_config(tmp_path, "CONFIG_IMA=y\n")
+        result = self._detect(tmp_path)
+        assert result.present is True
+        assert result.confidence == "medium"
+
+    def test_kernel_config_evidence_lists_matched_symbols(self, tmp_path: Path) -> None:
+        _write_kernel_config(tmp_path, "CONFIG_IMA=y\nCONFIG_EVM=y\n")
+        result = self._detect(tmp_path)
+        joined = " ".join(result.evidence)
+        assert "CONFIG_IMA" in joined
+        assert "CONFIG_EVM" in joined
+
+    def test_kernel_config_not_set_lines_ignored(self, tmp_path: Path) -> None:
+        _write_kernel_config(
+            tmp_path,
+            "# CONFIG_IMA is not set\n# CONFIG_EVM is not set\n",
+        )
+        result = self._detect(tmp_path)
+        assert result.present is False
+
+    def test_kernel_config_n_value_ignored(self, tmp_path: Path) -> None:
+        _write_kernel_config(tmp_path, "CONFIG_IMA=n\nCONFIG_EVM=n\n")
+        result = self._detect(tmp_path)
+        assert result.present is False
+
+    def test_kernel_config_module_value_counts(self, tmp_path: Path) -> None:
+        # ``=m`` (module) is a valid enable in Kconfig and should count.
+        _write_kernel_config(tmp_path, "CONFIG_IMA=m\nCONFIG_EVM=m\n")
+        result = self._detect(tmp_path)
+        assert result.present is True
+
+    def test_kernel_config_under_other_recipe_directory(self, tmp_path: Path) -> None:
+        # The detector globs ``linux-yocto*`` so ``linux-yocto-rt`` should
+        # also be found.
+        _write_kernel_config(
+            tmp_path,
+            "CONFIG_IMA=y\nCONFIG_EVM=y\n",
+            recipe="linux-yocto-rt",
+        )
+        result = self._detect(tmp_path)
+        assert result.present is True
+
+    # --- Scenario 2: license manifest --------------------------------------
+
+    def test_license_manifest_alone_medium_confidence(self, tmp_path: Path) -> None:
+        _write_license_manifest(
+            tmp_path,
+            "PACKAGE NAME: ima-evm-utils\nPACKAGE VERSION: 1.5\nLICENSE: GPL-2.0-only\n\n",
+        )
+        result = self._detect(tmp_path)
+        assert result.present is True
+        assert result.confidence == "medium"
+
+    def test_license_manifest_evidence_includes_package(self, tmp_path: Path) -> None:
+        _write_license_manifest(
+            tmp_path,
+            "PACKAGE NAME: ima-evm-utils\nPACKAGE VERSION: 1.5\nLICENSE: GPL-2.0-only\n\n",
+        )
+        result = self._detect(tmp_path)
+        joined = " ".join(result.evidence)
+        assert "ima-evm-utils" in joined
+
+    def test_license_manifest_with_kernel_config_high_confidence(self, tmp_path: Path) -> None:
+        # license manifest + single kernel symbol → high
+        # (combining license manifest with kernel config raises confidence).
+        _write_kernel_config(tmp_path, "CONFIG_IMA=y\n")
+        _write_license_manifest(
+            tmp_path,
+            "PACKAGE NAME: ima-evm-utils\nPACKAGE VERSION: 1.5\nLICENSE: GPL-2.0-only\n\n",
+        )
+        result = self._detect(tmp_path)
+        assert result.present is True
+        assert result.confidence == "high"
+
+    def test_license_manifest_unrelated_package_ignored(self, tmp_path: Path) -> None:
+        _write_license_manifest(
+            tmp_path,
+            "PACKAGE NAME: openssl\nPACKAGE VERSION: 3.0\nLICENSE: Apache-2.0\n\n",
+        )
+        result = self._detect(tmp_path)
+        assert result.present is False
+
+    # --- Scenario 3: IMAGE_INSTALL references ------------------------------
+
+    def test_image_install_ima_evm_utils_low_confidence(self, tmp_path: Path) -> None:
+        _write_conf(tmp_path, "local.conf", 'IMAGE_INSTALL:append = " ima-evm-utils"\n')
+        result = self._detect(tmp_path)
+        assert result.present is True
+        assert result.confidence == "low"
+
+    def test_image_install_ima_policy_pattern(self, tmp_path: Path) -> None:
+        _write_conf(tmp_path, "local.conf", 'IMAGE_INSTALL:append = " ima-policy-hashed"\n')
+        result = self._detect(tmp_path)
+        assert result.present is True
+        assert result.confidence == "low"
+
+    def test_image_install_in_auto_conf(self, tmp_path: Path) -> None:
+        _write_conf(tmp_path, "auto.conf", 'IMAGE_INSTALL += "ima-evm-utils"\n')
+        result = self._detect(tmp_path)
+        assert result.present is True
+
+    def test_commented_image_install_ignored(self, tmp_path: Path) -> None:
+        _write_conf(tmp_path, "local.conf", '# IMAGE_INSTALL:append = " ima-evm-utils"\n')
+        result = self._detect(tmp_path)
+        assert result.present is False
+
+    def test_image_install_evidence_mentions_package(self, tmp_path: Path) -> None:
+        _write_conf(tmp_path, "local.conf", 'IMAGE_INSTALL:append = " ima-evm-utils"\n')
+        result = self._detect(tmp_path)
+        joined = " ".join(result.evidence)
+        assert "ima-evm-utils" in joined or "IMAGE_INSTALL" in joined
+
+    # --- Scenario 4: boot-arg evidence -------------------------------------
+
+    def test_boot_arg_alone_does_not_mark_present(self, tmp_path: Path) -> None:
+        # Boot args are supplementary -- they cannot stand alone.
+        _write_bootargs(tmp_path, "console=ttyS0 ima_policy=tcb\n")
+        result = self._detect(tmp_path)
+        assert result.present is False
+
+    def test_boot_arg_raises_confidence_one_tier(self, tmp_path: Path) -> None:
+        # IMAGE_INSTALL alone is low; with a boot-arg signal it should
+        # rise to medium.
+        _write_conf(tmp_path, "local.conf", 'IMAGE_INSTALL:append = " ima-evm-utils"\n')
+        _write_bootargs(tmp_path, "console=ttyS0 ima_policy=tcb\n")
+        result = self._detect(tmp_path)
+        assert result.present is True
+        assert result.confidence == "medium"
+
+    def test_boot_arg_does_not_exceed_high(self, tmp_path: Path) -> None:
+        # Already-high confidence stays at high when a boot-arg is added.
+        _write_kernel_config(
+            tmp_path,
+            "CONFIG_IMA=y\nCONFIG_IMA_APPRAISE=y\nCONFIG_EVM=y\n",
+        )
+        _write_bootargs(tmp_path, "ima_policy=appraise_tcb\n")
+        result = self._detect(tmp_path)
+        assert result.present is True
+        assert result.confidence == "high"
+
+    # --- Combined scenarios ------------------------------------------------
+
+    def test_all_four_signals_high_confidence(self, tmp_path: Path) -> None:
+        _write_kernel_config(
+            tmp_path,
+            "CONFIG_IMA=y\nCONFIG_IMA_APPRAISE=y\nCONFIG_EVM=y\n",
+        )
+        _write_license_manifest(
+            tmp_path,
+            "PACKAGE NAME: ima-evm-utils\nPACKAGE VERSION: 1.5\nLICENSE: GPL-2.0-only\n\n",
+        )
+        _write_conf(tmp_path, "local.conf", 'IMAGE_INSTALL:append = " ima-evm-utils"\n')
+        _write_bootargs(tmp_path, "ima_policy=appraise_tcb\n")
+        result = self._detect(tmp_path)
+        assert result.present is True
+        assert result.confidence == "high"
+
+    def test_misconfigurations_always_empty(self, tmp_path: Path) -> None:
+        # The IMA/EVM detector emits no per-mechanism findings; absence is
+        # surfaced by the aggregator (task 1.7).
+        _write_kernel_config(tmp_path, "CONFIG_IMA=y\nCONFIG_EVM=y\n")
+        result = self._detect(tmp_path)
+        assert result.misconfigurations == []
+
+    # --- Edge cases --------------------------------------------------------
+
+    def test_binary_kernel_config_does_not_crash(self, tmp_path: Path) -> None:
+        work = tmp_path / "tmp" / "work" / "arch" / "linux-yocto" / "v"
+        work.mkdir(parents=True)
+        (work / ".config").write_bytes(b"\x00\xff\xfe" * 100)
+        result = self._detect(tmp_path)
+        assert isinstance(result, MechanismResult)
+        assert result.present is False
+
+    def test_binary_license_manifest_does_not_crash(self, tmp_path: Path) -> None:
+        lic_dir = tmp_path / "tmp" / "deploy" / "licenses" / "core-image-minimal"
+        lic_dir.mkdir(parents=True)
+        (lic_dir / "license.manifest").write_bytes(b"\x00\xff\xfe" * 100)
+        result = self._detect(tmp_path)
+        assert isinstance(result, MechanismResult)
+        assert result.present is False
+
+    def test_binary_bootargs_does_not_crash(self, tmp_path: Path) -> None:
+        deploy = tmp_path / "tmp" / "deploy" / "images" / "machine"
+        deploy.mkdir(parents=True)
+        (deploy / "bootargs").write_bytes(b"\x00\xff\xfe" * 100)
+        # Add another signal so present=True can be evaluated.
+        _write_kernel_config(tmp_path, "CONFIG_IMA=y\n")
+        result = self._detect(tmp_path)
+        assert isinstance(result, MechanismResult)
