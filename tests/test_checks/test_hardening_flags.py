@@ -27,7 +27,7 @@ from shipcheck.checks.hardening_flags import (
     detect_signal_a,
     detect_signal_b,
 )
-from shipcheck.models import BaseCheck
+from shipcheck.models import BaseCheck, CheckStatus
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -298,3 +298,172 @@ class TestRunSmoke:
         _write_conf(tmp_path, "local.conf", 'MACHINE = "qemux86-64"\n')
         result = HardeningFlagsCheck().run(tmp_path, {})
         assert "No compile-time hardening evidence" in result.summary
+
+
+class TestStatus:
+    """Status semantics across the four A/B truth-table cells.
+
+    Per ``specs/hardening-flags/spec.md`` Requirement: Status
+    semantics:
+
+    - PASS when signal A is present AND signal B reports at least one
+      flag class.
+    - WARN when only one of the two signals indicates hardening.
+    - FAIL when neither signal indicates any hardening evidence.
+    """
+
+    def test_pass_when_both_signals_present(self, tmp_path: Path) -> None:
+        # Signal A: security_flags.inc included.
+        # Signal B: at least one hardening flag.
+        _write_conf(
+            tmp_path,
+            "local.conf",
+            "require conf/distro/include/security_flags.inc\n"
+            'TUNE_CCARGS = "-fPIE -Wl,-z,relro -Wl,-z,now"\n',
+        )
+        result = HardeningFlagsCheck().run(tmp_path, {})
+        assert result.status == CheckStatus.PASS, (
+            f"expected PASS when both signals present, got {result.status}"
+        )
+        # PASS path emits no findings: the build already meets the
+        # spec's "both signals indicate hardening" condition.
+        assert result.findings == []
+
+    def test_warn_when_only_signal_a_present(self, tmp_path: Path) -> None:
+        # Signal A only: security_flags.inc included but no global
+        # TUNE_CCARGS / SELECTED_OPTIMIZATION hardening flags.
+        _write_conf(
+            tmp_path,
+            "local.conf",
+            'require conf/distro/include/security_flags.inc\nMACHINE = "qemux86-64"\n',
+        )
+        result = HardeningFlagsCheck().run(tmp_path, {})
+        assert result.status == CheckStatus.WARN
+        assert len(result.findings) == 1
+        finding = result.findings[0]
+        # The finding text must clearly identify which signal was
+        # absent so the user knows what to add.
+        assert "security_flags.inc" in finding.message
+        assert "TUNE_CCARGS" in finding.message or "SELECTED_OPTIMIZATION" in finding.message
+        # Remediation MUST be present per spec (task 3.2 explicitly
+        # requires "remediation text").
+        assert finding.remediation is not None
+        assert finding.remediation != ""
+
+    def test_warn_when_only_signal_b_present(self, tmp_path: Path) -> None:
+        # Signal B only: hardening flags configured custom without
+        # the standard security_flags.inc include.
+        _write_conf(
+            tmp_path,
+            "local.conf",
+            'TUNE_CCARGS = "-fPIE -fstack-protector-strong"\n',
+        )
+        result = HardeningFlagsCheck().run(tmp_path, {})
+        assert result.status == CheckStatus.WARN
+        assert len(result.findings) == 1
+        finding = result.findings[0]
+        # The finding text must mention security_flags.inc (the
+        # missing signal) so the user can map the warning to a fix.
+        assert "security_flags.inc" in finding.message
+        assert finding.remediation is not None
+        assert finding.remediation != ""
+
+    def test_fail_when_neither_signal_present(self, tmp_path: Path) -> None:
+        # Neither signal: empty conf, no security_flags.inc, no
+        # hardening tokens.
+        _write_conf(tmp_path, "local.conf", 'MACHINE = "qemux86-64"\n')
+        result = HardeningFlagsCheck().run(tmp_path, {})
+        assert result.status == CheckStatus.FAIL
+        assert len(result.findings) == 1
+        finding = result.findings[0]
+        # A FAIL must surface a high-or-critical-severity finding so
+        # ``--fail-on high`` gating fires correctly.
+        assert finding.severity in {"critical", "high"}
+        # Remediation must be actionable.
+        assert finding.remediation is not None
+        assert finding.remediation != ""
+
+    def test_fail_when_no_conf_files_at_all(self, tmp_path: Path) -> None:
+        # Edge case: no conf/ directory at all collapses into "no
+        # signals", which the spec treats as FAIL.
+        result = HardeningFlagsCheck().run(tmp_path, {})
+        assert result.status == CheckStatus.FAIL
+
+
+class TestCraMapping:
+    """CRA mapping per finding and per result.
+
+    Per ``specs/hardening-flags/spec.md`` Requirement: cra_mapping per
+    finding and per result:
+
+    - Each finding's ``cra_mapping`` is non-empty and a subset of
+      ``["I.P2.c", "I.P2.j"]``.
+    - ``CheckResult.cra_mapping`` is exactly ``["I.P2.c", "I.P2.j"]``.
+    """
+
+    _ALLOWED: set[str] = {"I.P2.c", "I.P2.j"}
+
+    def test_check_result_cra_mapping_is_full_list_when_fail(self, tmp_path: Path) -> None:
+        # Independent of which truth-table cell the build hits, the
+        # CheckResult.cra_mapping is the full list.
+        _write_conf(tmp_path, "local.conf", 'MACHINE = "qemux86-64"\n')
+        result = HardeningFlagsCheck().run(tmp_path, {})
+        assert result.cra_mapping == ["I.P2.c", "I.P2.j"]
+
+    def test_check_result_cra_mapping_full_for_pass_case(self, tmp_path: Path) -> None:
+        _write_conf(
+            tmp_path,
+            "local.conf",
+            "require conf/distro/include/security_flags.inc\n"
+            'TUNE_CCARGS = "-fPIE -Wl,-z,relro -Wl,-z,now"\n',
+        )
+        result = HardeningFlagsCheck().run(tmp_path, {})
+        assert result.cra_mapping == ["I.P2.c", "I.P2.j"]
+
+    def test_finding_cra_mapping_subset_when_signal_a_only(self, tmp_path: Path) -> None:
+        _write_conf(
+            tmp_path,
+            "local.conf",
+            "require conf/distro/include/security_flags.inc\n",
+        )
+        result = HardeningFlagsCheck().run(tmp_path, {})
+        assert result.findings, "expected one finding for signal-A-only"
+        for finding in result.findings:
+            assert finding.cra_mapping, "per-finding cra_mapping must be non-empty"
+            assert set(finding.cra_mapping).issubset(self._ALLOWED), (
+                f"per-finding cra_mapping {finding.cra_mapping!r} is not a "
+                f"subset of {sorted(self._ALLOWED)}"
+            )
+
+    def test_finding_cra_mapping_subset_when_signal_b_only(self, tmp_path: Path) -> None:
+        _write_conf(
+            tmp_path,
+            "local.conf",
+            'TUNE_CCARGS = "-fPIE"\n',
+        )
+        result = HardeningFlagsCheck().run(tmp_path, {})
+        assert result.findings, "expected one finding for signal-B-only"
+        for finding in result.findings:
+            assert finding.cra_mapping
+            assert set(finding.cra_mapping).issubset(self._ALLOWED)
+
+    def test_finding_cra_mapping_subset_when_neither(self, tmp_path: Path) -> None:
+        _write_conf(tmp_path, "local.conf", 'MACHINE = "qemux86-64"\n')
+        result = HardeningFlagsCheck().run(tmp_path, {})
+        assert result.findings, "expected one finding for FAIL case"
+        for finding in result.findings:
+            assert finding.cra_mapping
+            assert set(finding.cra_mapping).issubset(self._ALLOWED)
+
+    def test_pass_case_emits_no_findings(self, tmp_path: Path) -> None:
+        # PASS: both signals present, no findings, but result still
+        # carries the full CRA mapping.
+        _write_conf(
+            tmp_path,
+            "local.conf",
+            "require conf/distro/include/security_flags.inc\n"
+            'TUNE_CCARGS = "-fPIE -Wl,-z,relro -Wl,-z,now"\n',
+        )
+        result = HardeningFlagsCheck().run(tmp_path, {})
+        assert result.findings == []
+        assert result.cra_mapping == ["I.P2.c", "I.P2.j"]

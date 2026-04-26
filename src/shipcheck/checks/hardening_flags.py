@@ -21,10 +21,17 @@ Per-recipe override syntax (``TUNE_CCARGS:append:pn-foo``,
 ``specs/hardening-flags/spec.md`` Requirement: Global build-config
 scope only. Per-recipe coverage is deferred to a follow-on change.
 
+Status semantics (per spec Requirement: Status semantics):
+
+- **PASS** when signal A is present AND signal B reports at least one
+  flag class.
+- **WARN** when only one of the two signals indicates hardening.
+- **FAIL** when neither signal indicates any hardening evidence.
+
 Maps to CRA Annex I Part II §c (no known exploitable vulnerabilities)
-and §j (limit attack surfaces). Status semantics (PASS / WARN / FAIL
-across the two signals) and per-finding ``cra_mapping`` wiring belong
-to task 3.2.
+and §j (limit attack surfaces). ``CheckResult.cra_mapping`` is the
+full list ``["I.P2.c", "I.P2.j"]``; per-finding ``cra_mapping`` is a
+non-empty subset of that list.
 """
 
 from __future__ import annotations
@@ -43,9 +50,19 @@ logger = logging.getLogger(__name__)
 
 # CRA catalog IDs covered by this check, applied as the
 # ``CheckResult.cra_mapping`` regardless of which signal (if any)
-# fires. Per-finding ``cra_mapping`` is a non-empty subset wired up by
-# task 3.2.
+# fires. Per-finding ``cra_mapping`` is a non-empty subset.
 CRA_MAPPING: list[str] = ["I.P2.c", "I.P2.j"]
+
+# Per-finding CRA subsets. The two signals each emphasise a slightly
+# different Annex I Part II concern: signal A is distro-wide hardening
+# intent (§j -- limit attack surfaces by enabling distro-level
+# hardening) while signal B is per-flag exploit mitigation (§c -- no
+# known exploitable vulnerabilities, achieved via FORTIFY_SOURCE,
+# stack-protector, PIE, RELRO). The "neither" case cites both because
+# the absence covers both concerns.
+_CRA_SIGNAL_A_ONLY: list[str] = ["I.P2.j"]
+_CRA_SIGNAL_B_ONLY: list[str] = ["I.P2.c"]
+_CRA_BOTH: list[str] = ["I.P2.c", "I.P2.j"]
 
 _TOP_LEVEL_CONF_FILES = ("local.conf", "auto.conf")
 """Conf files read directly under ``build_dir/conf/``.
@@ -76,6 +93,24 @@ _STACK_PROTECTOR_TOKEN = "-fstack-protector-strong"
 _PIE_TOKEN = "-fPIE"
 _RELRO_TOKEN = "-Wl,-z,relro"
 _NOW_TOKEN = "-Wl,-z,now"
+
+_REMEDIATION_INCLUDE_SECURITY_FLAGS = (
+    "Add `require conf/distro/include/security_flags.inc` to "
+    "conf/local.conf (or to your distro conf) so the openembedded-core "
+    "hardening defaults apply across every recipe in the build."
+)
+_REMEDIATION_ADD_TUNE_CCARGS = (
+    "Either include conf/distro/include/security_flags.inc, or extend "
+    "TUNE_CCARGS / SELECTED_OPTIMIZATION with -D_FORTIFY_SOURCE=2, "
+    "-fstack-protector-strong, -fPIE, and -Wl,-z,relro -Wl,-z,now to "
+    "enable the standard compile-time hardenings."
+)
+_REMEDIATION_ADD_BOTH = (
+    "Include conf/distro/include/security_flags.inc in conf/local.conf "
+    "or your distro conf to enable the standard hardening flags. "
+    "Alternatively, set TUNE_CCARGS to include -D_FORTIFY_SOURCE=2, "
+    "-fstack-protector-strong, -fPIE, and -Wl,-z,relro -Wl,-z,now."
+)
 
 
 @dataclass
@@ -284,16 +319,28 @@ def detect_signal_b(build_dir: Path) -> SignalBResult:
     )
 
 
+def _detected_flag_names(signal_b: SignalBResult) -> list[str]:
+    """Human-readable labels for the flag classes signal B detected."""
+    return [
+        name
+        for name, flag in (
+            ("FORTIFY_SOURCE", signal_b.fortify_source),
+            ("stack-protector", signal_b.stack_protector),
+            ("PIE", signal_b.pie),
+            ("RELRO+now", signal_b.relro_now),
+        )
+        if flag
+    ]
+
+
 class HardeningFlagsCheck(BaseCheck):
     """Detect compile-time hardening evidence at global build-config scope.
 
     Composes signal A (``security_flags.inc`` inclusion) and signal B
-    (``TUNE_CCARGS`` / ``SELECTED_OPTIMIZATION`` parsing) and surfaces
-    per-class detection in the result. Status semantics (PASS / WARN /
-    FAIL) and per-finding ``cra_mapping`` wiring are layered on by
-    task 3.2 -- this scaffold returns a minimal informational result
-    so the registry, CLI plumbing, and dossier renderers can pick up
-    the new check without a follow-up rewrite.
+    (``TUNE_CCARGS`` / ``SELECTED_OPTIMIZATION`` parsing) and produces
+    a CheckResult whose status is determined directly by the four
+    A/B truth-table cells (PASS / WARN-A / WARN-B / FAIL) per the
+    spec's Status semantics requirement.
     """
 
     id = "hardening-flags"
@@ -306,32 +353,86 @@ class HardeningFlagsCheck(BaseCheck):
         signal_a = detect_signal_a(build_dir)
         signal_b = detect_signal_b(build_dir)
 
-        # Status wiring lives in task 3.2; for now classify by whether
-        # *any* hardening evidence was observed so the result is not
-        # silently misleading.
         findings: list[Finding] = []
-        any_evidence = signal_a.present or signal_b.any_present
-        status = CheckStatus.PASS if any_evidence else CheckStatus.SKIP
+        a = signal_a.present
+        b = signal_b.any_present
 
-        if any_evidence:
-            summary_parts: list[str] = []
-            if signal_a.present:
-                count = len(signal_a.including_files)
-                summary_parts.append(f"security_flags.inc included via {count} file(s)")
-            if signal_b.any_present:
-                detected = [
-                    name
-                    for name, flag in (
-                        ("FORTIFY_SOURCE", signal_b.fortify_source),
-                        ("stack-protector", signal_b.stack_protector),
-                        ("PIE", signal_b.pie),
-                        ("RELRO+now", signal_b.relro_now),
-                    )
-                    if flag
-                ]
-                summary_parts.append(f"hardening flags: {', '.join(detected)}")
-            summary = "; ".join(summary_parts)
+        if a and b:
+            # PASS: both signals indicate hardening. No findings.
+            status = CheckStatus.PASS
+            detected = _detected_flag_names(signal_b)
+            count = len(signal_a.including_files)
+            summary = (
+                f"security_flags.inc included via {count} file(s); "
+                f"hardening flags: {', '.join(detected)}"
+            )
+        elif a and not b:
+            # WARN: security_flags.inc included but no flags observed
+            # in the global TUNE_CCARGS / SELECTED_OPTIMIZATION. The
+            # include is the strong intent signal; severity is
+            # ``medium`` -- this is a configuration-quality warning,
+            # not a shipping-blocker.
+            status = CheckStatus.WARN
+            count = len(signal_a.including_files)
+            findings.append(
+                Finding(
+                    message=(
+                        "security_flags.inc is included but no hardening "
+                        "flags were observed in TUNE_CCARGS or "
+                        "SELECTED_OPTIMIZATION at global scope"
+                    ),
+                    severity="medium",
+                    remediation=_REMEDIATION_ADD_TUNE_CCARGS,
+                    cra_mapping=list(_CRA_SIGNAL_A_ONLY),
+                )
+            )
+            summary = (
+                f"security_flags.inc included via {count} file(s); "
+                "no hardening flags observed in TUNE_CCARGS / "
+                "SELECTED_OPTIMIZATION"
+            )
+        elif b and not a:
+            # WARN: hardening flags present but security_flags.inc not
+            # included (custom hardening setup). Severity ``medium``:
+            # the build has hardening evidence, just not via the
+            # standard distro include path.
+            status = CheckStatus.WARN
+            detected = _detected_flag_names(signal_b)
+            findings.append(
+                Finding(
+                    message=(
+                        "Hardening flags are present in TUNE_CCARGS / "
+                        "SELECTED_OPTIMIZATION but security_flags.inc "
+                        "is not included (custom hardening setup): "
+                        f"{', '.join(detected)}"
+                    ),
+                    severity="medium",
+                    remediation=_REMEDIATION_INCLUDE_SECURITY_FLAGS,
+                    cra_mapping=list(_CRA_SIGNAL_B_ONLY),
+                )
+            )
+            summary = (
+                "Custom hardening setup: hardening flags present "
+                f"({', '.join(detected)}) without security_flags.inc"
+            )
         else:
+            # FAIL: neither signal indicates hardening. Severity
+            # ``high`` -- a build with no compile-time hardening
+            # evidence is a CRA Annex I Part II §c / §j gap.
+            status = CheckStatus.FAIL
+            findings.append(
+                Finding(
+                    message=(
+                        "No compile-time hardening evidence detected: "
+                        "security_flags.inc is not included and no "
+                        "hardening flags were observed in TUNE_CCARGS "
+                        "or SELECTED_OPTIMIZATION at global scope"
+                    ),
+                    severity="high",
+                    remediation=_REMEDIATION_ADD_BOTH,
+                    cra_mapping=list(_CRA_BOTH),
+                )
+            )
             summary = "No compile-time hardening evidence detected"
 
         return CheckResult(
