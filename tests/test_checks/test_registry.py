@@ -264,12 +264,12 @@ class TestCheckRegistryFiltering:
 class TestDefaultRegistry:
     """Tests for the default registry with built-in checks."""
 
-    def test_default_registry_has_seven_checks(self) -> None:
+    def test_default_registry_has_eight_checks(self) -> None:
         from shipcheck.checks.registry import get_default_registry
 
         registry = get_default_registry()
 
-        assert len(registry.checks) == 7
+        assert len(registry.checks) == 8
 
     def test_default_registry_has_builtin_checks(self) -> None:
         from shipcheck.checks.registry import get_default_registry
@@ -279,11 +279,21 @@ class TestDefaultRegistry:
 
         assert "sbom-generation" in check_ids
         assert "cve-tracking" in check_ids
-        assert "secure-boot" in check_ids
-        assert "image-signing" in check_ids
+        assert "code-integrity" in check_ids
+        assert "image-features" in check_ids
+        assert "hardening-flags" in check_ids
         assert "license-audit" in check_ids
         assert "yocto-cve-check" in check_ids
         assert "vuln-reporting" in check_ids
+
+    def test_default_registry_does_not_have_legacy_checks(self) -> None:
+        from shipcheck.checks.registry import get_default_registry
+
+        registry = get_default_registry()
+        check_ids = [c.id for c in registry.checks]
+
+        assert "secure-boot" not in check_ids
+        assert "image-signing" not in check_ids
 
     def test_default_registry_order(self) -> None:
         from shipcheck.checks.registry import get_default_registry
@@ -292,9 +302,10 @@ class TestDefaultRegistry:
         check_ids = [c.id for c in registry.checks]
 
         assert check_ids.index("sbom-generation") < check_ids.index("cve-tracking")
-        assert check_ids.index("cve-tracking") < check_ids.index("secure-boot")
-        assert check_ids.index("secure-boot") < check_ids.index("image-signing")
-        assert check_ids.index("image-signing") < check_ids.index("license-audit")
+        assert check_ids.index("cve-tracking") < check_ids.index("code-integrity")
+        assert check_ids.index("code-integrity") < check_ids.index("image-features")
+        assert check_ids.index("image-features") < check_ids.index("hardening-flags")
+        assert check_ids.index("hardening-flags") < check_ids.index("license-audit")
         assert check_ids.index("license-audit") < check_ids.index("yocto-cve-check")
         assert check_ids.index("yocto-cve-check") < check_ids.index("vuln-reporting")
 
