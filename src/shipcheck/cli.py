@@ -66,8 +66,7 @@ def _build_check_config(config) -> dict:
     cfg: dict = {
         "sbom-generation": asdict(config.sbom),
         "cve-tracking": asdict(config.cve),
-        "secure-boot": asdict(config.secure_boot),
-        "image-signing": asdict(config.image_signing),
+        "code-integrity": asdict(config.code_integrity),
         "license-audit": asdict(config.license_audit),
         "yocto-cve-check": asdict(config.yocto_cve),
         # vuln-reporting needs the product_config_path to locate product.yaml;
@@ -575,8 +574,9 @@ def init() -> None:
 # checks:
 #   - sbom-generation
 #   - cve-tracking
-#   - secure-boot
-#   - image-signing
+#   - code-integrity
+#   - image-features
+#   - hardening-flags
 #   - license-audit
 #   - yocto-cve-check
 #   - vuln-reporting
@@ -595,14 +595,12 @@ def init() -> None:
 #   suppress:
 #     - CVE-2023-1234
 
-# Secure Boot check configuration
-# secure_boot:
+# Code Integrity check configuration (FIT signing, dm-verity, IMA)
+# code_integrity:
 #   known_test_keys: []
-
-# Image Signing check configuration
-# image_signing:
 #   expect_fit: true
 #   expect_verity: true
+#   expect_ima: false
 
 # License audit configuration (parses tmp/deploy/licenses/<image>/license.manifest)
 # license_audit:
