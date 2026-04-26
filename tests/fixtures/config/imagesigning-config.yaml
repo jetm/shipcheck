@@ -1,5 +1,0 @@
-build_dir: ./build
-
-image_signing:
-  expect_fit: true
-  expect_verity: true
