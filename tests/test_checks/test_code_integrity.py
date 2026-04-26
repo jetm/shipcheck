@@ -1019,3 +1019,309 @@ class TestImaEvmDetector:
         _write_kernel_config(tmp_path, "CONFIG_IMA=y\n")
         result = self._detect(tmp_path)
         assert isinstance(result, MechanismResult)
+
+
+# ---------------------------------------------------------------------------
+# CodeIntegrityCheck aggregator (task 1.7)
+# ---------------------------------------------------------------------------
+
+
+class TestCheckAggregator:
+    """``CodeIntegrityCheck.run`` aggregating the four detectors.
+
+    Covers the failure-semantics scenarios from
+    ``specs/code-integrity/spec.md`` Requirement: Failure semantics
+    anchor on mechanism absence:
+
+    1. FAIL only when every detector reports ``present=False``.
+    2. PASS when at least one mechanism is present and valid.
+    3. Status delegates to ``determine_status`` over the union of
+       ``misconfigurations`` when a mechanism is present but
+       misconfigured.
+
+    Plus the ``cra_mapping union covers prior checks`` scenarios:
+    - ``CheckResult.cra_mapping`` is the union ``["I.P1.c", "I.P1.d",
+      "I.P1.f", "I.P1.k"]`` regardless of detected mechanism.
+    - Per-finding ``cra_mapping`` may be narrower (dm-verity findings
+      may carry only ``I.P1.k``; UEFI test-key findings carry
+      ``I.P1.c``, ``I.P1.d``, ``I.P1.f``).
+    """
+
+    def _run(self, build_dir: Path, config: dict | None = None):
+        check = CodeIntegrityCheck()
+        return check.run(build_dir, config or {})
+
+    # --- Scenario 1: FAIL when no mechanism present -----------------------
+
+    def test_fail_when_no_mechanism_present(self, tmp_path: Path) -> None:
+        # Empty build_dir: no conf/, no tmp/, no detector reports present.
+        from shipcheck.models import CheckStatus
+
+        result = self._run(tmp_path)
+        assert result.status == CheckStatus.FAIL
+        assert result.findings, "expected a finding for no-mechanism-present"
+        joined = " ".join(f.message.lower() for f in result.findings)
+        assert "integrity" in joined or "mechanism" in joined
+
+    def test_fail_finding_severity_high(self, tmp_path: Path) -> None:
+        # The "no mechanism present" finding must be high-severity so
+        # ``determine_status`` would also return FAIL if it were the
+        # only finding -- preventing accidental WARN/PASS regressions.
+        result = self._run(tmp_path)
+        assert any(f.severity in {"critical", "high"} for f in result.findings)
+
+    def test_fail_when_no_mechanism_present_summary(self, tmp_path: Path) -> None:
+        result = self._run(tmp_path)
+        # The summary must communicate that no mechanism was detected.
+        assert "no" in result.summary.lower() or "not detected" in result.summary.lower()
+
+    def test_fail_efi_artifacts_alone_do_not_flip_present(self, tmp_path: Path) -> None:
+        # EFI artifacts without a signing class still mean UEFI Secure
+        # Boot is not configured -- the aggregator must FAIL.
+        from shipcheck.models import CheckStatus
+
+        _create_efi_artifacts(tmp_path, "bootx64.efi")
+        result = self._run(tmp_path)
+        assert result.status == CheckStatus.FAIL
+
+    def test_fail_unsigned_fit_alone_does_not_flip_present(self, tmp_path: Path) -> None:
+        # Unsigned FIT artifact: detector returns ``present=False`` but
+        # ships a high-severity finding. With no other mechanism present,
+        # the aggregator still FAILs.
+        from shipcheck.models import CheckStatus
+
+        deploy = _create_deploy_dir(tmp_path)
+        (deploy / "fitImage.itb").write_bytes(FIT_UNSIGNED_CONTENT)
+        result = self._run(tmp_path)
+        assert result.status == CheckStatus.FAIL
+
+    # --- Scenario 2: PASS when one mechanism present and valid ------------
+
+    def test_pass_when_signed_fit_present(self, tmp_path: Path) -> None:
+        from shipcheck.models import CheckStatus
+
+        deploy = _create_deploy_dir(tmp_path)
+        (deploy / "fitImage.itb").write_bytes(FIT_SIGNATURE_MARKER)
+        result = self._run(tmp_path)
+        assert result.status == CheckStatus.PASS
+        assert result.findings == []
+
+    def test_pass_summary_names_mechanism(self, tmp_path: Path) -> None:
+        # The summary must mention which mechanism was detected so the
+        # report consumer can show the user what passed.
+        deploy = _create_deploy_dir(tmp_path)
+        (deploy / "fitImage.itb").write_bytes(FIT_SIGNATURE_MARKER)
+        result = self._run(tmp_path)
+        assert "fit" in result.summary.lower()
+
+    def test_pass_when_dm_verity_present(self, tmp_path: Path) -> None:
+        from shipcheck.models import CheckStatus
+
+        _write_conf(tmp_path, "local.conf", 'DM_VERITY_IMAGE = "core-image-minimal"\n')
+        result = self._run(tmp_path)
+        assert result.status == CheckStatus.PASS
+        assert "verity" in result.summary.lower() or "dm-verity" in result.summary.lower()
+
+    def test_pass_when_ima_evm_present(self, tmp_path: Path) -> None:
+        from shipcheck.models import CheckStatus
+
+        _write_kernel_config(tmp_path, "CONFIG_IMA=y\nCONFIG_EVM=y\n")
+        result = self._run(tmp_path)
+        assert result.status == CheckStatus.PASS
+        assert "ima" in result.summary.lower()
+
+    def test_pass_when_uefi_present_with_clean_keys(self, tmp_path: Path) -> None:
+        from shipcheck.models import CheckStatus
+
+        keys = _create_key_files(tmp_path, "production.key")
+        _write_conf(
+            tmp_path,
+            "local.conf",
+            f'IMAGE_CLASSES += "uefi-sign"\nSECURE_BOOT_SIGNING_KEY = "{keys[0]}"\n',
+        )
+        result = self._run(tmp_path)
+        assert result.status == CheckStatus.PASS
+        assert "uefi" in result.summary.lower() or "secure boot" in result.summary.lower()
+
+    def test_pass_summary_lists_multiple_mechanisms(self, tmp_path: Path) -> None:
+        # When more than one mechanism is present, the summary names them
+        # all so the user sees the full evidence picture.
+        from shipcheck.models import CheckStatus
+
+        deploy = _create_deploy_dir(tmp_path)
+        (deploy / "fitImage.itb").write_bytes(FIT_SIGNATURE_MARKER)
+        _write_conf(tmp_path, "local.conf", 'DM_VERITY_IMAGE = "core-image-minimal"\n')
+        result = self._run(tmp_path)
+        assert result.status == CheckStatus.PASS
+        summary_lower = result.summary.lower()
+        assert "fit" in summary_lower
+        assert "verity" in summary_lower or "dm-verity" in summary_lower
+
+    # --- Scenario 3: status delegates to determine_status -----------------
+
+    def test_warn_when_present_but_medium_misconfiguration(self, tmp_path: Path) -> None:
+        # A present mechanism with only medium/low findings should yield
+        # WARN per ``determine_status`` semantics. We construct this by
+        # patching one detector to return a medium-severity misconfiguration.
+        from unittest.mock import patch
+
+        from shipcheck.checks.code_integrity import MechanismResult
+        from shipcheck.models import CheckStatus, Finding
+
+        med_finding = Finding(
+            message="medium-severity issue",
+            severity="medium",
+            cra_mapping=["I.P1.f"],
+        )
+        present_with_medium = MechanismResult(
+            present=True,
+            confidence="high",
+            evidence=["FIT artifact"],
+            misconfigurations=[med_finding],
+        )
+        absent = MechanismResult(present=False, confidence="low", evidence=[], misconfigurations=[])
+        with (
+            patch("shipcheck.checks.code_integrity.uefi.detect", return_value=absent),
+            patch("shipcheck.checks.code_integrity.fit.detect", return_value=present_with_medium),
+            patch("shipcheck.checks.code_integrity.dm_verity.detect", return_value=absent),
+            patch("shipcheck.checks.code_integrity.ima_evm.detect", return_value=absent),
+        ):
+            result = self._run(tmp_path)
+        assert result.status == CheckStatus.WARN
+        assert med_finding in result.findings
+
+    def test_fail_when_present_but_high_misconfiguration(self, tmp_path: Path) -> None:
+        # The spec scenario "WARN when a mechanism is present but
+        # misconfigured" delegates the actual status to determine_status.
+        # A high-severity finding (e.g. a UEFI test key) yields FAIL, not
+        # WARN -- the spec text "the overall status reflects
+        # determine_status over that finding" is the load-bearing
+        # contract.
+        from shipcheck.models import CheckStatus
+
+        keys = _create_key_files(tmp_path, "test-signing.key")
+        _write_conf(
+            tmp_path,
+            "local.conf",
+            f'IMAGE_CLASSES += "uefi-sign"\nSECURE_BOOT_SIGNING_KEY = "{keys[0]}"\n',
+        )
+        result = self._run(tmp_path)
+        # UEFI is present, but the test-key flag is high-severity.
+        assert result.status == CheckStatus.FAIL
+        # The finding must come from the UEFI detector -- it bubbles up
+        # through the aggregator.
+        joined = " ".join(f.message.lower() for f in result.findings)
+        assert "test" in joined or "development" in joined
+
+    def test_aggregator_unions_misconfigurations_from_all_detectors(self, tmp_path: Path) -> None:
+        # When more than one detector reports findings, the aggregator
+        # must include them all, not just the first.
+        from unittest.mock import patch
+
+        from shipcheck.checks.code_integrity import MechanismResult
+        from shipcheck.models import Finding
+
+        f1 = Finding(message="uefi finding", severity="high", cra_mapping=["I.P1.c"])
+        f2 = Finding(message="fit finding", severity="medium", cra_mapping=["I.P1.f"])
+        uefi_present = MechanismResult(
+            present=True, confidence="high", evidence=["uefi"], misconfigurations=[f1]
+        )
+        fit_present = MechanismResult(
+            present=True, confidence="high", evidence=["fit"], misconfigurations=[f2]
+        )
+        absent = MechanismResult(present=False, confidence="low", evidence=[], misconfigurations=[])
+        with (
+            patch("shipcheck.checks.code_integrity.uefi.detect", return_value=uefi_present),
+            patch("shipcheck.checks.code_integrity.fit.detect", return_value=fit_present),
+            patch("shipcheck.checks.code_integrity.dm_verity.detect", return_value=absent),
+            patch("shipcheck.checks.code_integrity.ima_evm.detect", return_value=absent),
+        ):
+            result = self._run(tmp_path)
+        assert f1 in result.findings
+        assert f2 in result.findings
+
+    # --- Scenario: cra_mapping union covers prior checks ------------------
+
+    def test_check_result_cra_mapping_is_union(self, tmp_path: Path) -> None:
+        # Empty build directory (FAIL path): cra_mapping still equals the
+        # full union per the spec.
+        result = self._run(tmp_path)
+        assert sorted(result.cra_mapping) == sorted(["I.P1.c", "I.P1.d", "I.P1.f", "I.P1.k"])
+
+    def test_check_result_cra_mapping_is_union_when_present(self, tmp_path: Path) -> None:
+        # When a mechanism is present, the union still applies.
+        deploy = _create_deploy_dir(tmp_path)
+        (deploy / "fitImage.itb").write_bytes(FIT_SIGNATURE_MARKER)
+        result = self._run(tmp_path)
+        assert sorted(result.cra_mapping) == sorted(["I.P1.c", "I.P1.d", "I.P1.f", "I.P1.k"])
+
+    def test_per_finding_cra_mapping_remains_narrower(self, tmp_path: Path) -> None:
+        # Per-finding cra_mappings come from the detector and are NOT
+        # widened to the union. UEFI test-key findings should carry
+        # I.P1.c, I.P1.d, I.P1.f and not I.P1.k.
+        keys = _create_key_files(tmp_path, "test-signing.key")
+        _write_conf(
+            tmp_path,
+            "local.conf",
+            f'IMAGE_CLASSES += "uefi-sign"\nSECURE_BOOT_SIGNING_KEY = "{keys[0]}"\n',
+        )
+        result = self._run(tmp_path)
+        test_key_findings = [
+            f
+            for f in result.findings
+            if "test" in f.message.lower() or "development" in f.message.lower()
+        ]
+        assert test_key_findings, "expected a UEFI test-key finding"
+        for f in test_key_findings:
+            assert "I.P1.c" in f.cra_mapping
+            assert "I.P1.d" in f.cra_mapping
+            assert "I.P1.f" in f.cra_mapping
+            # Per spec: UEFI findings need not enumerate I.P1.k.
+            assert "I.P1.k" not in f.cra_mapping
+
+    # --- Wiring -----------------------------------------------------------
+
+    def test_returns_check_result(self, tmp_path: Path) -> None:
+        from shipcheck.models import CheckResult
+
+        result = self._run(tmp_path)
+        assert isinstance(result, CheckResult)
+
+    def test_check_result_identity(self, tmp_path: Path) -> None:
+        result = self._run(tmp_path)
+        assert result.check_id == "code-integrity"
+        assert result.check_name == "Code Integrity"
+
+    def test_run_accepts_code_integrity_config_dict(self, tmp_path: Path) -> None:
+        # The config dict matches ``asdict(CodeIntegrityConfig())`` shape:
+        # the run() method must accept all four keys without error.
+        config = {
+            "known_test_keys": ["staging"],
+            "expect_fit": True,
+            "expect_verity": True,
+            "expect_ima": False,
+        }
+        result = self._run(tmp_path, config)
+        # Empty build_dir still yields FAIL; we only assert no exception
+        # was raised and the dataclass round-trip survived.
+        assert result.check_id == "code-integrity"
+
+    def test_known_test_keys_threaded_into_uefi_detector(self, tmp_path: Path) -> None:
+        # ``known_test_keys`` lives on ``CodeIntegrityConfig`` but is
+        # consumed by the UEFI detector. The aggregator must thread the
+        # config through so the user's extra patterns flag keys.
+        keys = _create_key_files(tmp_path, "staging-db.key")
+        _write_conf(
+            tmp_path,
+            "local.conf",
+            f'IMAGE_CLASSES += "uefi-sign"\nSECURE_BOOT_SIGNING_KEY = "{keys[0]}"\n',
+        )
+        result = self._run(tmp_path, {"known_test_keys": ["staging"]})
+        flagged = [
+            f
+            for f in result.findings
+            if "staging" in f.message.lower()
+            or "test" in f.message.lower()
+            or "development" in f.message.lower()
+        ]
+        assert flagged, "expected staging key to be flagged via known_test_keys"
