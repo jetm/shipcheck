@@ -106,7 +106,13 @@ class TestProducesCveFindingsTrait:
     def test_non_cve_checks_inherit_default(self):
         registry = get_default_registry()
         non_producers = {c.id for c in registry.checks if not c.produces_cve_findings}
-        assert {"sbom-generation", "secure-boot", "image-signing", "license-audit"} <= non_producers
+        assert {
+            "sbom-generation",
+            "code-integrity",
+            "image-features",
+            "hardening-flags",
+            "license-audit",
+        } <= non_producers
 
 
 class TestCveCheckIdsHelper:
