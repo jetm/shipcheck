@@ -69,16 +69,16 @@ def _sbom_check(findings: list[Finding]) -> CheckResult:
     )
 
 
-def _secureboot_check(findings: list[Finding]) -> CheckResult:
+def _code_integrity_check(findings: list[Finding]) -> CheckResult:
     return CheckResult(
-        check_id="secure-boot",
-        check_name="Secure Boot",
+        check_id="code-integrity",
+        check_name="Code Integrity",
         status=CheckStatus.PASS if not findings else CheckStatus.FAIL,
         score=50,
         max_score=50,
         findings=findings,
-        summary="synthetic secure boot check",
-        cra_mapping=["I.P1.d", "I.P1.f"],
+        summary="synthetic code integrity check",
+        cra_mapping=["I.P1.c", "I.P1.d", "I.P1.f", "I.P1.k"],
     )
 
 
@@ -270,7 +270,7 @@ class TestItem2SbomTable:
         report = _make_report(
             checks=[
                 _sbom_check([matching_a, matching_b]),
-                _secureboot_check([unrelated]),
+                _code_integrity_check([unrelated]),
             ],
         )
 
@@ -339,7 +339,7 @@ class TestItem3RiskAssessment:
             severity="low",
             cra_mapping=["I.P1.d", "I.P1.f"],
         )
-        report = _make_report(checks=[_secureboot_check([finding])])
+        report = _make_report(checks=[_code_integrity_check([finding])])
 
         generate_annex_vii(report, product, out_path)
         text = out_path.read_text(encoding="utf-8")
