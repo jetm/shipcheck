@@ -136,15 +136,21 @@ def _assert_license_audit_warn(build_dir: Path) -> None:
 
 
 def _assert_known_limit_statuses(build_dir: Path) -> None:
-    """secure-boot/image-signing WARN, vuln-reporting SKIP with product.yaml diagnostic."""
+    """code-integrity runs with a definite status, vuln-reporting SKIPs without product.yaml.
+
+    The pilot fixtures and live builds carry no UEFI/FIT/dm-verity/IMA
+    configuration, so ``code-integrity`` reports FAIL with the
+    "No software-integrity mechanism detected" finding. A live build that
+    happens to enable one of the four mechanisms could legitimately PASS
+    or WARN here, so accept any non-error status as long as the check ran.
+    """
     results = get_default_registry().run_checks(build_dir=build_dir, config={})
     by_id = {r.check_id: r for r in results}
-    for cid in ("secure-boot", "image-signing"):
-        r = by_id.get(cid)
-        assert r is not None, f"{cid} did not run"
-        assert r.status == CheckStatus.WARN, (
-            f"{cid} status={r.status!r}, expected WARN (summary={r.summary!r})"
-        )
+    ci = by_id.get("code-integrity")
+    assert ci is not None, "code-integrity did not run"
+    assert ci.status in (CheckStatus.FAIL, CheckStatus.WARN, CheckStatus.PASS), (
+        f"code-integrity status={ci.status!r} unexpected (summary={ci.summary!r})"
+    )
     vr = by_id.get("vuln-reporting")
     assert vr is not None, "vuln-reporting did not run"
     assert vr.status == CheckStatus.SKIP, (
@@ -335,7 +341,7 @@ class TestJsonReportOutput:
         score = data["readiness_score"]
         assert "score" in score
         assert "max_score" in score
-        assert score["max_score"] == 350
+        assert score["max_score"] == 250
 
     def test_json_report_has_checks_array(
         self,
@@ -347,12 +353,16 @@ class TestJsonReportOutput:
         result = _invoke_check(build_dir, fmt="json")
         data = _read_json_report(result)
         assert isinstance(data["checks"], list)
-        assert len(data["checks"]) == 7
+        assert len(data["checks"]) == 8
         check_ids = {c["check_id"] for c in data["checks"]}
         assert "sbom-generation" in check_ids
         assert "cve-tracking" in check_ids
-        assert "secure-boot" in check_ids
-        assert "image-signing" in check_ids
+        assert "code-integrity" in check_ids
+        assert "image-features" in check_ids
+        assert "hardening-flags" in check_ids
+        assert "license-audit" in check_ids
+        assert "yocto-cve-check" in check_ids
+        assert "vuln-reporting" in check_ids
 
 
 # ---------------------------------------------------------------------------
@@ -611,7 +621,7 @@ class TestMissingArtifacts:
 class TestReadinessScore:
     """Verify readiness score reflects check results."""
 
-    def test_max_score_is_350(
+    def test_max_score_is_250(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -620,7 +630,7 @@ class TestReadinessScore:
         monkeypatch.chdir(tmp_path)
         result = _invoke_check(build_dir, fmt="json")
         data = _read_json_report(result)
-        assert data["readiness_score"]["max_score"] == 350
+        assert data["readiness_score"]["max_score"] == 250
 
     def test_score_between_zero_and_max(
         self,
@@ -638,7 +648,7 @@ class TestReadinessScore:
     def test_score_in_terminal_output(self, tmp_path: Path):
         build_dir = _setup_build_dir(tmp_path)
         result = _invoke_check(build_dir)
-        assert "/350" in result.output
+        assert "/250" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -725,12 +735,12 @@ class TestReportContentIntegrity:
 
 
 # ---------------------------------------------------------------------------
-# Secure Boot check via CLI
+# Code Integrity check via CLI
 # ---------------------------------------------------------------------------
 
 
 def _add_secureboot_config(build_dir: Path) -> None:
-    """Add Secure Boot configuration files to a mock build directory."""
+    """Add UEFI Secure Boot configuration files to a mock build directory."""
     conf_dir = build_dir / "conf"
     conf_dir.mkdir(exist_ok=True)
     keys_dir = build_dir / "keys"
@@ -776,15 +786,21 @@ def _add_signed_fit(build_dir: Path) -> None:
     shutil.copy(src, images_dir / "fitImage.itb")
 
 
-class TestSecureBootCheckViaCLI:
-    """Verify Secure Boot check appears in CLI output and reports."""
+class TestCodeIntegrityCheckViaCLI:
+    """Verify the unified Code Integrity check appears in CLI output and reports.
 
-    def test_terminal_output_contains_secure_boot(self, tmp_path: Path):
+    The merged ``code-integrity`` check covers UEFI Secure Boot, signed FIT,
+    dm-verity, and IMA/EVM. It uses ``max_score=0`` (detection-only, not
+    scored) so these tests verify presence and detection behavior, not
+    scoring.
+    """
+
+    def test_terminal_output_contains_code_integrity(self, tmp_path: Path):
         build_dir = _setup_build_dir(tmp_path)
         result = _invoke_check(build_dir)
-        assert "Secure Boot" in result.output
+        assert "Code Integrity" in result.output
 
-    def test_json_report_includes_secure_boot_check(
+    def test_json_report_includes_code_integrity_check(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -794,9 +810,51 @@ class TestSecureBootCheckViaCLI:
         result = _invoke_check(build_dir, fmt="json")
         data = _read_json_report(result)
         check_ids = {c["check_id"] for c in data["checks"]}
-        assert "secure-boot" in check_ids
+        assert "code-integrity" in check_ids
 
-    def test_secure_boot_with_signing_config_scores_points(
+    def test_json_report_does_not_include_legacy_check_ids(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Legacy ``secure-boot`` / ``image-signing`` IDs must be gone."""
+        build_dir = _setup_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
+        check_ids = {c["check_id"] for c in data["checks"]}
+        assert "secure-boot" not in check_ids
+        assert "image-signing" not in check_ids
+
+    def test_code_integrity_max_score_is_zero(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """code-integrity is detection-only; it does not contribute to readiness score."""
+        build_dir = _setup_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
+        ci = next(c for c in data["checks"] if c["check_id"] == "code-integrity")
+        assert ci["max_score"] == 0
+        assert ci["score"] == 0
+
+    def test_code_integrity_without_any_mechanism_fails(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """No UEFI/FIT/verity/IMA configuration → FAIL with high-severity finding."""
+        build_dir = _setup_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
+        ci = next(c for c in data["checks"] if c["check_id"] == "code-integrity")
+        assert ci["status"] == "fail"
+        assert len(ci["findings"]) > 0
+
+    def test_code_integrity_detects_uefi_signing(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -807,77 +865,10 @@ class TestSecureBootCheckViaCLI:
         monkeypatch.chdir(tmp_path)
         result = _invoke_check(build_dir, fmt="json")
         data = _read_json_report(result)
-        sb = next(c for c in data["checks"] if c["check_id"] == "secure-boot")
-        assert sb["score"] > 0
-        assert sb["max_score"] == 50
+        ci = next(c for c in data["checks"] if c["check_id"] == "code-integrity")
+        assert "UEFI Secure Boot" in ci["summary"]
 
-    def test_secure_boot_without_config_scores_zero(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ):
-        build_dir = _setup_build_dir(tmp_path)
-        monkeypatch.chdir(tmp_path)
-        result = _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(result)
-        sb = next(c for c in data["checks"] if c["check_id"] == "secure-boot")
-        assert sb["score"] == 0
-
-    def test_filter_secure_boot_only(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ):
-        build_dir = _setup_build_dir(tmp_path)
-        _add_secureboot_config(build_dir)
-        monkeypatch.chdir(tmp_path)
-        result = _invoke_check(build_dir, checks="secure-boot", fmt="json")
-        data = _read_json_report(result)
-        assert len(data["checks"]) == 1
-        assert data["checks"][0]["check_id"] == "secure-boot"
-        assert data["readiness_score"]["max_score"] == 50
-
-
-# ---------------------------------------------------------------------------
-# Image Signing check via CLI
-# ---------------------------------------------------------------------------
-
-
-class TestImageSigningCheckViaCLI:
-    """Verify Image Signing check appears in CLI output and reports."""
-
-    def test_terminal_output_contains_image_signing(self, tmp_path: Path):
-        build_dir = _setup_build_dir(tmp_path)
-        result = _invoke_check(build_dir)
-        assert "Image Signing" in result.output
-
-    def test_json_report_includes_image_signing_check(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ):
-        build_dir = _setup_build_dir(tmp_path)
-        monkeypatch.chdir(tmp_path)
-        result = _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(result)
-        check_ids = {c["check_id"] for c in data["checks"]}
-        assert "image-signing" in check_ids
-
-    def test_image_signing_with_verity_config_scores_points(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ):
-        build_dir = _setup_build_dir(tmp_path)
-        _add_verity_config(build_dir)
-        monkeypatch.chdir(tmp_path)
-        result = _invoke_check(build_dir, fmt="json")
-        data = _read_json_report(result)
-        isig = next(c for c in data["checks"] if c["check_id"] == "image-signing")
-        assert isig["score"] > 0
-        assert isig["max_score"] == 50
-
-    def test_image_signing_with_signed_fit_scores_points(
+    def test_code_integrity_detects_signed_fit(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -887,10 +878,53 @@ class TestImageSigningCheckViaCLI:
         monkeypatch.chdir(tmp_path)
         result = _invoke_check(build_dir, fmt="json")
         data = _read_json_report(result)
-        isig = next(c for c in data["checks"] if c["check_id"] == "image-signing")
-        assert isig["score"] > 0
+        ci = next(c for c in data["checks"] if c["check_id"] == "code-integrity")
+        # Detection summary or findings must mention the FIT mechanism.
+        assert "FIT" in ci["summary"] or any("FIT" in f.get("message", "") for f in ci["findings"])
 
-    def test_image_signing_without_artifacts_has_findings(
+    def test_code_integrity_detects_dm_verity(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_build_dir(tmp_path)
+        _add_verity_config(build_dir)
+        monkeypatch.chdir(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
+        ci = next(c for c in data["checks"] if c["check_id"] == "code-integrity")
+        assert "verity" in ci["summary"].lower() or any(
+            "verity" in f.get("message", "").lower() for f in ci["findings"]
+        )
+
+    def test_filter_code_integrity_only(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        result = _invoke_check(build_dir, checks="code-integrity", fmt="json")
+        data = _read_json_report(result)
+        assert len(data["checks"]) == 1
+        assert data["checks"][0]["check_id"] == "code-integrity"
+        assert data["readiness_score"]["max_score"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Image Features check via CLI
+# ---------------------------------------------------------------------------
+
+
+class TestImageFeaturesCheckViaCLI:
+    """Verify the Image Features check appears in CLI output and reports."""
+
+    def test_terminal_output_contains_image_features(self, tmp_path: Path):
+        build_dir = _setup_build_dir(tmp_path)
+        result = _invoke_check(build_dir)
+        assert "Image Features" in result.output
+
+    def test_json_report_includes_image_features_check(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -899,21 +933,88 @@ class TestImageSigningCheckViaCLI:
         monkeypatch.chdir(tmp_path)
         result = _invoke_check(build_dir, fmt="json")
         data = _read_json_report(result)
-        isig = next(c for c in data["checks"] if c["check_id"] == "image-signing")
-        assert len(isig["findings"]) > 0
+        check_ids = {c["check_id"] for c in data["checks"]}
+        assert "image-features" in check_ids
 
-    def test_filter_image_signing_only(
+    def test_image_features_max_score_is_zero(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """image-features is detection-only; it does not contribute to readiness score."""
+        build_dir = _setup_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
+        ifc = next(c for c in data["checks"] if c["check_id"] == "image-features")
+        assert ifc["max_score"] == 0
+        assert ifc["score"] == 0
+
+    def test_filter_image_features_only(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ):
         build_dir = _setup_build_dir(tmp_path)
         monkeypatch.chdir(tmp_path)
-        result = _invoke_check(build_dir, checks="image-signing", fmt="json")
+        result = _invoke_check(build_dir, checks="image-features", fmt="json")
         data = _read_json_report(result)
         assert len(data["checks"]) == 1
-        assert data["checks"][0]["check_id"] == "image-signing"
-        assert data["readiness_score"]["max_score"] == 50
+        assert data["checks"][0]["check_id"] == "image-features"
+        assert data["readiness_score"]["max_score"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Hardening Flags check via CLI
+# ---------------------------------------------------------------------------
+
+
+class TestHardeningFlagsCheckViaCLI:
+    """Verify the Hardening Flags check appears in CLI output and reports."""
+
+    def test_terminal_output_contains_hardening_flags(self, tmp_path: Path):
+        build_dir = _setup_build_dir(tmp_path)
+        result = _invoke_check(build_dir)
+        assert "Hardening Flags" in result.output
+
+    def test_json_report_includes_hardening_flags_check(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
+        check_ids = {c["check_id"] for c in data["checks"]}
+        assert "hardening-flags" in check_ids
+
+    def test_hardening_flags_max_score_is_zero(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """hardening-flags is detection-only; it does not contribute to readiness score."""
+        build_dir = _setup_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        result = _invoke_check(build_dir, fmt="json")
+        data = _read_json_report(result)
+        hf = next(c for c in data["checks"] if c["check_id"] == "hardening-flags")
+        assert hf["max_score"] == 0
+        assert hf["score"] == 0
+
+    def test_filter_hardening_flags_only(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        build_dir = _setup_build_dir(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        result = _invoke_check(build_dir, checks="hardening-flags", fmt="json")
+        data = _read_json_report(result)
+        assert len(data["checks"]) == 1
+        assert data["checks"][0]["check_id"] == "hardening-flags"
+        assert data["readiness_score"]["max_score"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -939,7 +1040,7 @@ class TestScoreAggregationAllChecks:
         data = _read_json_report(result)
         total = sum(c["score"] for c in data["checks"])
         assert data["readiness_score"]["score"] == total
-        assert data["readiness_score"]["max_score"] == 350
+        assert data["readiness_score"]["max_score"] == 250
 
     def test_max_score_scales_with_filtered_checks(
         self,
@@ -957,12 +1058,12 @@ class TestScoreAggregationAllChecks:
         data = _read_json_report(result)
         assert data["readiness_score"]["max_score"] == 100
 
-    def test_terminal_score_shows_out_of_350(self, tmp_path: Path):
+    def test_terminal_score_shows_out_of_250(self, tmp_path: Path):
         build_dir = _setup_build_dir(tmp_path)
         result = _invoke_check(build_dir)
-        assert "/350" in result.output
+        assert "/250" in result.output
 
-    def test_markdown_report_includes_all_four_checks(
+    def test_markdown_report_includes_all_check_groups(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -973,10 +1074,11 @@ class TestScoreAggregationAllChecks:
         content = (tmp_path / "shipcheck-report.md").read_text()
         assert "SBOM" in content
         assert "CVE" in content
-        assert "Secure Boot" in content
-        assert "Image Signing" in content
+        assert "Code Integrity" in content
+        assert "Image Features" in content
+        assert "Hardening Flags" in content
 
-    def test_html_report_includes_all_four_checks(
+    def test_html_report_includes_all_check_groups(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -985,10 +1087,11 @@ class TestScoreAggregationAllChecks:
         monkeypatch.chdir(tmp_path)
         _invoke_check(build_dir, fmt="html")
         content = (tmp_path / "shipcheck-report.html").read_text()
-        assert "Secure Boot" in content
-        assert "Image Signing" in content
+        assert "Code Integrity" in content
+        assert "Image Features" in content
+        assert "Hardening Flags" in content
 
-    def test_missing_all_artifacts_max_score_still_350(
+    def test_missing_all_artifacts_max_score_still_250(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -997,7 +1100,7 @@ class TestScoreAggregationAllChecks:
         monkeypatch.chdir(tmp_path)
         result = _invoke_check(build_dir, fmt="json")
         data = _read_json_report(result)
-        assert data["readiness_score"]["max_score"] == 350
+        assert data["readiness_score"]["max_score"] == 250
         assert data["readiness_score"]["score"] == 0
 
 
