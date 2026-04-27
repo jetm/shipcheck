@@ -381,7 +381,7 @@ Note any artefact regeneration here (for example, "regenerated after fixing <bug
 Bucket definitions:
 
 - **bug**: shipcheck misreported on real output in a way that would mislead an auditor. File a tracker task and link it in the follow-up column.
-- **known-limit**: shipcheck's scope does not cover this case today (for example, SPDX 3.0 detection-only, secure-boot config-level only, no PE/COFF or PKI verification, no CI-file detection). Link to the README "Known limitations" anchor.
+- **known-limit**: shipcheck's scope does not cover this case today (for example, SPDX 3.0 detection-only, code-integrity config-level only, image-features config-level only, hardening-flags config-level only, no PE/COFF or PKI verification, no CI-file detection). Link to the README "Known limitations" anchor.
 - **quirk**: BSP-specific or environment-specific behaviour worth recording but not actionable. Record in the table, no follow-up.
 
 ## Conclusion
