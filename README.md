@@ -53,8 +53,9 @@ shipcheck check \
 | -------- | ---------------- |
 | `sbom-generation` | SPDX 2.3 documents under `tmp/deploy/spdx/` against BSI TR-03183-2; detects SPDX 3.0 / CycloneDX |
 | `cve-tracking` | `cve-check`, `vex.bbclass`, and `sbom-cve-check` JSON under `tmp/deploy/images/` |
-| `secure-boot` | UEFI / sbsign signing class inheritance and signing-key references |
-| `image-signing` | FIT (U-Boot) signatures and dm-verity images under `tmp/deploy/images/` |
+| `code-integrity` | UEFI/sbsign signing classes, FIT (U-Boot) signatures, dm-verity images, and IMA/EVM (config + `ima-evm-utils` package presence) |
+| `image-features` | Insecure `IMAGE_FEATURES` (e.g. `debug-tweaks`, `empty-root-password`, `allow-root-login`) |
+| `hardening-flags` | Compile-time hardening evidence at global build-config scope (`security_flags.inc`, `SECURITY_CFLAGS`, `SECURITY_LDFLAGS`, FORTIFY/stack-protector/PIE markers) |
 | `license-audit` | `tmp/deploy/licenses/<image>/license.manifest` against allow/denylist |
 | `yocto-cve-check` | Yocto's `tmp/log/cve/cve-summary.json` (Kirkstone and Scarthgap schemas) |
 | `vuln-reporting` | Article 14 / Annex I Part II §§4-8 documentation obligations from `product.yaml` |
@@ -77,15 +78,20 @@ limitations, not defects:
   when the path is set but the file does not exist. Supply a valid
   `product.yaml` via `product_config_path` in `.shipcheck.yaml` to
   exercise the check.
-- **`secure-boot` is config-level only** - detects the signing-class
-  inheritance and flags known test keys in `.shipcheck.yaml`, but does
-  NOT perform PE/COFF binary signature verification, PKI chain validation
-  (PK/KEK/DB enrollment), or CI-file signing-step detection. Those depths
-  are tracked as roadmap follow-ups.
-- **`image-signing` is config-level only** - detects FIT image signatures
-  and dm-verity configuration from the build tree layout, but does NOT
-  verify the cryptographic integrity of the signed artefacts. Cryptographic
-  verification is tracked as a roadmap follow-up.
+- **`code-integrity` is config/file-level only** - detects signing-class
+  inheritance (`uefi-sign`, `sbsign`, `image-uefi-sign`, `secureboot`),
+  FIT image signatures (`UBOOT_SIGN_ENABLE`), dm-verity
+  (`DM_VERITY_IMAGE`), and IMA/EVM (config flags plus `ima-evm-utils`
+  package presence), and flags known test keys. It does NOT perform
+  PE/COFF binary signature verification, PKI chain validation
+  (PK/KEK/DB enrollment), cryptographic verification of FIT or
+  dm-verity artefacts, or IMA xattr verification on the rootfs. Those
+  depths are tracked as roadmap follow-ups.
+- **`hardening-flags` is build-config evidence only** - reads global
+  build configuration for `security_flags.inc` inheritance and the
+  `SECURITY_CFLAGS` / `SECURITY_LDFLAGS` / FORTIFY / stack-protector /
+  PIE markers Yocto exposes. It does NOT parse ELF binaries to confirm
+  per-binary hardening; that is tracked as a roadmap follow-up.
 - **`sbom-generation` accepts SPDX 2.x, not only 2.3** - poky Scarthgap's
   `create-spdx` class emits SPDX 2.2 documents; shipcheck accepts both 2.2
   and 2.3 against the BSI TR-03183-2 v2.1.0 field requirements. SPDX 3.0
@@ -167,16 +173,20 @@ with the report and evidence plumbing they need.
 - **Phase 1 — SBOM + CVE + Report.** `sbom-generation` and `cve-tracking`
   checks; terminal / markdown / JSON / HTML reports; readiness score and
   `--fail-on` CI gating; `.shipcheck.yaml` configuration.
-- **Phase 2 — Secure Boot, Image Signing, and CRA evidence layer.**
-  `secure-boot` (sbsign / image-uefi-sign class detection, test-key
-  flagging) and `image-signing` (FIT signatures, dm-verity) checks.
-  Static CRA requirement catalog with `cra_mapping` metadata on every
-  finding, `--format evidence` renderer, `--out DIR` multi-file dossier,
-  `license-audit` and `yocto-cve-check` checks, CVE finding reconciliation
-  across scanners, SQLite scan history at `.shipcheck/history.db`, the
-  `dossier`, `docs`, and `doc declaration` subcommands, and a
-  `vuln-reporting` check covering Article 14 / Annex I Part II §§4-8
-  documentation obligations.
+- **Phase 2 — Code integrity, hardening, and CRA evidence layer.**
+  `code-integrity` (UEFI/sbsign signing-class detection, FIT signatures,
+  dm-verity, IMA/EVM config + package presence), `image-features`
+  (insecure `IMAGE_FEATURES` such as `debug-tweaks`, `empty-root-password`,
+  `allow-root-login`), and `hardening-flags` (compile-time hardening
+  evidence: `security_flags.inc` inheritance, `SECURITY_CFLAGS`,
+  `SECURITY_LDFLAGS`, FORTIFY/stack-protector/PIE markers in global
+  build config) checks. Static CRA requirement catalog with `cra_mapping`
+  metadata on every finding, `--format evidence` renderer, `--out DIR`
+  multi-file dossier, `license-audit` and `yocto-cve-check` checks, CVE
+  finding reconciliation across scanners, SQLite scan history at
+  `.shipcheck/history.db`, the `dossier`, `docs`, and `doc declaration`
+  subcommands, and a `vuln-reporting` check covering Article 14 /
+  Annex I Part II §§4-8 documentation obligations.
 
 Pilot: see [`pilots/0001-poky-scarthgap-min/REPORT.md`](pilots/0001-poky-scarthgap-min/REPORT.md).
 
