@@ -28,10 +28,10 @@ Status semantics (per spec Requirement: Status semantics):
 - **WARN** when only one of the two signals indicates hardening.
 - **FAIL** when neither signal indicates any hardening evidence.
 
-Maps to CRA Annex I Part II §c (no known exploitable vulnerabilities)
-and §j (limit attack surfaces). ``CheckResult.cra_mapping`` is the
-full list ``["I.P2.c", "I.P2.j"]``; per-finding ``cra_mapping`` is a
-non-empty subset of that list.
+Maps to CRA Annex I Part I §j (limit attack surfaces) and §k (apply
+exploitation-mitigation techniques). ``CheckResult.cra_mapping`` is
+the full list ``["I.P1.j", "I.P1.k"]``; per-finding ``cra_mapping``
+is a non-empty subset of that list.
 """
 
 from __future__ import annotations
@@ -51,18 +51,18 @@ logger = logging.getLogger(__name__)
 # CRA catalog IDs covered by this check, applied as the
 # ``CheckResult.cra_mapping`` regardless of which signal (if any)
 # fires. Per-finding ``cra_mapping`` is a non-empty subset.
-CRA_MAPPING: list[str] = ["I.P2.c", "I.P2.j"]
+CRA_MAPPING: list[str] = ["I.P1.j", "I.P1.k"]
 
 # Per-finding CRA subsets. The two signals each emphasise a slightly
-# different Annex I Part II concern: signal A is distro-wide hardening
+# different Annex I Part I concern: signal A is distro-wide hardening
 # intent (§j -- limit attack surfaces by enabling distro-level
-# hardening) while signal B is per-flag exploit mitigation (§c -- no
-# known exploitable vulnerabilities, achieved via FORTIFY_SOURCE,
+# hardening) while signal B is per-flag exploitation mitigation (§k --
+# apply exploitation-mitigation techniques such as FORTIFY_SOURCE,
 # stack-protector, PIE, RELRO). The "neither" case cites both because
 # the absence covers both concerns.
-_CRA_SIGNAL_A_ONLY: list[str] = ["I.P2.j"]
-_CRA_SIGNAL_B_ONLY: list[str] = ["I.P2.c"]
-_CRA_BOTH: list[str] = ["I.P2.c", "I.P2.j"]
+_CRA_SIGNAL_A_ONLY: list[str] = ["I.P1.j"]
+_CRA_SIGNAL_B_ONLY: list[str] = ["I.P1.k"]
+_CRA_BOTH: list[str] = ["I.P1.j", "I.P1.k"]
 
 _TOP_LEVEL_CONF_FILES = ("local.conf", "auto.conf")
 """Conf files read directly under ``build_dir/conf/``.
@@ -418,7 +418,7 @@ class HardeningFlagsCheck(BaseCheck):
         else:
             # FAIL: neither signal indicates hardening. Severity
             # ``high`` -- a build with no compile-time hardening
-            # evidence is a CRA Annex I Part II §c / §j gap.
+            # evidence is a CRA Annex I Part I §j / §k gap.
             status = CheckStatus.FAIL
             findings.append(
                 Finding(

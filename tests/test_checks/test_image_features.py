@@ -210,28 +210,28 @@ class TestParsing:
 class TestCraMapping:
     """``cra_mapping`` per finding and per result."""
 
-    def test_check_result_cra_mapping_is_b_and_c(self, tmp_path: Path) -> None:
+    def test_check_result_cra_mapping_is_b_and_j(self, tmp_path: Path) -> None:
         _write_conf(tmp_path, "local.conf", 'IMAGE_FEATURES += "debug-tweaks"\n')
         result = ImageFeaturesCheck().run(tmp_path, {})
-        assert result.cra_mapping == ["I.P2.b", "I.P2.c"]
+        assert result.cra_mapping == ["I.P1.b", "I.P1.j"]
 
-    def test_high_finding_cites_b_and_c(self, tmp_path: Path) -> None:
+    def test_high_finding_cites_b_and_j(self, tmp_path: Path) -> None:
         _write_conf(tmp_path, "local.conf", 'IMAGE_FEATURES += "debug-tweaks"\n')
         result = ImageFeaturesCheck().run(tmp_path, {})
         high = [f for f in result.findings if f.severity == "high"]
         assert high
         for finding in high:
-            assert "I.P2.b" in finding.cra_mapping
-            assert "I.P2.c" in finding.cra_mapping
+            assert "I.P1.b" in finding.cra_mapping
+            assert "I.P1.j" in finding.cra_mapping
 
     @pytest.mark.parametrize("feature", ["tools-debug", "dbg-pkgs", "eclipse-debug", "dev-pkgs"])
-    def test_lower_severity_finding_cites_at_least_b(self, tmp_path: Path, feature: str) -> None:
+    def test_lower_severity_finding_cites_at_least_j(self, tmp_path: Path, feature: str) -> None:
         _write_conf(tmp_path, "local.conf", f'IMAGE_FEATURES += "{feature}"\n')
         result = ImageFeaturesCheck().run(tmp_path, {})
         matches = [f for f in result.findings if feature in f.message]
         assert matches
         for finding in matches:
-            assert "I.P2.b" in finding.cra_mapping
+            assert "I.P1.j" in finding.cra_mapping
 
     def test_check_result_cra_mapping_present_when_passing(self, tmp_path: Path) -> None:
         _write_conf(tmp_path, "local.conf", 'IMAGE_FEATURES += "package-management"\n')
@@ -239,4 +239,4 @@ class TestCraMapping:
         # CheckResult.cra_mapping should still be the canonical pair even
         # when the run returns PASS so consumers can render the mapping
         # uniformly.
-        assert result.cra_mapping == ["I.P2.b", "I.P2.c"]
+        assert result.cra_mapping == ["I.P1.b", "I.P1.j"]

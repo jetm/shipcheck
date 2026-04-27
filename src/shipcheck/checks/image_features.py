@@ -3,8 +3,8 @@
 Detects insecure entries in ``IMAGE_FEATURES`` configured in
 ``conf/local.conf`` / ``conf/auto.conf`` and surfaces them with a
 calibrated severity drawn from a hardcoded table. Maps to CRA Annex I
-Part II §b (secure by default) and §c (no known exploitable
-vulnerabilities).
+Part I §b (secure-by-default configuration) and §j (limit attack
+surfaces).
 
 Per ``specs/image-features/spec.md``:
 
@@ -36,16 +36,18 @@ logger = logging.getLogger(__name__)
 # ``CheckResult.cra_mapping`` regardless of which entry (if any) was
 # matched. Per-finding ``cra_mapping`` may be narrower; see
 # ``_FEATURE_TABLE`` below.
-CRA_MAPPING: list[str] = ["I.P2.b", "I.P2.c"]
+CRA_MAPPING: list[str] = ["I.P1.b", "I.P1.j"]
 
 _CONF_FILES = ("conf/local.conf", "conf/auto.conf")
 
 # Hardcoded severity table from ``specs/image-features/spec.md``. The
 # value is ``(severity, cra_mapping, remediation)``. Per the spec's
 # "cra_mapping per finding" requirement, the four high entries cite
-# both §b and §c; the lower-severity entries cite at least §b.
-_HIGH_CRA = ["I.P2.b", "I.P2.c"]
-_LOWER_CRA = ["I.P2.b"]
+# both §b (secure-by-default violation) and §j (attack-surface gap);
+# the lower-severity entries (dev/dbg packages) cite only §j because
+# they are pure attack-surface concerns, not secure-default violations.
+_HIGH_CRA = ["I.P1.b", "I.P1.j"]
+_LOWER_CRA = ["I.P1.j"]
 
 _REMEDIATION_DEBUG_TWEAKS = (
     "Remove 'debug-tweaks' from IMAGE_FEATURES before shipping. It "

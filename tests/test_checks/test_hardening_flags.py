@@ -64,7 +64,7 @@ class TestScaffold:
         assert HardeningFlagsCheck.severity == "critical"
 
     def test_check_cra_mapping(self) -> None:
-        assert HardeningFlagsCheck.cra_mapping == ["I.P2.c", "I.P2.j"]
+        assert HardeningFlagsCheck.cra_mapping == ["I.P1.j", "I.P1.k"]
 
     def test_check_instantiable(self) -> None:
         instance = HardeningFlagsCheck()
@@ -268,7 +268,7 @@ class TestRunSmoke:
         _write_conf(tmp_path, "local.conf", 'MACHINE = "qemux86-64"\n')
         result = HardeningFlagsCheck().run(tmp_path, {})
         assert result.check_id == "hardening-flags"
-        assert result.cra_mapping == ["I.P2.c", "I.P2.j"]
+        assert result.cra_mapping == ["I.P1.j", "I.P1.k"]
 
     def test_run_no_conf_files(self, tmp_path: Path) -> None:
         # No conf/ directory at all: must not raise.
@@ -397,18 +397,18 @@ class TestCraMapping:
     finding and per result:
 
     - Each finding's ``cra_mapping`` is non-empty and a subset of
-      ``["I.P2.c", "I.P2.j"]``.
-    - ``CheckResult.cra_mapping`` is exactly ``["I.P2.c", "I.P2.j"]``.
+      ``["I.P1.j", "I.P1.k"]``.
+    - ``CheckResult.cra_mapping`` is exactly ``["I.P1.j", "I.P1.k"]``.
     """
 
-    _ALLOWED: set[str] = {"I.P2.c", "I.P2.j"}
+    _ALLOWED: set[str] = {"I.P1.j", "I.P1.k"}
 
     def test_check_result_cra_mapping_is_full_list_when_fail(self, tmp_path: Path) -> None:
         # Independent of which truth-table cell the build hits, the
         # CheckResult.cra_mapping is the full list.
         _write_conf(tmp_path, "local.conf", 'MACHINE = "qemux86-64"\n')
         result = HardeningFlagsCheck().run(tmp_path, {})
-        assert result.cra_mapping == ["I.P2.c", "I.P2.j"]
+        assert result.cra_mapping == ["I.P1.j", "I.P1.k"]
 
     def test_check_result_cra_mapping_full_for_pass_case(self, tmp_path: Path) -> None:
         _write_conf(
@@ -418,9 +418,12 @@ class TestCraMapping:
             'TUNE_CCARGS = "-fPIE -Wl,-z,relro -Wl,-z,now"\n',
         )
         result = HardeningFlagsCheck().run(tmp_path, {})
-        assert result.cra_mapping == ["I.P2.c", "I.P2.j"]
+        assert result.cra_mapping == ["I.P1.j", "I.P1.k"]
 
-    def test_finding_cra_mapping_subset_when_signal_a_only(self, tmp_path: Path) -> None:
+    def test_finding_cra_mapping_when_signal_a_only(self, tmp_path: Path) -> None:
+        # Signal-A-only: distro-wide hardening intent without per-flag
+        # exploitation mitigation. Maps to §j (limit attack surfaces)
+        # exactly, not §k.
         _write_conf(
             tmp_path,
             "local.conf",
@@ -429,13 +432,12 @@ class TestCraMapping:
         result = HardeningFlagsCheck().run(tmp_path, {})
         assert result.findings, "expected one finding for signal-A-only"
         for finding in result.findings:
-            assert finding.cra_mapping, "per-finding cra_mapping must be non-empty"
-            assert set(finding.cra_mapping).issubset(self._ALLOWED), (
-                f"per-finding cra_mapping {finding.cra_mapping!r} is not a "
-                f"subset of {sorted(self._ALLOWED)}"
-            )
+            assert finding.cra_mapping == ["I.P1.j"]
 
-    def test_finding_cra_mapping_subset_when_signal_b_only(self, tmp_path: Path) -> None:
+    def test_finding_cra_mapping_when_signal_b_only(self, tmp_path: Path) -> None:
+        # Signal-B-only: per-flag exploitation mitigation without the
+        # distro-wide include. Maps to §k (apply exploitation-mitigation
+        # techniques) exactly, not §j.
         _write_conf(
             tmp_path,
             "local.conf",
@@ -444,16 +446,15 @@ class TestCraMapping:
         result = HardeningFlagsCheck().run(tmp_path, {})
         assert result.findings, "expected one finding for signal-B-only"
         for finding in result.findings:
-            assert finding.cra_mapping
-            assert set(finding.cra_mapping).issubset(self._ALLOWED)
+            assert finding.cra_mapping == ["I.P1.k"]
 
-    def test_finding_cra_mapping_subset_when_neither(self, tmp_path: Path) -> None:
+    def test_finding_cra_mapping_when_neither(self, tmp_path: Path) -> None:
+        # Neither signal: the absence covers both §j and §k.
         _write_conf(tmp_path, "local.conf", 'MACHINE = "qemux86-64"\n')
         result = HardeningFlagsCheck().run(tmp_path, {})
         assert result.findings, "expected one finding for FAIL case"
         for finding in result.findings:
-            assert finding.cra_mapping
-            assert set(finding.cra_mapping).issubset(self._ALLOWED)
+            assert sorted(finding.cra_mapping) == ["I.P1.j", "I.P1.k"]
 
     def test_pass_case_emits_no_findings(self, tmp_path: Path) -> None:
         # PASS: both signals present, no findings, but result still
@@ -466,4 +467,4 @@ class TestCraMapping:
         )
         result = HardeningFlagsCheck().run(tmp_path, {})
         assert result.findings == []
-        assert result.cra_mapping == ["I.P2.c", "I.P2.j"]
+        assert result.cra_mapping == ["I.P1.j", "I.P1.k"]
