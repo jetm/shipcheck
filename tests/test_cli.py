@@ -92,19 +92,12 @@ class TestCheckCommand:
         assert result.exit_code == 0
         assert "SBOM" in result.output
 
-    def test_check_filters_secure_boot(self, build_dir_with_spdx: Path) -> None:
+    def test_check_filters_code_integrity(self, build_dir_with_spdx: Path) -> None:
         result = runner.invoke(
-            app, ["check", "--build-dir", str(build_dir_with_spdx), "--checks", "secure-boot"]
+            app, ["check", "--build-dir", str(build_dir_with_spdx), "--checks", "code-integrity"]
         )
         assert result.exit_code == 0
-        assert "Secure Boot" in result.output
-
-    def test_check_filters_image_signing(self, build_dir_with_spdx: Path) -> None:
-        result = runner.invoke(
-            app, ["check", "--build-dir", str(build_dir_with_spdx), "--checks", "image-signing"]
-        )
-        assert result.exit_code == 0
-        assert "Image Signing" in result.output
+        assert "Code Integrity" in result.output
 
     def test_check_loads_config_file(
         self, build_dir_with_spdx: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -253,9 +246,9 @@ class TestEvidenceFormat:
         assert "CRA Evidence Report" in result.output
 
     def test_evidence_format_emits_per_requirement_section(self, build_dir_empty: Path) -> None:
-        # An empty build dir triggers failing findings from secure-boot and
-        # image-signing, both of which carry cra_mapping ["I.P1.d", "I.P1.f"],
-        # so the evidence pivot must surface at least one of those headings.
+        # An empty build dir triggers failing findings from code-integrity,
+        # which carries cra_mapping covering I.P1.d and I.P1.f, so the
+        # evidence pivot must surface at least one of those headings.
         result = runner.invoke(
             app, ["check", "--build-dir", str(build_dir_empty), "--format", "evidence"]
         )
@@ -373,24 +366,17 @@ class TestInitCommand:
         assert "output" in content
         assert "fail_on" in content
 
-    def test_init_scaffold_contains_secure_boot_section(
+    def test_init_scaffold_contains_code_integrity_section(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.chdir(tmp_path)
         runner.invoke(app, ["init"])
         content = (tmp_path / ".shipcheck.yaml").read_text()
-        assert "secure_boot" in content
+        assert "code_integrity" in content
         assert "known_test_keys" in content
-
-    def test_init_scaffold_contains_image_signing_section(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.chdir(tmp_path)
-        runner.invoke(app, ["init"])
-        content = (tmp_path / ".shipcheck.yaml").read_text()
-        assert "image_signing" in content
         assert "expect_fit" in content
         assert "expect_verity" in content
+        assert "expect_ima" in content
 
     def test_init_scaffold_checks_list_includes_new_check_ids(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -398,8 +384,9 @@ class TestInitCommand:
         monkeypatch.chdir(tmp_path)
         runner.invoke(app, ["init"])
         content = (tmp_path / ".shipcheck.yaml").read_text()
-        assert "secure-boot" in content
-        assert "image-signing" in content
+        assert "code-integrity" in content
+        assert "image-features" in content
+        assert "hardening-flags" in content
 
     def test_init_scaffold_lists_all_v03_check_ids(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -416,8 +403,9 @@ class TestInitCommand:
         for check_id in (
             "sbom-generation",
             "cve-tracking",
-            "secure-boot",
-            "image-signing",
+            "code-integrity",
+            "image-features",
+            "hardening-flags",
             "license-audit",
             "yocto-cve-check",
             "vuln-reporting",
@@ -457,21 +445,13 @@ class TestInitCommand:
 class TestBuildCheckConfig:
     """Tests for `_build_check_config()` mapping new check IDs."""
 
-    def test_build_check_config_includes_secure_boot(self) -> None:
+    def test_build_check_config_includes_code_integrity(self) -> None:
         from shipcheck.cli import _build_check_config
         from shipcheck.config import ShipcheckConfig
 
         config = ShipcheckConfig()
         result = _build_check_config(config)
-        assert "secure-boot" in result
-
-    def test_build_check_config_includes_image_signing(self) -> None:
-        from shipcheck.cli import _build_check_config
-        from shipcheck.config import ShipcheckConfig
-
-        config = ShipcheckConfig()
-        result = _build_check_config(config)
-        assert "image-signing" in result
+        assert "code-integrity" in result
 
     def test_build_check_config_preserves_existing_checks(self) -> None:
         from shipcheck.cli import _build_check_config
@@ -581,7 +561,7 @@ class TestDossierOut:
                 "--out",
                 str(dossier_dir),
                 "--checks",
-                "sbom-generation,cve-tracking,secure-boot,image-signing,yocto-cve-check",
+                "sbom-generation,cve-tracking,code-integrity,yocto-cve-check",
             ],
         )
 
