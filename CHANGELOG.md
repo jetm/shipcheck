@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Added
+
+- `image-features` check detecting insecure `IMAGE_FEATURES` entries (`debug-tweaks` and similar).
+- `hardening-flags` check detecting global compile-time hardening evidence (`security_flags.inc` inclusion + `TUNE_CCARGS` parsing).
+
+### Changed
+
+- Merged `secure-boot` and `image-signing` checks into a single `code-integrity` check covering UEFI Secure Boot, signed FIT, dm-verity, and IMA/EVM. Migration: `sed -i -e 's/^secure_boot:/code_integrity:/' -e '/^image_signing:/d' .shipcheck.yaml` (and merge any per-key overrides manually).
+
+### Removed
+
+- `secure_boot:` and `image_signing:` configuration sections in `.shipcheck.yaml` no longer accepted.
+
 ## [0.0.4] - 2026-04-24
 
 ### Changed

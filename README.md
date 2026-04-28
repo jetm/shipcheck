@@ -190,6 +190,12 @@ with the report and evidence plumbing they need.
 
 Pilot: see [`pilots/0001-poky-scarthgap-min/REPORT.md`](pilots/0001-poky-scarthgap-min/REPORT.md).
 
+Pilot (`code-integrity` merge of `secure-boot` + `image-signing`): see [`pilots/0005-code-integrity-and-hardening/REPORT.md`](pilots/0005-code-integrity-and-hardening/REPORT.md).
+
+Pilot (`image-features` check): see [`pilots/0005-code-integrity-and-hardening/REPORT.md`](pilots/0005-code-integrity-and-hardening/REPORT.md).
+
+Pilot (`hardening-flags` check): see [`pilots/0005-code-integrity-and-hardening/REPORT.md`](pilots/0005-code-integrity-and-hardening/REPORT.md).
+
 ### Planned
 
 - **Phase 3 — Update mechanism + OP-TEE.** Detect capsule update /
