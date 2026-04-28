@@ -1,0 +1,266 @@
+# kas-container build configuration for pilot 0005.
+#
+# Target: poky Scarthgap, qemuarm64, core-image-minimal
+# Goal: produce a single Yocto build that exercises every check
+# introduced or refactored by the code-integrity-and-hardening change:
+#
+#   - code-integrity     (UEFI + signed FIT + dm-verity + IMA/EVM)
+#   - image-features     (insecure IMAGE_FEATURES detection)
+#   - hardening-flags    (security_flags.inc + TUNE_CCARGS evidence)
+#
+# The remaining five registered checks (sbom-generation, cve-tracking,
+# yocto-cve-check, license-audit, vuln-reporting) come along for free
+# because INHERIT += "create-spdx cve-check" is the same pattern as
+# pilot 0001. vuln-reporting validates the manufacturer-commitment
+# half from product.yaml at audit time, not at build time.
+#
+# Machine choice: qemuarm64 rather than qemux86-64 because UEFI Secure
+# Boot artifacts on aarch64 land in tmp/deploy/images/qemuarm64/ in a
+# layout meta-arm produces directly; meta-arm has first-class aarch64
+# support and meta-secure-core does not have a clean scarthgap branch.
+#
+# Designed to run with vanilla kas-container from the shipcheck repo
+# root:
+#
+#     kas-container build pilots/0005-code-integrity-and-hardening/kas.yml
+#
+# No --runtime-args and no host-specific bind-mounts are required. The
+# first clone of poky + meta-arm + meta-security + meta-openembedded
+# takes ~2-3 minutes over the network. Subsequent runs reuse DL_DIR
+# and SSTATE_DIR via env-var forwarding (see docs/pilot.md).
+#
+# IMAGE_FEATURES two-pass note (per task 6.1):
+# This kas.yml bakes IMAGE_FEATURES = "debug-tweaks" so the
+# image-features check has something high-severity to flag (pass 1).
+# To run pass 2 ("" / clean), invoke kas-container with an env
+# override:
+#
+#     kas-container -e SHIPCHECK_IMAGE_FEATURES="" \
+#         build pilots/0005-code-integrity-and-hardening/kas.yml
+#
+# (The local_conf_header below honors SHIPCHECK_IMAGE_FEATURES if set.)
+# Two passes against the same kas.yml is the documented procedure;
+# the REPORT.md authored in task 6.3 will record both runs.
+#
+# Combined-build trade-offs (per design.md D5 fallback):
+# Wiring six mechanisms into a single bitbake build is feasible on
+# qemuarm64 but carries known interactions:
+#
+#   1. Signed FIT requires a key directory the build will populate at
+#      first run. UBOOT_SIGN_KEYDIR points at a path under TOPDIR;
+#      u-boot-tools' do_sign generates the dev key on first build.
+#   2. dm-verity wraps the rootfs and is incompatible with read-write
+#      debug-tweaks behaviors at runtime, but the *build* still
+#      completes; shipcheck only reads build artifacts so the runtime
+#      conflict is a non-issue here.
+#   3. IMA/EVM kernel symbols require a kernel config fragment; we use
+#      a meta-security feature rather than a custom .cfg layer to
+#      avoid a third-party layer just for fragments.
+#   4. UEFI Secure Boot artifacts on qemuarm64 ship via meta-arm's
+#      qemuarm64-secureboot machine, but pinning to that machine
+#      conflicts with vanilla qemuarm64 + dm-verity. To keep one
+#      build, we stay on qemuarm64 and rely on shipcheck detecting
+#      the *intent* (signing classes in IMAGE_CLASSES) rather than
+#      requiring the final signed .efi to land in tmp/deploy/images.
+#      shipcheck's UEFI detector explicitly accepts class-presence
+#      as evidence (see specs/code-integrity/spec.md UEFI scenario).
+#
+# If any of the above interactions surface as bitbake errors at task
+# 6.2's `kas-container build` step, document the failure mode in
+# REPORT.md (task 6.3) and split into per-mechanism sub-pilots per
+# the D5 fallback in design.md.
+
+header:
+  version: 14
+
+distro: poky
+machine: qemuarm64
+target: core-image-minimal
+
+repos:
+  # The shipcheck repo itself - no layers to add, just lets kas
+  # anchor relative paths against this file's location. The
+  # `layers: {}` override stops kas from treating the repo root
+  # as a layer (default behaviour when layers is omitted).
+  shipcheck:
+    layers: {}
+
+  poky:
+    # Upstream Yocto poky, pinned to a Scarthgap LTS commit so
+    # kas-container can clone it fresh into /work/poky without
+    # needing any host bind-mounts. Same pin as pilot 0001 for
+    # cross-pilot SSTATE reuse.
+    url: https://git.yoctoproject.org/poky.git
+    branch: scarthgap
+    commit: cb2dcb4963e5fbe449f1bcb019eae883ddecc8ec
+    layers:
+      meta:
+      meta-poky:
+      meta-yocto-bsp:
+
+  meta-openembedded:
+    # Required by meta-security (meta-perl, meta-python) and by
+    # meta-arm (meta-oe). Pinned to scarthgap branch HEAD as of
+    # the date this pilot was authored; subsequent pilots may
+    # update by re-resolving the branch.
+    url: https://git.openembedded.org/meta-openembedded
+    branch: scarthgap
+    commit: 5124ac4a658899158f4a7a2ddf1d2ca931ec7d0e
+    layers:
+      meta-oe:
+      meta-perl:
+      meta-python:
+
+  meta-arm:
+    # UEFI Secure Boot signing classes (uefi-sign / image-uefi-sign)
+    # ship in meta-arm. We add the layer but do not switch to the
+    # qemuarm64-secureboot MACHINE (see combined-build trade-off #4
+    # in the header). shipcheck's UEFI detector accepts class
+    # presence in IMAGE_CLASSES as evidence on its own.
+    url: https://git.yoctoproject.org/meta-arm
+    branch: scarthgap
+    commit: a81c19915b5b9e71ed394032e9a50fd06919e1cd
+    layers:
+      meta-arm:
+      meta-arm-toolchain:
+
+  meta-security:
+    # IMA/EVM kernel-config fragment + ima-evm-utils + ima-policy
+    # recipes ship in meta-security/meta-integrity. Pinned to
+    # scarthgap branch HEAD as of pilot authoring.
+    url: https://git.yoctoproject.org/meta-security
+    branch: scarthgap
+    commit: b13f1705d723650de61277670c8a76aadea4cfdd
+    layers:
+      meta-security:
+      meta-integrity:
+
+# Forward host environment variables to bitbake. SHIPCHECK_IMAGE_FEATURES
+# enables the two-pass IMAGE_FEATURES toggle described in the header
+# without editing this file between runs. NVDCVE_API_KEY is forwarded
+# in null-default form (only forwarded if the host has it set) for
+# cve-check throttling, matching pilot 0001.
+env:
+  NVDCVE_API_KEY:
+  SHIPCHECK_IMAGE_FEATURES: "debug-tweaks"
+
+local_conf_header:
+  shipcheck-pilot: |
+    # ----------------------------------------------------------------
+    # SBOM + CVE producers (same as pilot 0001).
+    # ----------------------------------------------------------------
+    # create-spdx populates tmp/deploy/spdx/*.spdx.json; cve-check
+    # populates tmp/log/cve/cve-summary.json. Both are consumed by
+    # shipcheck's sbom-generation, cve-tracking, and yocto-cve-check
+    # checks. See pilot 0001's kas.yml for the full rationale on why
+    # CVE_CHECK_LOG_JSON / CVE_CHECK_SUMMARY_DIR are NOT overridden.
+    INHERIT += "create-spdx cve-check"
+    CVE_CHECK_DB_UPDATE = "1"
+    CVE_CHECK_FORMAT_JSON = "1"
+    SPDX_INCLUDE_SOURCES = "0"
+
+    # ----------------------------------------------------------------
+    # Build hygiene (same as pilot 0001 + ccache from variscite).
+    # ----------------------------------------------------------------
+    BB_NUMBER_THREADS ?= "${@oe.utils.cpu_count()}"
+    PARALLEL_MAKE    ?= "-j ${@oe.utils.cpu_count()}"
+    BB_HASHCONFIG_IGNORE_VARS += "DATE TIME"
+
+    # ccache reuse across re-runs. /work/ccache is the kas-container
+    # default working dir; the path is implicitly bind-mounted by kas.
+    CCACHE_DIR = "/work/ccache"
+    INHERIT += "ccache"
+
+    # ----------------------------------------------------------------
+    # Fetch robustness (from variscite/varis/kas-variscite.yml).
+    # ----------------------------------------------------------------
+    # Raise the per-URI timeout so transient TLS / DNS stalls do not
+    # trip the default (~45s) and fail the task.
+    BB_FETCH_TIMEOUT = "600"
+
+    # Replace scarthgap's default MIRRORS table (which hardcodes the
+    # dead sources.openembedded.org host) with a curated catch-all
+    # pointing at the Yocto Project source mirror. Bitbake consults
+    # MIRRORS on the fallback phase if the original URI failed.
+    MIRRORS = " \
+        git://.*/.*     http://downloads.yoctoproject.org/mirror/sources/ \n \
+        http://.*/.*    http://downloads.yoctoproject.org/mirror/sources/ \n \
+        https://.*/.*   http://downloads.yoctoproject.org/mirror/sources/ \n \
+        ftp://.*/.*     http://downloads.yoctoproject.org/mirror/sources/ \n \
+    "
+
+    # Try the yocto mirror BEFORE hitting github.com; this turns
+    # github outages into silent fallbacks instead of build blockers.
+    # Falls through to the original URI on miss.
+    PREMIRRORS:prepend = " \
+        git://github.com/.*/.*    http://downloads.yoctoproject.org/mirror/sources/ \n \
+        http://github.com/.*/.*   http://downloads.yoctoproject.org/mirror/sources/ \n \
+        https://github.com/.*/.*  http://downloads.yoctoproject.org/mirror/sources/ \n \
+    "
+
+    # ----------------------------------------------------------------
+    # IMAGE_FEATURES (exercises image-features check).
+    # ----------------------------------------------------------------
+    # Pass 1 default: "debug-tweaks" (high-severity finding expected).
+    # Pass 2 override: kas-container -e SHIPCHECK_IMAGE_FEATURES="".
+    # The variable is forwarded via env: above and read here.
+    IMAGE_FEATURES = "${SHIPCHECK_IMAGE_FEATURES}"
+
+    # ----------------------------------------------------------------
+    # Hardening flags (exercises hardening-flags check).
+    # ----------------------------------------------------------------
+    # Signal A: poky ships conf/distro/include/security_flags.inc as
+    # the canonical hardening profile. Including it at global scope
+    # is exactly the evidence the hardening-flags check looks for.
+    require conf/distro/include/security_flags.inc
+
+    # Signal B: append a stack-protector flag at global scope so the
+    # TUNE_CCARGS parser has at least one explicit flag to detect on
+    # top of whatever security_flags.inc provides.
+    TUNE_CCARGS:append = " -fstack-protector-strong"
+
+    # ----------------------------------------------------------------
+    # Code integrity: UEFI Secure Boot signing classes.
+    # ----------------------------------------------------------------
+    # meta-arm provides image-uefi-sign / uefi-sign. Adding the class
+    # to IMAGE_CLASSES is what shipcheck's UEFI detector keys on; the
+    # actual signed .efi artifacts only land when MACHINE is switched
+    # to qemuarm64-secureboot, which conflicts with dm-verity in this
+    # combined build. Class-presence is sufficient evidence per the
+    # spec (specs/code-integrity/spec.md UEFI scenario).
+    IMAGE_CLASSES:append = " image-uefi-sign"
+
+    # ----------------------------------------------------------------
+    # Code integrity: signed FIT image.
+    # ----------------------------------------------------------------
+    # UBOOT_SIGN_ENABLE = "1" is the headline indicator the FIT
+    # detector matches. UBOOT_SIGN_KEYDIR points at a TOPDIR-relative
+    # path the u-boot-tools recipe will populate on first build via
+    # do_sign with a generated dev key. UBOOT_SIGN_KEYNAME = "dev-key"
+    # is a known test-key pattern the check should detect as
+    # "valid mechanism, test-key warning" (medium severity).
+    UBOOT_SIGN_ENABLE = "1"
+    UBOOT_SIGN_KEYDIR = "${TOPDIR}/keys"
+    UBOOT_SIGN_KEYNAME = "dev-key"
+
+    # ----------------------------------------------------------------
+    # Code integrity: dm-verity.
+    # ----------------------------------------------------------------
+    # DM_VERITY_IMAGE selects the image recipe that gets a verity
+    # hash tree; DM_VERITY_IMAGE_TYPE selects the rootfs filesystem
+    # type. shipcheck's dm-verity detector keys on these two
+    # variables plus the resulting .verity / .hashtree files in
+    # tmp/deploy/images/.
+    DM_VERITY_IMAGE = "core-image-minimal"
+    DM_VERITY_IMAGE_TYPE = "ext4"
+
+    # ----------------------------------------------------------------
+    # Code integrity: IMA / EVM.
+    # ----------------------------------------------------------------
+    # meta-integrity ships the kernel config fragment and userspace
+    # tooling. DISTRO_FEATURES += "ima" causes meta-integrity's
+    # linux-yocto bbappend to enable CONFIG_IMA, CONFIG_IMA_APPRAISE,
+    # and CONFIG_EVM in the kernel .config. ima-evm-utils plus
+    # ima-policy-simple cover the package + IMAGE_INSTALL signals.
+    DISTRO_FEATURES:append = " ima"
+    IMAGE_INSTALL:append = " ima-evm-utils ima-policy-simple"
