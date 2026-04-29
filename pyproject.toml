@@ -37,6 +37,7 @@ dev = [
     "pytest-cov>=6.0",
     "pytest-randomly>=3.15",
     "pytest-timeout>=2.3",
+    "spdx-python-model==0.0.5",
 ]
 
 [project.scripts]

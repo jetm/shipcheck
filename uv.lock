@@ -696,6 +696,7 @@ dev = [
     { name = "pytest-randomly" },
     { name = "pytest-timeout" },
     { name = "ruff" },
+    { name = "spdx-python-model" },
     { name = "ty" },
 ]
 
@@ -716,7 +717,17 @@ dev = [
     { name = "pytest-randomly", specifier = ">=3.15" },
     { name = "pytest-timeout", specifier = ">=2.3" },
     { name = "ruff" },
+    { name = "spdx-python-model", specifier = "==0.0.5" },
     { name = "ty" },
+]
+
+[[package]]
+name = "spdx-python-model"
+version = "0.0.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/73/59/82a21ae7ccb8f136279e409119ef5299d7e0b18f2fb06f684ad1e99a27aa/spdx_python_model-0.0.5.tar.gz", hash = "sha256:4bcf7c6e5e2e8f0b787ed4eb8fb519e2ed776e820cb6d9eb93e44e98eb92ca2d", size = 138407, upload-time = "2026-04-08T16:35:32.584Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fa/ac/9f59885b64c896d089737a387b28d5b1a64bf5c6e8fbc37a337e8d36dc70/spdx_python_model-0.0.5-py3-none-any.whl", hash = "sha256:a92fcec60ca766522f9de726013609cf76297d2a43c927aacf24ec915c927c9a", size = 74279, upload-time = "2026-04-08T16:35:30.893Z" },
 ]
 
 [[package]]
