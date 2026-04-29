@@ -5,7 +5,9 @@ Reads what your Yocto build emits — SBOMs, CVE scan output, signing
 artefacts, license manifests — and reports whether the image is ready
 to ship.
 
-Status: pre-release. The 0.1 line is the first publishable cut.
+Status: pre-release. v0.0.x is the iteration stream; v0.1 is the first
+publishable cut once pilots 0002 / 0003 / 0004 (core-image-full-cmdline
+/ sato / weston) land.
 
 ## Install
 
@@ -87,11 +89,26 @@ limitations, not defects:
   (PK/KEK/DB enrollment), cryptographic verification of FIT or
   dm-verity artefacts, or IMA xattr verification on the rootfs. Those
   depths are tracked as roadmap follow-ups.
+- **UEFI Secure Boot positive-path detection requires a vendor BSP** -
+  shipcheck's `code-integrity` UEFI detector keys on the class-name
+  patterns `uefi-sign`, `sbsign`, `image-uefi-sign`, and `secureboot`
+  in `IMAGE_CLASSES`. None of those `.bbclass` files ship in upstream
+  poky / meta-arm / meta-security / meta-secure-core; the only
+  upstream-real `secureboot.bbclass` is in PHYTEC's vendor BSP
+  (`meta-ampliphy`). Pilot 0005 confirmed this on a vanilla
+  qemuarm64 build. Genuine positive-path UEFI testing therefore
+  requires either a vendor BSP that ships one of the four classes, or
+  meta-arm's `qemuarm64-secureboot` MACHINE (which uses a different
+  signing path).
 - **`hardening-flags` is build-config evidence only** - reads global
-  build configuration for `security_flags.inc` inheritance and the
-  `SECURITY_CFLAGS` / `SECURITY_LDFLAGS` / FORTIFY / stack-protector /
-  PIE markers Yocto exposes. It does NOT parse ELF binaries to confirm
-  per-binary hardening; that is tracked as a roadmap follow-up.
+  build configuration for `security_flags.inc` inheritance (Signal A)
+  and parses `TUNE_CCARGS` / `SELECTED_OPTIMIZATION` for
+  `-D_FORTIFY_SOURCE=2/3`, `-fstack-protector-strong`, `-fPIE`, and
+  `-Wl,-z,relro -Wl,-z,now` (Signal B). Per-recipe override syntax
+  (`TUNE_CCARGS:append:pn-foo`) is intentionally skipped - global
+  scope only. It does NOT parse ELF binaries to confirm per-binary
+  hardening, and does NOT consume `image-buildinfo.bbclass` output;
+  both are tracked as follow-ups (signal SIG-011).
 - **`sbom-generation` accepts SPDX 2.x, not only 2.3** - poky Scarthgap's
   `create-spdx` class emits SPDX 2.2 documents; shipcheck accepts both 2.2
   and 2.3 against the BSI TR-03183-2 v2.1.0 field requirements. SPDX 3.0
@@ -140,7 +157,7 @@ open-source, and developer-facing.
 
 ### Readiness is not compliance
 
-`shipcheck check` reports a readiness score (0-200). A perfect score
+`shipcheck check` reports a readiness score (0-250). A perfect score
 means every registered shipcheck check passed on this build. It does
 not mean the product is CRA-compliant. Compliance is a legal judgement
 made by the manufacturer, not a tooling verdict.
@@ -168,7 +185,11 @@ attestation. For the full rationale, see
 shipcheck ships in capability phases. Each phase bundles a set of checks
 with the report and evidence plumbing they need.
 
-### Shipped (v0.1)
+### Shipped
+
+#### v0.0.3 (2026-04-21) - Phase 1 + CRA evidence layer scaffolding
+
+#### v0.0.4 (2026-04-24) - vuln-reporting placeholder validation
 
 - **Phase 1 — SBOM + CVE + Report.** `sbom-generation` and `cve-tracking`
   checks; terminal / markdown / JSON / HTML reports; readiness score and
@@ -178,9 +199,10 @@ with the report and evidence plumbing they need.
   dm-verity, IMA/EVM config + package presence), `image-features`
   (insecure `IMAGE_FEATURES` such as `debug-tweaks`, `empty-root-password`,
   `allow-root-login`), and `hardening-flags` (compile-time hardening
-  evidence: `security_flags.inc` inheritance, `SECURITY_CFLAGS`,
-  `SECURITY_LDFLAGS`, FORTIFY/stack-protector/PIE markers in global
-  build config) checks. Static CRA requirement catalog with `cra_mapping`
+  evidence: `security_flags.inc` inheritance plus `TUNE_CCARGS` /
+  `SELECTED_OPTIMIZATION` parsing for FORTIFY_SOURCE,
+  stack-protector, PIE, and RELRO+now flags at global build-config
+  scope) checks. Static CRA requirement catalog with `cra_mapping`
   metadata on every finding, `--format evidence` renderer, `--out DIR`
   multi-file dossier, `license-audit` and `yocto-cve-check` checks, CVE
   finding reconciliation across scanners, SQLite scan history at
@@ -189,6 +211,18 @@ with the report and evidence plumbing they need.
   Annex I Part II §§4-8 documentation obligations.
 
 Pilot: see [`pilots/0001-poky-scarthgap-min/REPORT.md`](pilots/0001-poky-scarthgap-min/REPORT.md).
+
+#### v0.0.5 (2026-04-29) - code-integrity merge + image-features + hardening-flags
+
+- Merged `secure-boot` + `image-signing` into a single `code-integrity`
+  check covering UEFI Secure Boot, signed FIT, dm-verity, and IMA/EVM.
+- Added `image-features` check detecting insecure `IMAGE_FEATURES`
+  entries (`debug-tweaks`, `allow-empty-password`, etc.).
+- Added `hardening-flags` check detecting compile-time hardening
+  evidence at global build-config scope (`security_flags.inc`
+  inheritance + `TUNE_CCARGS` / `SELECTED_OPTIMIZATION` parsing).
+- Pilot 0005 validated the three new checks against a real
+  qemuarm64 / poky-scarthgap / core-image-minimal build.
 
 Pilot (`code-integrity` merge of `secure-boot` + `image-signing`): see [`pilots/0005-code-integrity-and-hardening/REPORT.md`](pilots/0005-code-integrity-and-hardening/REPORT.md).
 
@@ -218,6 +252,15 @@ Open improvements to existing checks rather than new phases:
 - Secure Boot PE/COFF binary signature verification
 - Secure Boot PKI chain validation (PK / KEK / DB enrollment)
 - CI pipeline signing-step detection in `.gitlab-ci.yml` / GitHub workflows
+- Hardening-flags Signals C+D and per-recipe overrides
+  (`image-buildinfo.bbclass` parsing, ELF artifact verification,
+  `TUNE_CCARGS:append:pn-foo`-style overrides). Tracked as signal
+  SIG-011.
+- `product.yaml` `code_integrity` block + validation (manufacturer
+  declares the chosen integrity strategy: `fit_dm_verity`,
+  `uefi_secure_boot`, `ota_server_signed`, `ima_evm`, or `other` with
+  rationale; `code-integrity` check accepts the declared strategy as
+  evidence for Annex I Part I §f). Tracked as signal SIG-012.
 
 ## Configuration
 
