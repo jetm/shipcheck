@@ -2,10 +2,13 @@
 
 ## [Unreleased]
 
+## [0.0.5] - 2026-04-29
+
 ### Added
 
 - `image-features` check detecting insecure `IMAGE_FEATURES` entries (`debug-tweaks` and similar).
 - `hardening-flags` check detecting global compile-time hardening evidence (`security_flags.inc` inclusion + `TUNE_CCARGS` parsing).
+- `pyproject.toml` now declares `[build-system]` with `uv_build` backend and a `source-include` glob for `src/shipcheck/**/*.yaml`, fixing the v0.0.4 wheel that shipped without `license_categories.yaml` or `cra/requirements.yaml`. (#2 by @threexc)
 
 ### Changed
 
