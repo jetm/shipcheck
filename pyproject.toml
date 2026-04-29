@@ -1,3 +1,7 @@
+[build-system]
+requires = ["uv_build"]
+build-backend = "uv_build"
+
 [project]
 name = "shipcheck"
 version = "0.0.4"
@@ -45,6 +49,12 @@ Issues = "https://github.com/jetm/shipcheck/issues"
 
 [tool.uv]
 package = true
+
+[tool.uv.build-backend]
+module-name = "shipcheck"
+module-root = "src"
+source-include = ["src/shipcheck/**/*.yaml"]
+wheel-exclude = []
 
 [tool.ruff]
 line-length = 100
