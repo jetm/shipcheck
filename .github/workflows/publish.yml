@@ -24,8 +24,13 @@ jobs:
 
       - name: Extract changelog section for this tag
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          awk "/^## \\[$VERSION\\]/,/^## \\[/" CHANGELOG.md | sed '$d' > release-notes.md
+          VERSION="${GITHUB_REF_NAME#v}" awk '
+            /^## \[/ {
+              if ($0 ~ "^## \\[" ENVIRON["VERSION"] "\\]") { p=1; print; next }
+              else if (p) exit
+            }
+            p { print }
+          ' CHANGELOG.md > release-notes.md
           echo "=== Release notes for ${GITHUB_REF_NAME} ==="
           cat release-notes.md
 
