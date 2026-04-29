@@ -128,11 +128,14 @@ repos:
     # IMA/EVM kernel-config fragment + ima-evm-utils + ima-policy
     # recipes ship in meta-security/meta-integrity. Pinned to
     # scarthgap branch HEAD as of pilot authoring.
+    # The meta-security repo's primary layer IS at the repo root
+    # (not in a meta-security/ subdir), so layers.: rather than
+    # layers.meta-security: is the correct kas syntax.
     url: https://git.yoctoproject.org/meta-security
     branch: scarthgap
     commit: b13f1705d723650de61277670c8a76aadea4cfdd
     layers:
-      meta-security:
+      .:                    # the repo root IS the meta-security layer
       meta-integrity:
 
 # Forward host environment variables to bitbake. SHIPCHECK_IMAGE_FEATURES
