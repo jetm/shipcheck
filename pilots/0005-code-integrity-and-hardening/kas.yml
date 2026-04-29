@@ -223,15 +223,20 @@ local_conf_header:
     TUNE_CCARGS:append = " -fstack-protector-strong"
 
     # ----------------------------------------------------------------
-    # Code integrity: UEFI Secure Boot signing classes.
+    # Code integrity: UEFI Secure Boot signing classes (NOT WIRED).
     # ----------------------------------------------------------------
-    # meta-arm provides image-uefi-sign / uefi-sign. Adding the class
-    # to IMAGE_CLASSES is what shipcheck's UEFI detector keys on; the
-    # actual signed .efi artifacts only land when MACHINE is switched
-    # to qemuarm64-secureboot, which conflicts with dm-verity in this
-    # combined build. Class-presence is sufficient evidence per the
-    # spec (specs/code-integrity/spec.md UEFI scenario).
-    IMAGE_CLASSES:append = " image-uefi-sign"
+    # The original pilot plan was to set IMAGE_CLASSES:append =
+    # " image-uefi-sign" so shipcheck's UEFI detector would key on the
+    # class name. That fails at parse time because no upstream layer
+    # in poky / meta-arm / meta-security / meta-secure-core ships a
+    # file named image-uefi-sign.bbclass; the only real upstream
+    # secureboot.bbclass is in PHYTEC's meta-ampliphy (vendor BSP).
+    # Genuine positive-path UEFI testing requires either that vendor
+    # BSP or meta-arm's qemuarm64-secureboot MACHINE (which conflicts
+    # with dm-verity in this combined build). The pilot validates
+    # detection by absence on this build; REPORT.md captures the
+    # finding for follow-on work to narrow shipcheck's
+    # _SIGNING_CLASSES list to upstream-real names.
 
     # ----------------------------------------------------------------
     # Code integrity: signed FIT image.
