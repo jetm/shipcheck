@@ -19,6 +19,32 @@ _REMEDIATION_SPDX = (
     " to your image recipe or local.conf."
 )
 
+# SPDX 3.0 logical-field -> tuple of accepted aliases (first match wins).
+# Priority order is sourced from Yocto's create-spdx-3.0.bbclass emit pattern,
+# which writes the namespaced (`software_*`) form. Aliases catch tools that
+# emit the SPDX 2.x field name verbatim under a 3.0 wrapper.
+SPDX3_FIELD_ALIASES: dict[str, tuple[str, ...]] = {
+    "name": ("name",),
+    "version": ("software_packageVersion", "versionInfo", "packageVersion"),
+    "supplier": ("suppliedBy", "supplier"),
+    "license": ("software_declaredLicense", "licenseDeclared"),
+    "checksums": ("verifiedUsing", "checksums"),
+}
+
+# Element type aliases for graph traversal. SPDX 3.0 serializers emit either
+# the bare type name or the namespaced (`core_*`/`software_*`) form depending
+# on context. Match both.
+_CREATION_INFO_TYPES = ("CreationInfo", "core_CreationInfo")
+_SBOM_TYPES = ("Sbom", "software_Sbom")
+_PACKAGE_TYPE = "software_Package"
+_PRIMARY_PURPOSE_ARCHIVE = "archive"
+
+
+def _element_type(element: dict) -> str:
+    """Return the `type` or `@type` field of an Element, preferring `type`."""
+    value = element.get("type") or element.get("@type") or ""
+    return value if isinstance(value, str) else ""
+
 
 def _discover_spdx_files(build_dir: Path) -> list[Path]:
     """Scan build_dir/tmp/deploy/spdx/ for **/*.spdx.json files."""
@@ -69,25 +95,140 @@ def _select_document(docs: list[tuple[Path, dict]]) -> tuple[Path, dict] | None:
     return max(docs, key=lambda x: _package_count(x[1]))
 
 
+def _select_best_document(docs: list[tuple[Path, dict]]) -> tuple[Path, dict] | None:
+    """Pick the best document across loaded SBOMs, format-aware.
+
+    SPDX 3.0 documents are routed through `_select_spdx3_document`
+    (Sbom rootElement walking, archive-primaryPurpose tiebreak).
+    Other formats (SPDX 2.x and unrecognized) go through
+    `_select_document` (DESCRIBES + package count).
+    """
+    if not docs:
+        return None
+
+    spdx3_docs = [(p, d) for p, d in docs if _detect_format(d) == "spdx-3"]
+    if spdx3_docs:
+        return _select_spdx3_document(spdx3_docs)
+
+    return _select_document(docs)
+
+
 def _detect_format(doc: dict) -> str | None:
     """Detect the SBOM document format.
 
     Returns:
         "spdx-2" for SPDX 2.x, "spdx-3" for SPDX 3.0,
         "cyclonedx" for CycloneDX, or None if unrecognized.
+
+    SPDX 3.0 detection looks for a `CreationInfo`-typed Element in
+    `@graph` whose `specVersion` field starts with `"3."`. The SPDX 2.x
+    `@context` heuristic is intentionally not used: `@context` is
+    optional and tools omit it, while `specVersion` is mandatory in the
+    3.0 spec.
     """
     spdx_version = doc.get("spdxVersion", "")
     if isinstance(spdx_version, str) and spdx_version.startswith("SPDX-2"):
         return "spdx-2"
 
-    context = doc.get("@context", "")
-    if isinstance(context, str) and "spdx.org" in context:
-        return "spdx-3"
+    graph = doc.get("@graph", [])
+    if isinstance(graph, list):
+        for element in graph:
+            if not isinstance(element, dict):
+                continue
+            if _element_type(element) not in _CREATION_INFO_TYPES:
+                continue
+            spec_version = element.get("specVersion", "")
+            if isinstance(spec_version, str) and spec_version.startswith("3."):
+                return "spdx-3"
 
     if "bomFormat" in doc:
         return "cyclonedx"
 
     return None
+
+
+def _spdx3_packages_by_id(graph: list) -> dict[str, dict]:
+    """Index `software_Package` Elements in a 3.0 `@graph` by `spdxId`."""
+    index: dict[str, dict] = {}
+    for element in graph:
+        if not isinstance(element, dict):
+            continue
+        if _element_type(element) != _PACKAGE_TYPE:
+            continue
+        spdx_id = element.get("spdxId")
+        if isinstance(spdx_id, str):
+            index[spdx_id] = element
+    return index
+
+
+def _spdx3_sbom_elements(graph: list) -> list[dict]:
+    """Return all `Sbom`-typed Elements in a 3.0 `@graph`."""
+    return [
+        element
+        for element in graph
+        if isinstance(element, dict) and _element_type(element) in _SBOM_TYPES
+    ]
+
+
+def _spdx3_root_packages(sbom: dict, packages_by_id: dict[str, dict]) -> list[dict]:
+    """Resolve a `Sbom` Element's `rootElement` references to packages.
+
+    The `rootElement` field may be a list of `spdxId` strings. Returns
+    the subset that resolves to `software_Package` Elements.
+    """
+    roots = sbom.get("rootElement", [])
+    if not isinstance(roots, list):
+        return []
+    resolved: list[dict] = []
+    for ref in roots:
+        if not isinstance(ref, str):
+            continue
+        pkg = packages_by_id.get(ref)
+        if pkg is not None:
+            resolved.append(pkg)
+    return resolved
+
+
+def _select_spdx3_document(docs: list[tuple[Path, dict]]) -> tuple[Path, dict] | None:
+    """Select the best SPDX 3.0 document for validation.
+
+    Priority:
+    1. Document containing an Sbom whose `rootElement` resolves to a
+       `software_Package` with `software_primaryPurpose == "archive"`
+       (image-level rootfs).
+    2. Document with the most `software_Package` Elements (fallback).
+    """
+    if not docs:
+        return None
+
+    image_docs: list[tuple[Path, dict]] = []
+    for path, doc in docs:
+        graph = doc.get("@graph", [])
+        if not isinstance(graph, list):
+            continue
+        packages_by_id = _spdx3_packages_by_id(graph)
+        for sbom in _spdx3_sbom_elements(graph):
+            roots = _spdx3_root_packages(sbom, packages_by_id)
+            if any(pkg.get("software_primaryPurpose") == _PRIMARY_PURPOSE_ARCHIVE for pkg in roots):
+                image_docs.append((path, doc))
+                break
+
+    if image_docs:
+        return max(image_docs, key=lambda x: _spdx3_package_count(x[1]))
+
+    return max(docs, key=lambda x: _spdx3_package_count(x[1]))
+
+
+def _spdx3_package_count(doc: dict) -> int:
+    """Count `software_Package` Elements in a 3.0 `@graph`."""
+    graph = doc.get("@graph", [])
+    if not isinstance(graph, list):
+        return 0
+    return sum(
+        1
+        for element in graph
+        if isinstance(element, dict) and _element_type(element) == _PACKAGE_TYPE
+    )
 
 
 def _validate_spdx2_metadata(doc: dict) -> list[Finding]:
@@ -260,7 +401,7 @@ class SBOMCheck(BaseCheck):
                 cra_mapping=["I.P2.1", "VII.2"],
             )
 
-        selected = _select_document(docs)
+        selected = _select_best_document(docs)
         if selected is None:
             findings.append(
                 Finding(

@@ -11,13 +11,16 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 from shipcheck.checks.sbom import (
+    SPDX3_FIELD_ALIASES,
     SBOMCheck,
     _detect_format,
     _discover_spdx_files,
     _has_describes,
     _load_spdx_docs,
     _package_count,
+    _select_best_document,
     _select_document,
+    _select_spdx3_document,
     _validate_spdx2_metadata,
     _validate_spdx2_packages,
 )
@@ -400,12 +403,36 @@ class TestDetectFormat:
         doc = {"spdxVersion": "SPDX-2.2"}
         assert _detect_format(doc) == "spdx-2"
 
-    def test_spdx_3_detected_by_context(self):
-        doc = {"@context": "https://spdx.org/rdf/3.0.0/terms"}
+    def test_detect_format_v3_by_creation_info_spec_version(self):
+        doc = {
+            "@graph": [
+                {"type": "CreationInfo", "specVersion": "3.0.0"},
+            ],
+        }
         assert _detect_format(doc) == "spdx-3"
 
-    def test_spdx_3_context_substring_match(self):
-        doc = {"@context": "https://spdx.org/rdf/3.0.1/terms"}
+    def test_detect_format_v3_via_at_type_key(self):
+        doc = {
+            "@graph": [
+                {"@type": "CreationInfo", "specVersion": "3.0.1"},
+            ],
+        }
+        assert _detect_format(doc) == "spdx-3"
+
+    def test_detect_format_v3_via_namespaced_creation_info_type(self):
+        doc = {
+            "@graph": [
+                {"type": "core_CreationInfo", "specVersion": "3.0.0"},
+            ],
+        }
+        assert _detect_format(doc) == "spdx-3"
+
+    def test_detect_format_v3_unknown_minor_still_detects(self):
+        doc = {
+            "@graph": [
+                {"type": "CreationInfo", "specVersion": "3.1.0"},
+            ],
+        }
         assert _detect_format(doc) == "spdx-3"
 
     def test_cyclonedx_detected_by_bom_format(self):
@@ -416,28 +443,77 @@ class TestDetectFormat:
         doc = {"some": "random", "json": "doc"}
         assert _detect_format(doc) is None
 
-    def test_spdx_2_takes_priority_over_context(self):
-        doc = {"spdxVersion": "SPDX-2.3", "@context": "https://spdx.org/rdf/3.0.0/terms"}
+    def test_spdx_2_takes_priority_over_graph(self):
+        doc = {
+            "spdxVersion": "SPDX-2.3",
+            "@graph": [{"type": "CreationInfo", "specVersion": "3.0.0"}],
+        }
         assert _detect_format(doc) == "spdx-2"
 
     def test_spdx_version_must_start_with_spdx_2(self):
         doc = {"spdxVersion": "SPDX-3.0"}
         assert _detect_format(doc) != "spdx-2"
 
+    def test_detect_format_v3_not_detected_when_graph_missing(self):
+        doc = {"@context": "https://spdx.org/rdf/3.0.0/terms"}
+        assert _detect_format(doc) is None
+
+    def test_detect_format_v3_not_detected_when_graph_empty(self):
+        doc = {"@graph": []}
+        assert _detect_format(doc) is None
+
+    def test_detect_format_v3_not_detected_without_creation_info_element(self):
+        doc = {
+            "@graph": [
+                {"type": "software_Package", "name": "busybox"},
+            ],
+        }
+        assert _detect_format(doc) is None
+
+    def test_detect_format_v3_not_detected_when_spec_version_missing(self):
+        doc = {
+            "@graph": [
+                {"type": "CreationInfo"},
+            ],
+        }
+        assert _detect_format(doc) is None
+
+    def test_detect_format_v3_not_detected_when_spec_version_is_2x(self):
+        doc = {
+            "@graph": [
+                {"type": "CreationInfo", "specVersion": "2.3"},
+            ],
+        }
+        assert _detect_format(doc) is None
+
+    def test_detect_format_v3_spdx_2x_doc_not_detected_as_3(self):
+        doc = {"spdxVersion": "SPDX-2.3", "packages": [{"name": "x"}]}
+        assert _detect_format(doc) != "spdx-3"
+
 
 # --- Integration tests for format detection in SBOMCheck.run ---
 
 
 def _make_spdx3_doc() -> dict:
-    """Build a minimal SPDX 3.0 JSON-LD document."""
+    """Build a minimal SPDX 3.0 JSON-LD document.
+
+    Carries a top-level `CreationInfo` Element with `specVersion="3.0.0"`,
+    matching the new `_detect_format` contract.
+    """
     return {
         "@context": "https://spdx.org/rdf/3.0.0/terms",
         "@graph": [
             {
-                "type": "SpdxDocument",
+                "type": "CreationInfo",
+                "specVersion": "3.0.0",
+                "created": "2026-01-01T00:00:00Z",
+                "createdBy": ["urn:spdx:agent-test"],
+            },
+            {
+                "type": "software_Package",
+                "spdxId": "urn:spdx:package-test",
                 "name": "test-image",
-                "creationInfo": {"specVersion": "3.0.0"},
-            }
+            },
         ],
     }
 
@@ -449,6 +525,219 @@ def _make_cyclonedx_doc() -> dict:
         "specVersion": "1.5",
         "components": [{"type": "library", "name": "test-pkg", "version": "1.0"}],
     }
+
+
+class TestSpdx3FieldAliases:
+    """Module-level SPDX3_FIELD_ALIASES constant must match the spec."""
+
+    def test_field_aliases_keys_are_canonical(self):
+        assert set(SPDX3_FIELD_ALIASES.keys()) == {
+            "name",
+            "version",
+            "supplier",
+            "license",
+            "checksums",
+        }
+
+    def test_name_alias_tuple(self):
+        assert SPDX3_FIELD_ALIASES["name"] == ("name",)
+
+    def test_version_alias_priority(self):
+        assert SPDX3_FIELD_ALIASES["version"] == (
+            "software_packageVersion",
+            "versionInfo",
+            "packageVersion",
+        )
+
+    def test_supplier_alias_priority(self):
+        assert SPDX3_FIELD_ALIASES["supplier"] == ("suppliedBy", "supplier")
+
+    def test_license_alias_priority(self):
+        assert SPDX3_FIELD_ALIASES["license"] == (
+            "software_declaredLicense",
+            "licenseDeclared",
+        )
+
+    def test_checksums_alias_priority(self):
+        assert SPDX3_FIELD_ALIASES["checksums"] == ("verifiedUsing", "checksums")
+
+
+class TestDetectFormatV3WithGenerator:
+    """`_detect_format` against the synthetic Yocto-shaped fixture."""
+
+    def test_detect_format_v3_yocto_shaped_fixture(self):
+        from tests.fixtures.spdx3.generator import build_yocto_shaped_spdx3
+
+        doc = build_yocto_shaped_spdx3()
+        assert _detect_format(doc) == "spdx-3"
+
+
+class TestSelectBestDocumentV3:
+    """`_select_best_document` routes SPDX 3.0 docs through the v3 selector."""
+
+    @staticmethod
+    def _make_spdx3_with_archive_root(image_name: str = "rootfs-a") -> dict:
+        """Build a tiny SPDX 3.0 doc whose Sbom rootElement resolves to an archive Package."""
+        pkg_id = f"urn:spdx:package-{image_name}"
+        return {
+            "@graph": [
+                {"type": "CreationInfo", "specVersion": "3.0.0"},
+                {
+                    "type": "Sbom",
+                    "spdxId": f"urn:spdx:sbom-{image_name}",
+                    "rootElement": [pkg_id],
+                },
+                {
+                    "type": "software_Package",
+                    "spdxId": pkg_id,
+                    "name": image_name,
+                    "software_primaryPurpose": "archive",
+                },
+            ],
+        }
+
+    @staticmethod
+    def _make_spdx3_with_install_root(name: str = "non-rootfs") -> dict:
+        """Build a SPDX 3.0 doc whose Sbom rootElement is an install Package (not an archive)."""
+        pkg_id = f"urn:spdx:package-{name}"
+        return {
+            "@graph": [
+                {"type": "CreationInfo", "specVersion": "3.0.0"},
+                {
+                    "type": "Sbom",
+                    "spdxId": f"urn:spdx:sbom-{name}",
+                    "rootElement": [pkg_id],
+                },
+                {
+                    "type": "software_Package",
+                    "spdxId": pkg_id,
+                    "name": name,
+                    "software_primaryPurpose": "install",
+                },
+                {
+                    "type": "software_Package",
+                    "spdxId": "urn:spdx:package-extra",
+                    "name": "extra",
+                    "software_primaryPurpose": "install",
+                },
+            ],
+        }
+
+    def test_select_best_document_v3_returns_none_when_no_docs(self):
+        assert _select_best_document([]) is None
+
+    def test_select_best_document_v3_routes_single_spdx3_doc(self, tmp_path: Path):
+        doc = self._make_spdx3_with_archive_root("img")
+        path = tmp_path / "img.spdx.json"
+        result = _select_best_document([(path, doc)])
+        assert result is not None
+        assert result == (path, doc)
+
+    def test_select_best_document_v3_archive_primary_purpose_wins_tiebreak(self, tmp_path: Path):
+        archive_doc = self._make_spdx3_with_archive_root("rootfs-a")
+        install_doc = self._make_spdx3_with_install_root("not-an-image")
+        archive_path = tmp_path / "archive.spdx.json"
+        install_path = tmp_path / "install.spdx.json"
+
+        result = _select_best_document([(install_path, install_doc), (archive_path, archive_doc)])
+        assert result is not None
+        assert result[0] == archive_path
+
+    def test_select_best_document_v3_falls_back_to_package_count_when_no_archive(
+        self, tmp_path: Path
+    ):
+        small = self._make_spdx3_with_install_root("small")
+        # Strip the extra package so `small` has 1 software_Package.
+        small["@graph"] = [element for element in small["@graph"] if element.get("name") != "extra"]
+        large = self._make_spdx3_with_install_root("large")  # has 2 software_Packages
+        small_path = tmp_path / "small.spdx.json"
+        large_path = tmp_path / "large.spdx.json"
+
+        result = _select_spdx3_document([(small_path, small), (large_path, large)])
+        assert result is not None
+        assert result[0] == large_path
+
+    def test_select_best_document_v3_routes_spdx2_docs_through_legacy_selector(
+        self, tmp_path: Path
+    ):
+        spdx2_doc = _make_spdx_doc(has_describes=True)
+        path = tmp_path / "spdx2.spdx.json"
+        result = _select_best_document([(path, spdx2_doc)])
+        assert result is not None
+        assert result == (path, spdx2_doc)
+
+    def test_select_best_document_v3_prefers_spdx3_when_both_formats_present(self, tmp_path: Path):
+        spdx2_doc = _make_spdx_doc(has_describes=True)
+        spdx3_doc = self._make_spdx3_with_archive_root("img")
+        spdx2_path = tmp_path / "spdx2.spdx.json"
+        spdx3_path = tmp_path / "spdx3.spdx.json"
+        result = _select_best_document([(spdx2_path, spdx2_doc), (spdx3_path, spdx3_doc)])
+        assert result is not None
+        assert result[0] == spdx3_path
+
+    def test_select_best_document_v3_unresolved_root_element_falls_to_package_count(
+        self, tmp_path: Path
+    ):
+        # Sbom points at a spdxId that does not exist; should not be picked as image.
+        broken = {
+            "@graph": [
+                {"type": "CreationInfo", "specVersion": "3.0.0"},
+                {
+                    "type": "Sbom",
+                    "spdxId": "urn:spdx:sbom-broken",
+                    "rootElement": ["urn:spdx:does-not-exist"],
+                },
+                {
+                    "type": "software_Package",
+                    "spdxId": "urn:spdx:package-x",
+                    "name": "x",
+                    "software_primaryPurpose": "install",
+                },
+            ],
+        }
+        archive_doc = self._make_spdx3_with_archive_root("real")
+        broken_path = tmp_path / "broken.spdx.json"
+        archive_path = tmp_path / "archive.spdx.json"
+        result = _select_best_document([(broken_path, broken), (archive_path, archive_doc)])
+        assert result is not None
+        assert result[0] == archive_path
+
+    def test_select_best_document_v3_namespaced_sbom_type_recognized(self, tmp_path: Path):
+        doc = {
+            "@graph": [
+                {"type": "CreationInfo", "specVersion": "3.0.1"},
+                {
+                    "type": "software_Sbom",
+                    "spdxId": "urn:spdx:sbom-namespaced",
+                    "rootElement": ["urn:spdx:package-namespaced"],
+                },
+                {
+                    "type": "software_Package",
+                    "spdxId": "urn:spdx:package-namespaced",
+                    "name": "namespaced",
+                    "software_primaryPurpose": "archive",
+                },
+            ],
+        }
+        other = self._make_spdx3_with_install_root("other")
+        path_ns = tmp_path / "namespaced.spdx.json"
+        path_other = tmp_path / "other.spdx.json"
+        result = _select_best_document([(path_other, other), (path_ns, doc)])
+        assert result is not None
+        assert result[0] == path_ns
+
+
+class TestDetectFormatV3WithFixtureGenerator:
+    """Round-trip via the synthetic Yocto-shaped fixture from task 1.2."""
+
+    def test_select_best_document_v3_with_generator_fixture(self, tmp_path: Path):
+        from tests.fixtures.spdx3.generator import build_yocto_shaped_spdx3
+
+        doc = build_yocto_shaped_spdx3()
+        path = tmp_path / "yocto.spdx.json"
+        result = _select_best_document([(path, doc)])
+        assert result is not None
+        assert result[0] == path
 
 
 class TestFormatDetectionSpdx2:

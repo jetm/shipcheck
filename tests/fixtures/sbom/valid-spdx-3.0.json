@@ -2,21 +2,23 @@
   "@context": "https://spdx.org/rdf/3.0.0/terms",
   "@graph": [
     {
+      "type": "CreationInfo",
+      "@id": "_:CreationInfo0",
+      "specVersion": "3.0.0",
+      "created": "2026-04-01T10:00:00Z",
+      "createdBy": [
+        "urn:spdx:agent-oe-spdx-creator"
+      ],
+      "createdUsing": [
+        "urn:spdx:tool-oe-spdx-creator-3.0"
+      ]
+    },
+    {
       "type": "SpdxDocument",
       "@id": "urn:spdx:core-image-minimal-3.0",
       "spdxId": "urn:spdx:core-image-minimal-3.0",
+      "creationInfo": "_:CreationInfo0",
       "name": "core-image-minimal",
-      "creationInfo": {
-        "type": "CreationInfo",
-        "specVersion": "3.0.0",
-        "created": "2026-04-01T10:00:00Z",
-        "createdBy": [
-          "urn:spdx:agent-oe-spdx-creator"
-        ],
-        "createdUsing": [
-          "urn:spdx:tool-oe-spdx-creator-3.0"
-        ]
-      },
       "rootElement": [
         "urn:spdx:package-busybox"
       ],
@@ -28,6 +30,7 @@
     {
       "type": "software_Package",
       "spdxId": "urn:spdx:package-busybox",
+      "creationInfo": "_:CreationInfo0",
       "name": "busybox",
       "software_packageVersion": "1.36.1",
       "suppliedBy": "urn:spdx:agent-busybox-project",
@@ -36,6 +39,7 @@
     {
       "type": "software_Package",
       "spdxId": "urn:spdx:package-openssl",
+      "creationInfo": "_:CreationInfo0",
       "name": "openssl",
       "software_packageVersion": "3.2.1",
       "suppliedBy": "urn:spdx:agent-openssl-project",
