@@ -231,6 +231,148 @@ def _spdx3_package_count(doc: dict) -> int:
     )
 
 
+_SPDX3_MAPPING_CITATION = "audits/0003-spdx3-mapping/mapping.md"
+
+
+def _find_creation_info(doc: dict) -> dict | None:
+    """Return the first `CreationInfo` Element in `@graph`, or None."""
+    graph = doc.get("@graph", [])
+    if not isinstance(graph, list):
+        return None
+    for element in graph:
+        if not isinstance(element, dict):
+            continue
+        if _element_type(element) in _CREATION_INFO_TYPES:
+            return element
+    return None
+
+
+def _validate_spdx3_metadata(doc: dict) -> tuple[int, list[Finding]]:
+    """Validate document-level SPDX 3.0 fields per BSI v2.1.0 -> 3.0 mapping.
+
+    Walks `@graph` for the `CreationInfo` Element and verifies `created`
+    (ISO 8601 timestamp string) and `createdBy` (non-empty list of `spdxId`
+    references). Awards 5 points only when both fields are present.
+
+    Required-field set is sourced from `audits/0003-spdx3-mapping/mapping.md`
+    (group 2 of the v2.1.0 -> 3.0 mapping).
+
+    Returns:
+        Tuple of (score_delta, findings). score_delta is 5 when both
+        fields are present, 0 otherwise.
+    """
+    findings: list[Finding] = []
+    description_suffix = f" (per {_SPDX3_MAPPING_CITATION})"
+
+    creation_info = _find_creation_info(doc)
+    if creation_info is None:
+        findings.append(
+            Finding(
+                message=(
+                    "SPDX 3.0 document is missing a CreationInfo Element" + description_suffix
+                ),
+                severity="medium",
+                cra_mapping=["I.P2.1", "VII.2"],
+            )
+        )
+        return 0, findings
+
+    created = creation_info.get("created")
+    created_ok = isinstance(created, str) and created.strip() != ""
+    if not created_ok:
+        findings.append(
+            Finding(
+                message=(
+                    "SPDX 3.0 CreationInfo is missing `created` timestamp" + description_suffix
+                ),
+                severity="medium",
+                cra_mapping=["I.P2.1", "VII.2"],
+            )
+        )
+
+    created_by = creation_info.get("createdBy")
+    created_by_ok = (
+        isinstance(created_by, list)
+        and len(created_by) > 0
+        and all(isinstance(ref, str) and ref.strip() != "" for ref in created_by)
+    )
+    if not created_by_ok:
+        findings.append(
+            Finding(
+                message=(
+                    "SPDX 3.0 CreationInfo is missing or has empty `createdBy` list"
+                    + description_suffix
+                ),
+                severity="medium",
+                cra_mapping=["I.P2.1", "VII.2"],
+            )
+        )
+
+    score_delta = 5 if created_ok and created_by_ok else 0
+    return score_delta, findings
+
+
+def _validate_spdx3_root_element(doc: dict) -> tuple[int, list[Finding]]:
+    """Validate the chosen Sbom Element's `rootElement` reference resolves.
+
+    Verifies (in order, short-circuit on first failure):
+        1. `@graph` contains at least one `Sbom` Element.
+        2. The chosen Sbom's `rootElement` field is a non-empty list.
+        3. At least one `rootElement` entry resolves by `spdxId` lookup
+           to a `software_Package` Element elsewhere in `@graph`.
+
+    Required field is sourced from `audits/0003-spdx3-mapping/mapping.md`
+    (group 2 of the v2.1.0 -> 3.0 mapping, DESCRIBES row).
+
+    Returns:
+        Tuple of (score_delta, findings). score_delta is 5 only when all
+        three conditions hold; otherwise 0 and a single high finding.
+    """
+    description_suffix = f" (per {_SPDX3_MAPPING_CITATION})"
+    graph = doc.get("@graph", [])
+    if not isinstance(graph, list):
+        graph = []
+
+    sbom_elements = _spdx3_sbom_elements(graph)
+    if not sbom_elements:
+        return 0, [
+            Finding(
+                message=("SPDX 3.0 document contains no Sbom Element" + description_suffix),
+                severity="high",
+                cra_mapping=["I.P2.1", "VII.2"],
+            )
+        ]
+
+    sbom = sbom_elements[0]
+    roots = sbom.get("rootElement")
+    if not isinstance(roots, list) or len(roots) == 0:
+        return 0, [
+            Finding(
+                message=(
+                    "SPDX 3.0 Sbom has missing or empty `rootElement` list" + description_suffix
+                ),
+                severity="high",
+                cra_mapping=["I.P2.1", "VII.2"],
+            )
+        ]
+
+    packages_by_id = _spdx3_packages_by_id(graph)
+    resolved = [ref for ref in roots if isinstance(ref, str) and ref in packages_by_id]
+    if not resolved:
+        return 0, [
+            Finding(
+                message=(
+                    "SPDX 3.0 Sbom `rootElement` does not resolve to any"
+                    " software_Package in @graph" + description_suffix
+                ),
+                severity="high",
+                cra_mapping=["I.P2.1", "VII.2"],
+            )
+        ]
+
+    return 5, []
+
+
 def _validate_spdx2_metadata(doc: dict) -> list[Finding]:
     """Validate document-level SPDX 2.3 fields per BSI TR-03183-2.
 
@@ -449,14 +591,47 @@ class SBOMCheck(BaseCheck):
                 cra_mapping=["I.P2.1", "VII.2"],
             )
 
-        if fmt in ("spdx-3", "cyclonedx"):
-            fmt_label = "SPDX 3.0" if fmt == "spdx-3" else "CycloneDX"
-            summary = f"{fmt_label} detected — format detected but not fully validated in v0.1"
+        if fmt == "cyclonedx":
+            summary = "CycloneDX detected — format detected but not fully validated in v0.1"
             return CheckResult(
                 check_id=self.id,
                 check_name=self.name,
                 status=determine_status(findings),
                 score=10,
+                max_score=50,
+                findings=findings,
+                summary=summary,
+                cra_mapping=["I.P2.1", "VII.2"],
+            )
+
+        if fmt == "spdx-3":
+            score = 10
+            metadata_delta, metadata_findings = _validate_spdx3_metadata(doc)
+            findings.extend(metadata_findings)
+            score += metadata_delta
+
+            root_delta, root_findings = _validate_spdx3_root_element(doc)
+            findings.extend(root_findings)
+            score += root_delta
+
+            findings.append(
+                Finding(
+                    message=("SPDX 3.0 per-Package field validation not yet wired (task 5.1)"),
+                    severity="low",
+                    cra_mapping=["I.P2.1", "VII.2"],
+                )
+            )
+
+            summary = (
+                f"SPDX 3.0 detected at {path.name} —"
+                " metadata and rootElement validated; per-Package validation"
+                " not fully validated in v0.1"
+            )
+            return CheckResult(
+                check_id=self.id,
+                check_name=self.name,
+                status=determine_status(findings),
+                score=score,
                 max_score=50,
                 findings=findings,
                 summary=summary,

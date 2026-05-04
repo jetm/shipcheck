@@ -23,6 +23,8 @@ from shipcheck.checks.sbom import (
     _select_spdx3_document,
     _validate_spdx2_metadata,
     _validate_spdx2_packages,
+    _validate_spdx3_metadata,
+    _validate_spdx3_root_element,
 )
 from shipcheck.models import CheckStatus
 
@@ -495,10 +497,14 @@ class TestDetectFormat:
 
 
 def _make_spdx3_doc() -> dict:
-    """Build a minimal SPDX 3.0 JSON-LD document.
+    """Build a minimal valid SPDX 3.0 JSON-LD document.
 
-    Carries a top-level `CreationInfo` Element with `specVersion="3.0.0"`,
-    matching the new `_detect_format` contract.
+    Carries a top-level `CreationInfo` Element with `specVersion="3.0.0"`
+    plus a `Sbom` Element whose `rootElement` resolves by `spdxId` to the
+    embedded `software_Package`. After task 4.1 lands, this document is
+    structurally complete enough to score full metadata + rootElement
+    points (10 + 5 + 5 = 20), with the per-Package portion still pending
+    task 5.1.
     """
     return {
         "@context": "https://spdx.org/rdf/3.0.0/terms",
@@ -508,6 +514,11 @@ def _make_spdx3_doc() -> dict:
                 "specVersion": "3.0.0",
                 "created": "2026-01-01T00:00:00Z",
                 "createdBy": ["urn:spdx:agent-test"],
+            },
+            {
+                "type": "Sbom",
+                "spdxId": "urn:spdx:sbom-test",
+                "rootElement": ["urn:spdx:package-test"],
             },
             {
                 "type": "software_Package",
@@ -740,6 +751,206 @@ class TestDetectFormatV3WithFixtureGenerator:
         assert result[0] == path
 
 
+class TestValidateSpdx3Metadata:
+    """`_validate_spdx3_metadata` enforces CreationInfo `created` + `createdBy`.
+
+    Required-field set is sourced from `audits/0003-spdx3-mapping/mapping.md`
+    (group 2 of the v2.1.0 -> 3.0 mapping).
+    """
+
+    def test_validate_spdx3_metadata_both_fields_present_awards_5_points(self):
+        doc = {
+            "@graph": [
+                {
+                    "type": "CreationInfo",
+                    "specVersion": "3.0.1",
+                    "created": "2026-04-30T12:00:00Z",
+                    "createdBy": [
+                        "urn:spdx:agent-shipcheck",
+                        "urn:spdx:tool-bitbake",
+                    ],
+                },
+            ],
+        }
+        delta, findings = _validate_spdx3_metadata(doc)
+        assert delta == 5
+        assert findings == []
+
+    def test_validate_spdx3_metadata_namespaced_type_recognized(self):
+        # Use the namespaced `core_CreationInfo` form. Should also award 5.
+        doc = {
+            "@graph": [
+                {
+                    "type": "core_CreationInfo",
+                    "specVersion": "3.0.1",
+                    "created": "2026-04-30T12:00:00Z",
+                    "createdBy": ["urn:spdx:agent-x"],
+                },
+            ],
+        }
+        delta, findings = _validate_spdx3_metadata(doc)
+        assert delta == 5
+        assert findings == []
+
+    def test_validate_spdx3_metadata_missing_created_produces_medium_finding(self):
+        doc = {
+            "@graph": [
+                {
+                    "type": "CreationInfo",
+                    "specVersion": "3.0.1",
+                    "createdBy": ["urn:spdx:agent-shipcheck"],
+                },
+            ],
+        }
+        delta, findings = _validate_spdx3_metadata(doc)
+        assert delta == 0
+        assert len(findings) == 1
+        assert findings[0].severity == "medium"
+        assert "created" in findings[0].message
+        assert "I.P2.1" in findings[0].cra_mapping
+        assert "VII.2" in findings[0].cra_mapping
+        # Validator MUST cite the audit mapping doc per design.md D4.
+        assert "audits/0003-spdx3-mapping/mapping.md" in findings[0].message
+
+    def test_validate_spdx3_metadata_empty_created_by_produces_medium_finding(self):
+        doc = {
+            "@graph": [
+                {
+                    "type": "CreationInfo",
+                    "specVersion": "3.0.1",
+                    "created": "2026-04-30T12:00:00Z",
+                    "createdBy": [],
+                },
+            ],
+        }
+        delta, findings = _validate_spdx3_metadata(doc)
+        assert delta == 0
+        assert len(findings) == 1
+        assert findings[0].severity == "medium"
+        assert "createdBy" in findings[0].message
+        assert "I.P2.1" in findings[0].cra_mapping
+        assert "VII.2" in findings[0].cra_mapping
+
+    def test_validate_spdx3_metadata_no_creation_info_produces_medium_finding(self):
+        # Edge case: empty graph means no CreationInfo Element at all.
+        doc = {"@graph": []}
+        delta, findings = _validate_spdx3_metadata(doc)
+        assert delta == 0
+        assert len(findings) == 1
+        assert findings[0].severity == "medium"
+        assert "CreationInfo" in findings[0].message
+
+
+class TestValidateSpdx3SbomRootElement:
+    """`_validate_spdx3_root_element` enforces a resolvable Sbom.rootElement.
+
+    Required field is sourced from `audits/0003-spdx3-mapping/mapping.md`
+    (group 2 of the v2.1.0 -> 3.0 mapping, DESCRIBES row).
+    """
+
+    def test_validate_sbom_rootelement_resolves_cleanly_awards_5_points(self):
+        doc = {
+            "@graph": [
+                {"type": "CreationInfo", "specVersion": "3.0.1"},
+                {
+                    "type": "Sbom",
+                    "spdxId": "urn:spdx:sbom-image",
+                    "rootElement": ["urn:spdx:package-rootfs"],
+                },
+                {
+                    "type": "software_Package",
+                    "spdxId": "urn:spdx:package-rootfs",
+                    "name": "rootfs",
+                },
+            ],
+        }
+        delta, findings = _validate_spdx3_root_element(doc)
+        assert delta == 5
+        assert findings == []
+
+    def test_validate_sbom_rootelement_namespaced_software_sbom_recognized(self):
+        # Use the namespaced `software_Sbom` form to confirm both type aliases work.
+        doc = {
+            "@graph": [
+                {"type": "core_CreationInfo", "specVersion": "3.0.1"},
+                {
+                    "type": "software_Sbom",
+                    "spdxId": "urn:spdx:sbom-namespaced",
+                    "rootElement": ["urn:spdx:package-namespaced"],
+                },
+                {
+                    "type": "software_Package",
+                    "spdxId": "urn:spdx:package-namespaced",
+                    "name": "namespaced",
+                },
+            ],
+        }
+        delta, findings = _validate_spdx3_root_element(doc)
+        assert delta == 5
+        assert findings == []
+
+    def test_validate_sbom_rootelement_no_sbom_produces_high_finding(self):
+        # Document has Packages and a CreationInfo but no Sbom Element.
+        doc = {
+            "@graph": [
+                {"type": "CreationInfo", "specVersion": "3.0.1"},
+                {
+                    "type": "software_Package",
+                    "spdxId": "urn:spdx:package-x",
+                    "name": "x",
+                },
+            ],
+        }
+        delta, findings = _validate_spdx3_root_element(doc)
+        assert delta == 0
+        assert len(findings) == 1
+        assert findings[0].severity == "high"
+        assert "no Sbom" in findings[0].message
+        assert "I.P2.1" in findings[0].cra_mapping
+        assert "VII.2" in findings[0].cra_mapping
+        # Validator MUST cite the audit mapping doc.
+        assert "audits/0003-spdx3-mapping/mapping.md" in findings[0].message
+
+    def test_validate_sbom_rootelement_empty_list_produces_high_finding(self):
+        doc = {
+            "@graph": [
+                {"type": "CreationInfo", "specVersion": "3.0.1"},
+                {
+                    "type": "Sbom",
+                    "spdxId": "urn:spdx:sbom-empty",
+                    "rootElement": [],
+                },
+            ],
+        }
+        delta, findings = _validate_spdx3_root_element(doc)
+        assert delta == 0
+        assert len(findings) == 1
+        assert findings[0].severity == "high"
+        assert "rootElement" in findings[0].message
+
+    def test_validate_sbom_rootelement_unresolved_spdxid_produces_high_finding(self):
+        doc = {
+            "@graph": [
+                {"type": "CreationInfo", "specVersion": "3.0.1"},
+                {
+                    "type": "Sbom",
+                    "spdxId": "urn:spdx:sbom-broken",
+                    "rootElement": ["urn:spdx:does-not-exist"],
+                },
+                {
+                    "type": "software_Package",
+                    "spdxId": "urn:spdx:package-other",
+                    "name": "other",
+                },
+            ],
+        }
+        delta, findings = _validate_spdx3_root_element(doc)
+        assert delta == 0
+        assert len(findings) == 1
+        assert findings[0].severity == "high"
+        assert "resolve" in findings[0].message.lower()
+
+
 class TestFormatDetectionSpdx2:
     """SPDX 2.x document triggers full validation path (task 2.4 adds validation)."""
 
@@ -757,26 +968,34 @@ class TestFormatDetectionSpdx2:
 
 
 class TestFormatDetectionSpdx3:
-    """SPDX 3.0 document gets detection-only: PASS with note, score 10."""
+    """SPDX 3.0 document scores 20 (10 format + 5 metadata + 5 rootElement).
+
+    Per-Package validation lands in task 5.1 and emits a single low
+    placeholder finding until then.
+    """
 
     def test_spdx_3_passes_with_note(self, tmp_path: Path, sbom_check: SBOMCheck):
         spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
         _write_spdx(spdx_dir / "image.spdx.json", _make_spdx3_doc())
         result = sbom_check.run(tmp_path, {})
-        assert result.status == CheckStatus.PASS
+        assert result.status == CheckStatus.WARN
         assert "not fully validated" in result.summary
 
-    def test_spdx_3_scores_10(self, tmp_path: Path, sbom_check: SBOMCheck):
+    def test_spdx_3_scores_20(self, tmp_path: Path, sbom_check: SBOMCheck):
         spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
         _write_spdx(spdx_dir / "image.spdx.json", _make_spdx3_doc())
         result = sbom_check.run(tmp_path, {})
-        assert result.score == 10
+        assert result.score == 20
 
-    def test_spdx_3_no_findings(self, tmp_path: Path, sbom_check: SBOMCheck):
+    def test_spdx_3_emits_per_package_placeholder(self, tmp_path: Path, sbom_check: SBOMCheck):
         spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
         _write_spdx(spdx_dir / "image.spdx.json", _make_spdx3_doc())
         result = sbom_check.run(tmp_path, {})
-        assert result.findings == []
+        # Exactly one low-severity placeholder finding for unwired per-Package
+        # validation; no high/medium findings on a structurally valid doc.
+        assert len(result.findings) == 1
+        assert result.findings[0].severity == "low"
+        assert "task 5.1" in result.findings[0].message
 
 
 class TestFormatDetectionCycloneDX:
@@ -853,7 +1072,10 @@ class TestFormatDetectionWithFixtures:
         spdx_dir.mkdir(parents=True)
         shutil.copy(fixtures_dir / "valid-spdx-3.0.json", spdx_dir / "image.spdx.json")
         result = sbom_check.run(tmp_path, {})
-        assert result.score == 10
+        # The fixture uses SpdxDocument (not Sbom), so rootElement validation
+        # finds no Sbom Element: score is 10 (format) + 5 (metadata) = 15.
+        # Per-Package validation lands in task 5.1.
+        assert result.score == 15
         assert "not fully validated" in result.summary
 
     def test_cyclonedx_fixture(self, tmp_path: Path, sbom_check: SBOMCheck, fixtures_dir: Path):
@@ -1332,13 +1554,20 @@ class TestScoringCombinedDeductions:
 
 
 class TestScoringDetectionOnly:
-    """Detection-only formats (SPDX 3.0, CycloneDX) cap at 10 points."""
+    """Detection-only formats (CycloneDX) cap at 10 points.
 
-    def test_scoring_spdx_3_capped_at_10(self, tmp_path: Path, sbom_check: SBOMCheck):
+    SPDX 3.0 is no longer detection-only after task 4.1; it scores up to
+    20 (10 format + 5 metadata + 5 rootElement) with the per-Package
+    portion still pending task 5.1.
+    """
+
+    def test_scoring_spdx_3_partial_validation_scores_20(
+        self, tmp_path: Path, sbom_check: SBOMCheck
+    ):
         spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
         _write_spdx(spdx_dir / "image.spdx.json", _make_spdx3_doc())
         result = sbom_check.run(tmp_path, {})
-        assert result.score == 10
+        assert result.score == 20
         assert result.max_score == 50
 
     def test_scoring_cyclonedx_capped_at_10(self, tmp_path: Path, sbom_check: SBOMCheck):
