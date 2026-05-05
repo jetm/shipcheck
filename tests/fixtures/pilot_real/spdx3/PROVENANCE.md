@@ -23,81 +23,78 @@ log and gating outcome.
 
 ## Fixture form decision
 
-Recipe-level only.
+Image-level (Sbom-rooted) slice.
 
-The image-level rootfs SPDX 3.0 file
+The full image-level rootfs SPDX 3.0 file
 (`tmp/deploy/images/qemux86-64/core-image-minimal-qemux86-64.rootfs.spdx.json`)
-weighs 13.4 MB on this build — far over the 500 KB pilot fixture budget. A
-slim image-level subset would lose the very rootElement-resolves and
-software_Sbom semantics it would be committed to test, so the pragmatic
-choice is to ship four small recipe-level documents that exercise the
-JSON-LD `@graph` walker, `CreationInfo.specVersion` lookup, and
-field-alias resolution paths.
+weighs ~13 MB on this build with 18,204 `@graph` entries (1 `software_Sbom`,
+278 `CreationInfo`, 128 `software_Package`, 12,264
+`security_VexFixedVulnAssessmentRelationship`, etc.). Task 9.1
+(ground-truth reconciliation) replaces the v0.0.5-era four recipe-level
+documents with a transitive-closure slice of the image-level file so the
+real fixture exercises the validator's `software_Sbom`-rooted path,
+matching the runtime artifact shipcheck reads on a real build.
+
+The slice is produced by `scripts/extract_pilot_fixture_spdx3.py` (a
+sibling to the SPDX 2.x extractor). The slicer:
+
+- locates the unique `software_Sbom` Element,
+- keeps the CreationInfo it references,
+- keeps an archive-purpose root from `rootElement` plus a small,
+  representative subset of `software_Package` Elements (5 by default,
+  drawn deterministically from install-purpose first, then source-purpose),
+- BFS-follows IRI / blank-node spdxId references for 2 hops to pull in
+  any transitively-referenced Element (CreationInfo, hashes, etc.),
+- narrows the Sbom's `rootElement` list to entries that resolve into
+  the slice.
 
 The synthetic fixture from task 1.2 (`tests/fixtures/spdx3/generator.py`)
-covers the `Sbom` rootElement path that recipe-level documents do not
-carry.
+remains the ground truth for the full Yocto-shaped JSON-LD with
+relationships and externalIdentifier objects; the real fixture is the
+ground truth for what the validator will actually score on a live build.
+
+## Out of scope (tracked separately)
+
+Recipe-level Yocto SPDX 3.0 files use a `SpdxDocument` root rather than
+`Sbom`. shipcheck's `_validate_spdx3_root_element` only validates Sbom
+roots today. Whether to also validate recipe-level `SpdxDocument`-rooted
+documents in v0.0.7+ is tracked under follow-up signal **SIG-013**, not
+in the spdx-3-validation change.
 
 ## Files committed
 
-- `tmp/deploy/spdx/3.0.1/qemux86_64/recipes/recipe-base-files.spdx.json` — 25 KB
-- `tmp/deploy/spdx/3.0.1/qemux86_64/recipes/recipe-init-ifupdown.spdx.json` — 13 KB
-- `tmp/deploy/spdx/3.0.1/qemux86_64/recipes/recipe-shadow-securetty.spdx.json` — 6 KB
-- `tmp/deploy/spdx/3.0.1/qemux86_64/recipes/recipe-sysvinit-inittab.spdx.json` — 8 KB
+- `tmp/deploy/images/qemux86-64/core-image-minimal-qemux86-64.rootfs.spdx.json`
+  — ~9 KB, 16 `@graph` entries (1 `software_Sbom`, 5 `software_Package`,
+  8 `CreationInfo`, 1 `Organization`, 1 `Tool`).
 
-Total: ~67 KB (well under 500 KB).
+Total: ~13 KB (well under the 500 KB pilot fixture budget).
 
-## Divergence findings (for task 9.1 reconciliation)
+## Real-fixture scoring expectations
 
-These deltas were observed between the synthetic fixture shape and real
-Yocto SPDX 3.0 output. Task 9.1 ("Ground-truth reconciliation") is the
-owner — fixes belong in `src/shipcheck/checks/sbom.py`, not in the
-fixtures.
-
-### 1. Recipe-level documents use `SpdxDocument`, not `Sbom`
-
-Each recipe-level file has exactly one element with `type: "SpdxDocument"`
-at the top of `@graph`. There is no `Sbom` Element in recipe-level
-documents — Yocto only emits `software_Sbom` Elements at the image-level
-(`tmp/deploy/images/<machine>/<image>.rootfs.spdx.json`).
-
-The current `_validate_spdx3_root_element` validator (added in task 4.1)
-only looks for `Sbom` Elements. Real recipe-level Yocto SPDX 3.0 files
-will fail that validator. Task 9.1 must decide whether to:
-
-- accept `SpdxDocument` as an alternative root container,
-- restrict rootElement validation to documents that carry an `Sbom`
-  Element, treating `SpdxDocument`-only documents as recipe-level metadata
-  that does not need the rootElement check, or
-- some other reconciliation backed by the BSI v2.1.0 → SPDX 3.0 mapping
-  in `audits/0003-spdx3-mapping/mapping.md`.
-
-### 2. Image-level Sbom carries the namespaced type `software_Sbom`
-
-The 13.4 MB image-level file contains exactly one Sbom-form element, and
-its type is `software_Sbom` (not bare `Sbom`). The current validator
-matches on `type == "Sbom"`, which will miss the real Yocto image-level
-Sbom. Task 9.1 must update the validator to accept the namespaced form.
-
-This finding is documented here even though no image-level file is
-committed to the fixture, because task 9.1's diff is the right place to
-land the parser fix and the synthetic generator from task 1.2 should be
-reviewed to confirm it does or does not emit the namespaced form.
+The integration test in `tests/test_checks/test_sbom.py` expects a
+partial 20/50 score on this fixture: 10 (format) + 5 (metadata) + 5
+(rootElement resolves) + 0 (per-Package). Yocto's image-level
+`software_Package` Elements do not carry `supplier`,
+`software_declaredLicense`, or per-package `verifiedUsing`; license is
+expressed via separate `Relationship`/`hasConcludedLicense` Elements
+pointing to `simplelicensing_LicenseExpression` Elements elsewhere in
+`@graph`. That is a data-model difference from BSI v2.1.0's
+field-on-Package expectation, not a validator bug. The synthetic fixture
+exercises the fully-compliant path.
 
 ## Regenerate
 
-This fixture was extracted by hand-copy. `scripts/extract_pilot_fixture.py`
-targets SPDX 2.x layouts and is not yet wired for SPDX 3.0 trees; a future
-change can add a `--spdx3` flag, but doing so is out of scope for the
-spdx-3-validation change.
+```bash
+# Regenerate the underlying build (produces ~13 MB of SPDX 3.0 output)
+kas-container build pilots/0006-poky-scarthgap-spdx3/kas.yml
 
-To regenerate by hand:
+# Re-slice the image-level rootfs SPDX 3.0 file under 500 KB
+uv run scripts/extract_pilot_fixture_spdx3.py
+```
 
-1. Run `kas-container build pilots/0006-poky-scarthgap-spdx3/kas.yml`
-2. Copy the four files above from
-   `pilots/0006-poky-scarthgap-spdx3/build/tmp/deploy/spdx/3.0.1/qemux86_64/recipes/`
-   into this directory's `tmp/deploy/spdx/3.0.1/qemux86_64/recipes/`.
-3. Verify total size stays under 500 KB.
+The slicer is deterministic given the same input file (Package selection
+sorts by `spdxId`), so re-running it on the same build produces a
+byte-identical fixture.
 
 Refresh when poky Scarthgap point-releases shift SPDX 3.0 output layouts
 or when shipcheck's discovery logic changes. See `docs/pilot.md` for the

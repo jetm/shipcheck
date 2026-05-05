@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import pytest
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 from shipcheck.checks.sbom import (
     SPDX3_FIELD_ALIASES,
@@ -1989,3 +1986,124 @@ class TestCraMappingFormatValidation:
         assert result.findings
         for finding in result.findings:
             assert "VII.2" in finding.cra_mapping
+
+
+# --- Integration tests against the real pilot 0006 image-level slice ---
+
+
+_REAL_SPDX3_FIXTURE = (
+    Path(__file__).resolve().parent.parent
+    / "fixtures"
+    / "pilot_real"
+    / "spdx3"
+    / "tmp"
+    / "deploy"
+    / "images"
+    / "qemux86-64"
+    / "core-image-minimal-qemux86-64.rootfs.spdx.json"
+)
+
+
+@pytest.fixture
+def real_spdx3_doc() -> dict:
+    """Load the committed pilot 0006 image-level SPDX 3.0 slice as a dict."""
+    return json.loads(_REAL_SPDX3_FIXTURE.read_text())
+
+
+class TestSpdx3RealFixture:
+    """Integration tests that load the real pilot 0006 SPDX 3.0 slice.
+
+    Task 9.1 ground-truth reconciliation: assert the validator scores a
+    real-shape Yocto image-level rootfs SPDX 3.0 document correctly. The
+    fixture is a transitive-closure slice produced by
+    ``scripts/extract_pilot_fixture_spdx3.py`` from the pilot 0006 build;
+    see ``tests/fixtures/pilot_real/spdx3/PROVENANCE.md`` for the full
+    provenance and the slicing parameters.
+
+    Real Yocto image-level ``software_Package`` Elements carry name,
+    primaryPurpose, and (for runtime install packages) version, but do
+    NOT carry ``supplier``, ``software_declaredLicense``, or per-package
+    ``verifiedUsing``. License is expressed via separate Relationship /
+    hasConcludedLicense Elements pointing to simplelicensing_*
+    Elements. That divergence from BSI v2.1.0's field-on-Package
+    expectation is a data-model difference, not a validator bug; the
+    expected end-to-end score is documented as a partial 20/50.
+    """
+
+    def test_spdx3_real_fixture_loads(self, real_spdx3_doc: dict):
+        """Sanity: the committed slice is valid JSON with @graph + CreationInfo."""
+        assert "@graph" in real_spdx3_doc
+        graph = real_spdx3_doc["@graph"]
+        assert isinstance(graph, list)
+        assert len(graph) >= 1
+        creation_infos = [
+            el for el in graph if isinstance(el, dict) and el.get("type") == "CreationInfo"
+        ]
+        assert creation_infos, "fixture must contain at least one CreationInfo"
+        spec_versions = [ci.get("specVersion") for ci in creation_infos if ci.get("specVersion")]
+        assert spec_versions, "fixture must contain at least one specVersion"
+        assert any(sv.startswith("3.0") for sv in spec_versions)
+
+    def test_spdx3_real_fixture_detection(self, real_spdx3_doc: dict):
+        """``_detect_format`` must classify the real fixture as ``spdx-3``."""
+        assert _detect_format(real_spdx3_doc) == "spdx-3"
+
+    def test_spdx3_real_fixture_validates_metadata(self, real_spdx3_doc: dict):
+        """Metadata validator awards 5 points: real CreationInfo has both fields."""
+        score, findings = _validate_spdx3_metadata(real_spdx3_doc)
+        assert score == 5
+        assert findings == []
+
+    def test_spdx3_real_fixture_validates_root_element(self, real_spdx3_doc: dict):
+        """rootElement validator awards 5 points: Sbom resolves to software_Package."""
+        score, findings = _validate_spdx3_root_element(real_spdx3_doc)
+        assert score == 5
+        assert findings == []
+
+    def test_spdx3_real_fixture_validates_packages(self, real_spdx3_doc: dict):
+        """Per-Package validator returns score 0 plus medium findings.
+
+        Yocto image-level packages do not carry supplier / license /
+        per-package checksums, so every package emits the same triple of
+        ``missing or invalid {supplier,license,checksums}`` findings. The
+        archive package additionally lacks version. None are fully
+        compliant under the BSI v2.1.0 mapping, so score is 0/30.
+        """
+        score, findings = _validate_spdx3_packages(real_spdx3_doc)
+        assert score == 0
+        assert findings, "real packages should produce missing-field findings"
+        for finding in findings:
+            assert finding.severity == "medium"
+            assert "I.P2.1" in finding.cra_mapping
+            assert "VII.2" in finding.cra_mapping
+        # Every finding cites a missing logical field.
+        missing_fields = {
+            field
+            for finding in findings
+            for field in ("supplier", "license", "checksums", "version", "name")
+            if f"missing or invalid {field}" in finding.message
+        }
+        assert "supplier" in missing_fields
+        assert "license" in missing_fields
+
+    def test_spdx3_real_fixture_end_to_end(
+        self, tmp_path: Path, sbom_check: SBOMCheck, real_spdx3_doc: dict
+    ):
+        """End-to-end: SBOMCheck.run scores the real fixture as 20/50.
+
+        Score breakdown:
+          - 10 format detection (spdx-3)
+          - 5 metadata (CreationInfo has created + createdBy)
+          - 5 rootElement (Sbom rootElement resolves to software_Package)
+          - 0 per-Package (no Package carries supplier/license/checksums)
+        """
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", real_spdx3_doc)
+        result = sbom_check.run(tmp_path, {})
+        assert result.max_score == 50
+        assert result.score == 20
+        assert result.status == CheckStatus.WARN
+        assert "SPDX 3.0" in result.summary
+        # Findings are real-Yocto missing-field signals, not detection failures.
+        for finding in result.findings:
+            assert finding.severity in ("medium", "high", "low")

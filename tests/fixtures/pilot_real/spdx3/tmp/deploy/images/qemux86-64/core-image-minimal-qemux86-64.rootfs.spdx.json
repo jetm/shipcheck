@@ -1,0 +1,202 @@
+{
+  "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+  "@graph": [
+    {
+      "type": "CreationInfo",
+      "created": "2011-04-05T23:00:00Z",
+      "createdBy": [
+        "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/agent/OpenEmbedded"
+      ],
+      "createdUsing": [
+        "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/tool/oe-spdx-creator_1_0"
+      ],
+      "specVersion": "3.0.1"
+    },
+    {
+      "type": "CreationInfo",
+      "@id": "_:CreationInfo161",
+      "created": "2023-05-18T22:31:00Z",
+      "createdBy": [
+        "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/agent/OpenEmbedded"
+      ],
+      "createdUsing": [
+        "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/tool/oe-spdx-creator_1_0"
+      ],
+      "specVersion": "3.0.1"
+    },
+    {
+      "type": "CreationInfo",
+      "@id": "_:CreationInfo200",
+      "created": "2023-05-18T22:31:00Z",
+      "createdBy": [
+        "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/agent/OpenEmbedded"
+      ],
+      "createdUsing": [
+        "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/tool/oe-spdx-creator_1_0"
+      ],
+      "specVersion": "3.0.1"
+    },
+    {
+      "type": "CreationInfo",
+      "@id": "_:CreationInfo235",
+      "created": "2011-04-05T23:00:00Z",
+      "createdBy": [
+        "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/agent/OpenEmbedded"
+      ],
+      "createdUsing": [
+        "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/tool/oe-spdx-creator_1_0"
+      ],
+      "specVersion": "3.0.1"
+    },
+    {
+      "type": "CreationInfo",
+      "@id": "_:CreationInfo236",
+      "created": "2011-04-05T23:00:00Z",
+      "createdBy": [
+        "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/agent/OpenEmbedded"
+      ],
+      "createdUsing": [
+        "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/tool/oe-spdx-creator_1_0"
+      ],
+      "specVersion": "3.0.1"
+    },
+    {
+      "type": "CreationInfo",
+      "@id": "_:CreationInfo237",
+      "created": "2011-04-05T23:00:00Z",
+      "createdBy": [
+        "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/agent/OpenEmbedded"
+      ],
+      "createdUsing": [
+        "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/tool/oe-spdx-creator_1_0"
+      ],
+      "specVersion": "3.0.1"
+    },
+    {
+      "type": "CreationInfo",
+      "@id": "_:CreationInfo245",
+      "created": "2023-11-29T09:09:27Z",
+      "createdBy": [
+        "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/agent/OpenEmbedded"
+      ],
+      "createdUsing": [
+        "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/tool/oe-spdx-creator_1_0"
+      ],
+      "specVersion": "3.0.1"
+    },
+    {
+      "type": "CreationInfo",
+      "@id": "_:CreationInfo256",
+      "created": "2011-04-05T23:00:00Z",
+      "createdBy": [
+        "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/agent/OpenEmbedded"
+      ],
+      "createdUsing": [
+        "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/tool/oe-spdx-creator_1_0"
+      ],
+      "specVersion": "3.0.1"
+    },
+    {
+      "type": "software_Package",
+      "spdxId": "http://spdx.org/spdxdocs/base-files-ee9424e3-1d7e-5739-b9cd-237a1a6f843f/17b29a2358175438c251b7e2859973caf993e7686ba504de03312797da2207ba/package/base-files",
+      "creationInfo": "_:CreationInfo256",
+      "description": "The base-files package creates the basic system directory structure and provides a small set of key configuration files for the system.",
+      "externalIdentifier": [
+        {
+          "type": "ExternalIdentifier",
+          "externalIdentifierType": "cpe23",
+          "identifier": "cpe:2.3:*:*:base-files:3.0.14:*:*:*:*:*:*:*"
+        }
+      ],
+      "name": "base-files",
+      "summary": "Miscellaneous files for the base system",
+      "software_primaryPurpose": "install",
+      "software_packageVersion": "3.0.14"
+    },
+    {
+      "type": "software_Package",
+      "spdxId": "http://spdx.org/spdxdocs/base-passwd-78e3ab0a-4686-572d-a886-5105dd9b12de/ee06908598bbba2c4f55e42f4a5afc15a60800589dd7880f905e157783a1bcb7/package/base-passwd",
+      "creationInfo": "_:CreationInfo245",
+      "description": "The master copies of the user database files (/etc/passwd and /etc/group).  The update-passwd tool is also provided to keep the system databases synchronized with these master files.",
+      "externalIdentifier": [
+        {
+          "type": "ExternalIdentifier",
+          "externalIdentifierType": "cpe23",
+          "identifier": "cpe:2.3:*:*:base-passwd:3.6.3:*:*:*:*:*:*:*"
+        }
+      ],
+      "name": "base-passwd",
+      "summary": "Base system master password/group files",
+      "software_primaryPurpose": "install",
+      "software_homePage": "https://launchpad.net/base-passwd",
+      "software_packageVersion": "3.6.3"
+    },
+    {
+      "type": "Organization",
+      "spdxId": "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/agent/OpenEmbedded",
+      "creationInfo": "_:CreationInfo235",
+      "name": "OpenEmbedded"
+    },
+    {
+      "type": "Tool",
+      "spdxId": "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/tool/oe-spdx-creator_1_0",
+      "creationInfo": "_:CreationInfo235",
+      "name": "oe-spdx-creator 1.0"
+    },
+    {
+      "type": "software_Package",
+      "spdxId": "http://spdx.org/spdxdocs/busybox-88c2f534-0ecc-55ec-b418-e44fadbec098/3b395ad064ec8e8cd94d3caf54aefca3df7af02df939afe52be510fac74d3808/package/busybox",
+      "creationInfo": "_:CreationInfo161",
+      "description": "BusyBox combines tiny versions of many common UNIX utilities into a single small executable. It provides minimalist replacements for most of the utilities you usually find in GNU fileutils, shellutils, etc. The utilities in BusyBox generally have fewer options than their full-featured GNU cousins; however, the options that are included provide the expected functionality and behave very much like their GNU counterparts. BusyBox provides a fairly complete POSIX environment for any small or embedded system.",
+      "externalIdentifier": [
+        {
+          "type": "ExternalIdentifier",
+          "externalIdentifierType": "cpe23",
+          "identifier": "cpe:2.3:*:*:busybox:1.36.1:*:*:*:*:*:*:*"
+        }
+      ],
+      "name": "busybox",
+      "summary": "Tiny versions of many common UNIX utilities in a single small executable",
+      "software_primaryPurpose": "install",
+      "software_homePage": "https://www.busybox.net",
+      "software_packageVersion": "1.36.1"
+    },
+    {
+      "type": "software_Package",
+      "spdxId": "http://spdx.org/spdxdocs/busybox-88c2f534-0ecc-55ec-b418-e44fadbec098/3b395ad064ec8e8cd94d3caf54aefca3df7af02df939afe52be510fac74d3808/package/busybox-hwclock",
+      "creationInfo": "_:CreationInfo200",
+      "description": "BusyBox combines tiny versions of many common UNIX utilities into a single small executable. It provides minimalist replacements for most of the utilities you usually find in GNU fileutils, shellutils, etc. The utilities in BusyBox generally have fewer options than their full-featured GNU cousins; however, the options that are included provide the expected functionality and behave very much like their GNU counterparts. BusyBox provides a fairly complete POSIX environment for any small or embedded system.",
+      "externalIdentifier": [
+        {
+          "type": "ExternalIdentifier",
+          "externalIdentifierType": "cpe23",
+          "identifier": "cpe:2.3:*:*:busybox:1.36.1:*:*:*:*:*:*:*"
+        }
+      ],
+      "name": "busybox-hwclock",
+      "summary": "Tiny versions of many common UNIX utilities in a single small executable",
+      "software_primaryPurpose": "install",
+      "software_homePage": "https://www.busybox.net",
+      "software_packageVersion": "1.36.1"
+    },
+    {
+      "type": "software_Package",
+      "spdxId": "http://spdx.org/spdxdocs/core-image-minimal-d87a4dff-5991-524d-b994-a37645cdb1fc/a09a2e9442633a89eb4b4a72affe0798819b12c9daff783b5bfc3d41937baa7f/rootfs/core-image-minimal",
+      "creationInfo": "_:CreationInfo236",
+      "name": "core-image-minimal",
+      "software_primaryPurpose": "archive"
+    },
+    {
+      "type": "software_Sbom",
+      "spdxId": "http://spdx.org/spdxdocs/core-image-minimal-d87a4dff-5991-524d-b994-a37645cdb1fc/a4f89f2f49a30f241aeb849009c5f6fd9dd44334f3804f3882ea8e2785d9a094/sbom/core-image-minimal-qemux86-64_rootfs-20260430131021",
+      "creationInfo": "_:CreationInfo237",
+      "name": "core-image-minimal-qemux86-64.rootfs-20260430131021",
+      "rootElement": [
+        "http://spdx.org/spdxdocs/core-image-minimal-d87a4dff-5991-524d-b994-a37645cdb1fc/a09a2e9442633a89eb4b4a72affe0798819b12c9daff783b5bfc3d41937baa7f/rootfs/core-image-minimal"
+      ],
+      "software_sbomType": [
+        "build"
+      ]
+    }
+  ]
+}
