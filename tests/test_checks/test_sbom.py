@@ -24,6 +24,7 @@ from shipcheck.checks.sbom import (
     _validate_spdx2_metadata,
     _validate_spdx2_packages,
     _validate_spdx3_metadata,
+    _validate_spdx3_packages,
     _validate_spdx3_root_element,
 )
 from shipcheck.models import CheckStatus
@@ -951,6 +952,224 @@ class TestValidateSpdx3SbomRootElement:
         assert "resolve" in findings[0].message.lower()
 
 
+def _make_compliant_spdx3_package(
+    name: str = "pkg1",
+    *,
+    version_alias: str = "software_packageVersion",
+) -> dict:
+    """Build a fully compliant SPDX 3.0 software_Package Element.
+
+    All five required logical fields (name, version, supplier, license,
+    checksums) carry non-empty values via canonical-name aliases.
+    """
+    pkg = {
+        "type": "software_Package",
+        "spdxId": f"urn:spdx:package-{name}",
+        "name": name,
+        "suppliedBy": "urn:spdx:agent-vendor",
+        "software_declaredLicense": "MIT",
+        "verifiedUsing": [
+            {"algorithm": "sha256", "hashValue": "abc123" * 10},
+        ],
+    }
+    pkg[version_alias] = "1.2.3"
+    return pkg
+
+
+def _make_spdx3_doc_with_packages(packages: list[dict]) -> dict:
+    """Build a structurally valid SPDX 3.0 doc with the given Packages.
+
+    The first Package is referenced by the Sbom's rootElement so the
+    metadata + rootElement validators score 5 + 5.
+    """
+    root_id = packages[0]["spdxId"] if packages else "urn:spdx:package-missing"
+    return {
+        "@context": "https://spdx.org/rdf/3.0.0/terms",
+        "@graph": [
+            {
+                "type": "CreationInfo",
+                "specVersion": "3.0.0",
+                "created": "2026-01-01T00:00:00Z",
+                "createdBy": ["urn:spdx:agent-test"],
+            },
+            {
+                "type": "Sbom",
+                "spdxId": "urn:spdx:sbom-test",
+                "rootElement": [root_id],
+            },
+            *packages,
+        ],
+    }
+
+
+class TestValidateSpdx3Packages:
+    """`_validate_spdx3_packages` enforces the five BSI-required logical fields.
+
+    Required-field set is sourced from `audits/0003-spdx3-mapping/mapping.md`
+    (group 2 of the v2.1.0 -> 3.0 mapping).
+    """
+
+    def test_validate_spdx3_packages_all_fields_satisfied_via_canonical_names(self):
+        doc = _make_spdx3_doc_with_packages([_make_compliant_spdx3_package("pkg1")])
+        delta, findings = _validate_spdx3_packages(doc)
+        assert delta == 30
+        assert findings == []
+
+    def test_validate_spdx3_packages_version_via_versioninfo_alias(self):
+        pkg = _make_compliant_spdx3_package("pkg1", version_alias="versionInfo")
+        doc = _make_spdx3_doc_with_packages([pkg])
+        delta, findings = _validate_spdx3_packages(doc)
+        assert delta == 30
+        assert findings == []
+
+    def test_validate_spdx3_packages_missing_version_produces_finding(self):
+        pkg = _make_compliant_spdx3_package("pkg1")
+        # Strip every version alias.
+        for alias in SPDX3_FIELD_ALIASES["version"]:
+            pkg.pop(alias, None)
+        doc = _make_spdx3_doc_with_packages([pkg])
+        delta, findings = _validate_spdx3_packages(doc)
+        assert delta == 0
+        assert len(findings) == 1
+        assert findings[0].severity == "medium"
+        assert "version" in findings[0].message
+        assert "pkg1" in findings[0].message
+
+    def test_validate_spdx3_packages_supplier_noassertion_missing(self):
+        pkg = _make_compliant_spdx3_package("pkg1")
+        pkg["suppliedBy"] = "NOASSERTION"
+        doc = _make_spdx3_doc_with_packages([pkg])
+        delta, findings = _validate_spdx3_packages(doc)
+        assert delta == 0
+        assert len(findings) == 1
+        assert findings[0].severity == "medium"
+        assert "supplier" in findings[0].message
+
+    def test_validate_spdx3_packages_canonical_alias_outranks_legacy(self):
+        pkg = _make_compliant_spdx3_package("pkg1")
+        # Canonical alias has the real value; legacy alias is empty.
+        pkg["software_packageVersion"] = "9.9.9"
+        pkg["versionInfo"] = ""
+        doc = _make_spdx3_doc_with_packages([pkg])
+        delta, findings = _validate_spdx3_packages(doc)
+        # First-match-wins: canonical alias resolves to the real value;
+        # the empty legacy alias is never consulted.
+        assert delta == 30
+        assert findings == []
+
+    def test_validate_spdx3_packages_security_vulnerability_ignored(self):
+        pkg = _make_compliant_spdx3_package("pkg1")
+        doc = _make_spdx3_doc_with_packages([pkg])
+        doc["@graph"].append(
+            {
+                "type": "security_Vulnerability",
+                "spdxId": "urn:spdx:vuln-1",
+                "name": "CVE-2026-1234",
+            }
+        )
+        delta, findings = _validate_spdx3_packages(doc)
+        # 1 of 1 surviving Package compliant; security_ Element ignored.
+        assert delta == 30
+        assert findings == []
+
+    def test_validate_spdx3_packages_security_vex_relationship_ignored(self):
+        pkg = _make_compliant_spdx3_package("pkg1")
+        doc = _make_spdx3_doc_with_packages([pkg])
+        doc["@graph"].append(
+            {
+                "type": "security_VexNotAffectedVulnAssessmentRelationship",
+                "spdxId": "urn:spdx:vex-1",
+            }
+        )
+        delta, findings = _validate_spdx3_packages(doc)
+        assert delta == 30
+        assert findings == []
+
+    def test_validate_spdx3_packages_no_packages_returns_zero(self):
+        doc = {"@graph": [{"type": "CreationInfo", "specVersion": "3.0.0"}]}
+        delta, findings = _validate_spdx3_packages(doc)
+        assert delta == 0
+        assert len(findings) == 1
+        assert findings[0].severity == "medium"
+        assert "no software_Package" in findings[0].message
+
+
+class TestSecuritySkip:
+    """The graph walker skips every Element whose type starts with `security_`."""
+
+    def test_security_skip_cvss_relationship_excluded(self):
+        pkg = _make_compliant_spdx3_package("pkg1")
+        doc = _make_spdx3_doc_with_packages([pkg])
+        doc["@graph"].append(
+            {
+                "type": "security_CvssV3VulnAssessmentRelationship",
+                "spdxId": "urn:spdx:cvss-1",
+            }
+        )
+        delta, findings = _validate_spdx3_packages(doc)
+        # The CVSS Element is skipped entirely; the lone real Package is
+        # the full denominator.
+        assert delta == 30
+        assert findings == []
+
+    def test_security_skip_only_graph_yields_no_packages(self):
+        doc = {
+            "@graph": [
+                {"type": "CreationInfo", "specVersion": "3.0.0"},
+                {
+                    "type": "security_Vulnerability",
+                    "spdxId": "urn:spdx:vuln-1",
+                },
+                {
+                    "type": "security_VexNotAffectedVulnAssessmentRelationship",
+                    "spdxId": "urn:spdx:vex-1",
+                },
+            ],
+        }
+        delta, findings = _validate_spdx3_packages(doc)
+        assert delta == 0
+        assert len(findings) == 1
+        assert findings[0].severity == "medium"
+        assert "no software_Package" in findings[0].message
+
+
+class TestSbomCheckV3EndToEnd:
+    """`SBOMCheck.run` end-to-end scoring on full / partially-compliant docs."""
+
+    def test_sbom_check_v3_fully_valid_10_packages_scores_50(
+        self, tmp_path: Path, sbom_check: SBOMCheck
+    ):
+        packages = [_make_compliant_spdx3_package(f"pkg{i}") for i in range(10)]
+        doc = _make_spdx3_doc_with_packages(packages)
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        assert result.score == 50
+        assert result.max_score == 50
+        assert result.status == CheckStatus.PASS
+        assert "SPDX 3.0 fully validated" in result.summary
+
+    def test_sbom_check_v3_5_of_10_compliant_scores_35(self, tmp_path: Path, sbom_check: SBOMCheck):
+        packages: list[dict] = []
+        # 5 fully compliant.
+        for i in range(5):
+            packages.append(_make_compliant_spdx3_package(f"good{i}"))
+        # 5 each missing exactly one different field.
+        missing_fields = ("name", "version", "supplier", "license", "checksums")
+        for i, logical_field in enumerate(missing_fields):
+            pkg = _make_compliant_spdx3_package(f"bad{i}")
+            for alias in SPDX3_FIELD_ALIASES[logical_field]:
+                pkg.pop(alias, None)
+            packages.append(pkg)
+        doc = _make_spdx3_doc_with_packages(packages)
+        spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
+        _write_spdx(spdx_dir / "image.spdx.json", doc)
+        result = sbom_check.run(tmp_path, {})
+        # 10 (format) + 5 (metadata) + 5 (rootElement) + round(30 * 5/10) = 35
+        assert result.score == 35
+        assert result.max_score == 50
+
+
 class TestFormatDetectionSpdx2:
     """SPDX 2.x document triggers full validation path (task 2.4 adds validation)."""
 
@@ -970,8 +1189,9 @@ class TestFormatDetectionSpdx2:
 class TestFormatDetectionSpdx3:
     """SPDX 3.0 document scores 20 (10 format + 5 metadata + 5 rootElement).
 
-    Per-Package validation lands in task 5.1 and emits a single low
-    placeholder finding until then.
+    The minimal `_make_spdx3_doc()` carries a single Package with only `name`
+    populated, so per-Package validation produces 4 medium findings (missing
+    version, supplier, license, checksums) and contributes 0 of 30 points.
     """
 
     def test_spdx_3_passes_with_note(self, tmp_path: Path, sbom_check: SBOMCheck):
@@ -979,7 +1199,7 @@ class TestFormatDetectionSpdx3:
         _write_spdx(spdx_dir / "image.spdx.json", _make_spdx3_doc())
         result = sbom_check.run(tmp_path, {})
         assert result.status == CheckStatus.WARN
-        assert "not fully validated" in result.summary
+        assert "SPDX 3.0 fully validated" in result.summary
 
     def test_spdx_3_scores_20(self, tmp_path: Path, sbom_check: SBOMCheck):
         spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
@@ -987,15 +1207,21 @@ class TestFormatDetectionSpdx3:
         result = sbom_check.run(tmp_path, {})
         assert result.score == 20
 
-    def test_spdx_3_emits_per_package_placeholder(self, tmp_path: Path, sbom_check: SBOMCheck):
+    def test_spdx_3_emits_per_package_findings(self, tmp_path: Path, sbom_check: SBOMCheck):
         spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
         _write_spdx(spdx_dir / "image.spdx.json", _make_spdx3_doc())
         result = sbom_check.run(tmp_path, {})
-        # Exactly one low-severity placeholder finding for unwired per-Package
-        # validation; no high/medium findings on a structurally valid doc.
-        assert len(result.findings) == 1
-        assert result.findings[0].severity == "low"
-        assert "task 5.1" in result.findings[0].message
+        # The minimal package has only `name`; expect one medium finding per
+        # missing logical field (version, supplier, license, checksums).
+        assert all(f.severity == "medium" for f in result.findings)
+        missing_fields = {
+            field
+            for field in ("version", "supplier", "license", "checksums")
+            if any(field in f.message for f in result.findings)
+        }
+        assert missing_fields == {"version", "supplier", "license", "checksums"}
+        # Placeholder finding must no longer be emitted.
+        assert not any("task 5.1" in f.message for f in result.findings)
 
 
 class TestFormatDetectionCycloneDX:
@@ -1073,10 +1299,11 @@ class TestFormatDetectionWithFixtures:
         shutil.copy(fixtures_dir / "valid-spdx-3.0.json", spdx_dir / "image.spdx.json")
         result = sbom_check.run(tmp_path, {})
         # The fixture uses SpdxDocument (not Sbom), so rootElement validation
-        # finds no Sbom Element: score is 10 (format) + 5 (metadata) = 15.
-        # Per-Package validation lands in task 5.1.
+        # contributes 0 of 5 points. Its two software_Package Elements lack the
+        # five required fields, so per-Package validation contributes 0 of 30.
+        # Total: 10 (format) + 5 (metadata) + 0 (rootElement) + 0 (per-Package).
         assert result.score == 15
-        assert "not fully validated" in result.summary
+        assert "SPDX 3.0 fully validated" in result.summary
 
     def test_cyclonedx_fixture(self, tmp_path: Path, sbom_check: SBOMCheck, fixtures_dir: Path):
         import shutil
@@ -1556,9 +1783,9 @@ class TestScoringCombinedDeductions:
 class TestScoringDetectionOnly:
     """Detection-only formats (CycloneDX) cap at 10 points.
 
-    SPDX 3.0 is no longer detection-only after task 4.1; it scores up to
-    20 (10 format + 5 metadata + 5 rootElement) with the per-Package
-    portion still pending task 5.1.
+    SPDX 3.0 is fully validated after task 5.1: a structurally minimal
+    document (one Package missing four of five required fields) scores
+    20 (10 format + 5 metadata + 5 rootElement + 0 per-Package).
     """
 
     def test_scoring_spdx_3_partial_validation_scores_20(

@@ -373,6 +373,128 @@ def _validate_spdx3_root_element(doc: dict) -> tuple[int, list[Finding]]:
     return 5, []
 
 
+def _resolve_spdx3_field(element: dict, aliases: tuple[str, ...]) -> object:
+    """First-match-wins lookup over ``aliases`` against ``element``.
+
+    Returns the raw value of the first alias whose key is present on the
+    Element. ``None`` if no alias is present.
+    """
+    for alias in aliases:
+        if alias in element:
+            return element[alias]
+    return None
+
+
+def _is_spdx3_field_present(value: object) -> bool:
+    """Return True when a resolved field value counts as 'present'.
+
+    Empty strings, empty lists/dicts, and ``None`` count as missing. The
+    literal string ``"NOASSERTION"`` is rejected by the caller (it is a
+    valid value type-wise but maps to a missing-supplier/license finding
+    per the BSI mapping).
+    """
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value.strip() != ""
+    if isinstance(value, (list, dict)):
+        return len(value) > 0
+    return True
+
+
+def _validate_spdx3_packages(doc: dict) -> tuple[int, list[Finding]]:
+    """Validate per-Package SPDX 3.0 fields per BSI v2.1.0 -> 3.0 mapping.
+
+    Walks ``@graph`` and inspects each Element whose type discriminator
+    contains ``Package`` (matches both ``software_Package`` and the bare
+    ``Package`` form). Elements whose type begins with ``security_`` are
+    skipped before any field parsing or scoring.
+
+    For each surviving Package, the five logical fields (``name``,
+    ``version``, ``supplier``, ``license``, ``checksums``) are resolved
+    through ``SPDX3_FIELD_ALIASES`` first-match-wins. The literal string
+    ``"NOASSERTION"`` for the supplier or license logical fields counts
+    as MISSING and produces a finding.
+
+    Required-field set is sourced from
+    ``audits/0003-spdx3-mapping/mapping.md`` (group 2 of the v2.1.0 ->
+    3.0 mapping).
+
+    Returns:
+        Tuple of (score_delta, findings). ``score_delta`` is 30 points
+        distributed proportionally to fully-compliant package count over
+        total surviving package count. With no packages found, returns
+        ``(0, [single medium finding])``.
+    """
+    description_suffix = f" (per {_SPDX3_MAPPING_CITATION})"
+    findings: list[Finding] = []
+
+    graph = doc.get("@graph", [])
+    if not isinstance(graph, list):
+        graph = []
+
+    packages: list[dict] = []
+    for element in graph:
+        if not isinstance(element, dict):
+            continue
+        type_value = _element_type(element)
+        if type_value.startswith("security_"):
+            continue
+        if "Package" not in type_value:
+            continue
+        packages.append(element)
+
+    if not packages:
+        return 0, [
+            Finding(
+                message=(
+                    "SPDX 3.0 document contains no software_Package Elements" + description_suffix
+                ),
+                severity="medium",
+                cra_mapping=["I.P2.1", "VII.2"],
+            )
+        ]
+
+    compliant = 0
+    for pkg in packages:
+        pkg_name_value = _resolve_spdx3_field(pkg, SPDX3_FIELD_ALIASES["name"])
+        pkg_label = (
+            pkg_name_value if isinstance(pkg_name_value, str) and pkg_name_value else "<unknown>"
+        )
+        pkg_issues: list[str] = []
+
+        for logical_field in ("name", "version", "supplier", "license", "checksums"):
+            aliases = SPDX3_FIELD_ALIASES[logical_field]
+            value = _resolve_spdx3_field(pkg, aliases)
+            if not _is_spdx3_field_present(value):
+                pkg_issues.append(logical_field)
+                continue
+            if (
+                logical_field in ("supplier", "license")
+                and isinstance(value, str)
+                and value.strip() == "NOASSERTION"
+            ):
+                pkg_issues.append(logical_field)
+
+        if pkg_issues:
+            for field_name in pkg_issues:
+                findings.append(
+                    Finding(
+                        message=(
+                            f"SPDX 3.0 software_Package '{pkg_label}':"
+                            f" missing or invalid {field_name}" + description_suffix
+                        ),
+                        severity="medium",
+                        cra_mapping=["I.P2.1", "VII.2"],
+                    )
+                )
+        else:
+            compliant += 1
+
+    score_delta = round(30 * compliant / len(packages))
+    return score_delta, findings
+
+
 def _validate_spdx2_metadata(doc: dict) -> list[Finding]:
     """Validate document-level SPDX 2.3 fields per BSI TR-03183-2.
 
@@ -614,18 +736,13 @@ class SBOMCheck(BaseCheck):
             findings.extend(root_findings)
             score += root_delta
 
-            findings.append(
-                Finding(
-                    message=("SPDX 3.0 per-Package field validation not yet wired (task 5.1)"),
-                    severity="low",
-                    cra_mapping=["I.P2.1", "VII.2"],
-                )
-            )
+            package_delta, package_findings = _validate_spdx3_packages(doc)
+            findings.extend(package_findings)
+            score += package_delta
 
             summary = (
-                f"SPDX 3.0 detected at {path.name} —"
-                " metadata and rootElement validated; per-Package validation"
-                " not fully validated in v0.1"
+                f"SPDX 3.0 fully validated at {path.name}"
+                f" against BSI v2.1.0 mapping ({_spdx3_package_count(doc)} packages)"
             )
             return CheckResult(
                 check_id=self.id,
