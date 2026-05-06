@@ -78,6 +78,55 @@ scope for this change.
 | Per-package `licenseDeclared` (rejecting empty and `NOASSERTION`) | `software_Package.software_declaredLicense` (xsd:string SPDX license expression; `NOASSERTION` and missing both treated as missing-license) | BSI TR-03183-2 v2.1.0 §5.3.4 (Component declared license) | `https://spdx.github.io/spdx-spec/v3.0.1/model/Software/Classes/Package/` - field `software_declaredLicense`; `https://spdx.github.io/spdx-spec/v3.0.1/model/SimpleLicensing/` | Renamed and namespaced. shipcheck alias tuple: `("software_declaredLicense", "licenseDeclared")`. The literal string `"NOASSERTION"` is treated as missing. The corresponding `software_concludedLicense` field (3.0 analogue of 2.x `licenseConcluded`) is NOT validated by this check - only `licenseDeclared` is in BSI v2.1.0's required set. |
 | Per-package `checksums` (non-empty list) | `software_Package.verifiedUsing` (non-empty list of `core_Hash` Elements; each `core_Hash` carries `algorithm` and `hashValue`) | BSI TR-03183-2 v2.1.0 §5.3.5 (Component cryptographic hash) | `https://spdx.github.io/spdx-spec/v3.0.1/model/Core/Classes/Package/` - field `verifiedUsing`; `https://spdx.github.io/spdx-spec/v3.0.1/model/Core/Classes/Hash/` (range, with `algorithm`, `hashValue`) | Renamed and re-typed: the 2.x `[{algorithm, checksumValue}]` list becomes a list of typed `core_Hash` Elements (or `spdxId` references to them). shipcheck alias tuple: `("verifiedUsing", "checksums")`. shipcheck only checks list non-emptiness for 3.0, mirroring the 2.x rule; it does not validate algorithm strength here (out of scope for BSI v2.1.0). |
 
+## 4a. Resolution path: field vs Relationship
+
+Real Yocto Scarthgap (poky pin
+`cb2dcb4963e5fbe449f1bcb019eae883ddecc8ec`, see
+`audits/0003-spdx3-mapping/upstream-poky-spdx3.md`) does NOT emit
+supplier and license as fields on the `software_Package` Element.
+Instead, those values land in separate Elements (an `Organization`
+for supplier; a `simplelicensing_LicenseExpression` for license)
+linked to the Package via `Relationship` Elements. The validator
+implements a two-phase resolution per logical field; the table below
+records which phase each BSI field uses on real Scarthgap output.
+
+| Logical field | Phase 1: field-on-Package | Phase 2: Relationship traversal | Real Scarthgap path |
+| --- | --- | --- | --- |
+| `name` | `name` (always present on the Package Element) | not consulted | Phase 1 |
+| `version` | aliases `("software_packageVersion", "versionInfo", "packageVersion")` (Yocto writes `software_packageVersion`) | not consulted | Phase 1 |
+| `supplier` | aliases `("suppliedBy", "supplier")` | `from == Package.spdxId`, `relationshipType ∈ {hasSuppliedBy, hasOriginatedBy}`, `to[0]` resolves to an `Organization` / `Agent` Element | Phase 2 (Yocto writes a `Relationship` per package; `suppliedBy` may also appear on the Package field but the runtime fixture observed at the Scarthgap pin omits it) |
+| `license` | aliases `("software_declaredLicense", "licenseDeclared")` | `from == Package.spdxId`, `relationshipType ∈ {hasConcludedLicense, hasDeclaredLicense}`, `to[0]` resolves to a `simplelicensing_LicenseExpression` Element (whose `simplelicensing_licenseExpression` field carries the SPDX expression string) | Phase 2 (Yocto writes the license as a separate Element and links it via `hasConcludedLicense`; commit `02c8355a81` on master changes the package-level relationship to `hasDeclaredLicense`) |
+| `checksums` | aliases `("verifiedUsing", "checksums")` | not consulted in v0.0.6 (per-Package checksums on `software_File` Elements would require multi-hop traversal; tracked under signal SIG-013) | Phase 1 (no relationship fallback shipped) |
+
+### Resolution rules
+
+1. **Field-on-Package wins.** If Phase 1 resolves a non-empty value
+   that is not the literal string `NOASSERTION`, that value is used;
+   Phase 2 is never consulted for that field on that Package.
+2. **One hop only.** Phase 2 follows `Package.spdxId -> Relationship.from`
+   then `Relationship.to[0] -> Element.spdxId`. The validator does not
+   chase further references on the resolved target.
+3. **`relationshipType` priority.** When two known relationship types
+   resolve the same logical field, the lower-priority value wins:
+   `hasConcludedLicense (1) > hasDeclaredLicense (2)`,
+   `hasSuppliedBy (1) > hasOriginatedBy (2)`. Unknown types are
+   ignored.
+4. **`security_` skip.** Relationship Elements whose type begins with
+   `security_` (e.g. `security_VexNotAffectedVulnAssessmentRelationship`)
+   are excluded from the resolver before any matching, mirroring the
+   skip rule already applied to package walking (design.md D5).
+5. **`NOASSERTION` is missing.** A relationship target whose `to[0]`
+   is the literal string `NOASSERTION`, or whose resolved Element
+   carries `NOASSERTION` as its identifying value, is treated as
+   missing - identical to the existing 2.x `_validate_spdx2_packages`
+   rule.
+
+The relationship-traversal extension was added in shipcheck v0.0.6
+after pilot 0006 surfaced the encoding divergence. The amendment
+event recording the spec change is logged in
+`devspec/spdx-3-validation` (event_type `amendment`, `spec_file`
+`specs/spdx3-field-validation`).
+
 ## 5. Fields with no clean 3.0 analogue
 
 The audit pass against `_validate_spdx2_metadata` and

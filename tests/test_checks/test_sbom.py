@@ -2096,6 +2096,18 @@ class TestSpdx3RealFixture:
           - 5 metadata (CreationInfo has created + createdBy)
           - 5 rootElement (Sbom rootElement resolves to software_Package)
           - 0 per-Package (no Package carries supplier/license/checksums)
+
+        Relationship-traversal fallback (task 9.2) does NOT lift this
+        score because the committed slice has zero Relationship Elements
+        - the slicer kept Packages and CreationInfo but dropped every
+        ``Relationship`` from ``@graph`` to stay under the 500 KB
+        budget. The traversal is exercised by the unit tests in
+        ``TestSpdx3PackageRelationshipResolution`` (synthetic fixtures
+        with explicit Relationship Elements). The 20/50 here remains
+        the floor for what shipcheck can score on the real Yocto
+        Scarthgap-encoded image-level rootfs SPDX 3.0 slice as
+        committed; see PROVENANCE.md for the slicer rationale and
+        SIG-013 for the recipe-level / full-fixture follow-up.
         """
         spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
         _write_spdx(spdx_dir / "image.spdx.json", real_spdx3_doc)
@@ -2107,3 +2119,209 @@ class TestSpdx3RealFixture:
         # Findings are real-Yocto missing-field signals, not detection failures.
         for finding in result.findings:
             assert finding.severity in ("medium", "high", "low")
+
+
+class TestSpdx3PackageRelationshipResolution:
+    """`_validate_spdx3_packages` falls back to Relationship traversal.
+
+    Real Yocto Scarthgap (poky cb2dcb4963e5fbe449f1bcb019eae883ddecc8ec)
+    emits supplier and license as separate Elements linked via
+    Relationship Elements rather than as fields on the Package itself.
+    The validator's resolution order is:
+
+    1. Try ``SPDX3_FIELD_ALIASES`` first-match-wins on the Package.
+    2. On miss, walk Relationship Elements where ``from == Package.spdxId``
+       and the ``relationshipType`` matches a row in
+       ``SPDX3_RELATIONSHIP_TYPE_FIELD_MAP``.
+    3. The Relationship's ``to[0]`` resolves by ``spdxId`` lookup to a
+       sibling Element whose identifying value is taken as the field's
+       value (license expression for ``license``; Organization name for
+       ``supplier``).
+
+    See ``audits/0003-spdx3-mapping/mapping.md`` (Resolution-path
+    section) and ``audits/0003-spdx3-mapping/upstream-poky-spdx3.md``
+    for the upstream encoding origin.
+    """
+
+    @staticmethod
+    def _make_relationship(
+        from_id: str,
+        to_id: str,
+        rel_type: str,
+        spdx_id_suffix: str = "rel",
+    ) -> dict:
+        return {
+            "type": "Relationship",
+            "spdxId": f"urn:spdx:{spdx_id_suffix}-{rel_type}",
+            "from": from_id,
+            "relationshipType": rel_type,
+            "to": [to_id],
+        }
+
+    @staticmethod
+    def _make_package_without(name: str, *, drop: tuple[str, ...]) -> dict:
+        pkg = _make_compliant_spdx3_package(name)
+        for logical_field in drop:
+            for alias in SPDX3_FIELD_ALIASES[logical_field]:
+                pkg.pop(alias, None)
+        return pkg
+
+    def test_spdx3_relationship_license_via_has_concluded_license(self):
+        """`hasConcludedLicense` Relationship satisfies missing license field."""
+        pkg = self._make_package_without("pkg1", drop=("license",))
+        license_element = {
+            "type": "simplelicensing_LicenseExpression",
+            "spdxId": "urn:spdx:license-mit",
+            "simplelicensing_licenseExpression": "MIT",
+        }
+        doc = _make_spdx3_doc_with_packages([pkg])
+        doc["@graph"].append(license_element)
+        doc["@graph"].append(
+            self._make_relationship(
+                pkg["spdxId"],
+                license_element["spdxId"],
+                "hasConcludedLicense",
+            )
+        )
+        delta, findings = _validate_spdx3_packages(doc)
+        assert delta == 30
+        assert findings == []
+
+    def test_spdx3_relationship_supplier_via_has_supplied_by(self):
+        """`hasSuppliedBy` Relationship to Organization satisfies supplier."""
+        pkg = self._make_package_without("pkg1", drop=("supplier",))
+        organization = {
+            "type": "Organization",
+            "spdxId": "urn:spdx:agent-openembedded",
+            "name": "OpenEmbedded",
+        }
+        doc = _make_spdx3_doc_with_packages([pkg])
+        doc["@graph"].append(organization)
+        doc["@graph"].append(
+            self._make_relationship(
+                pkg["spdxId"],
+                organization["spdxId"],
+                "hasSuppliedBy",
+            )
+        )
+        delta, findings = _validate_spdx3_packages(doc)
+        assert delta == 30
+        assert findings == []
+
+    def test_spdx3_relationship_field_on_package_wins(self):
+        """Field-on-Package alias has priority; Relationship is the fallback."""
+        pkg = _make_compliant_spdx3_package("pkg1")
+        pkg["software_declaredLicense"] = "Apache-2.0"
+        license_element = {
+            "type": "simplelicensing_LicenseExpression",
+            "spdxId": "urn:spdx:license-gpl3",
+            "simplelicensing_licenseExpression": "GPL-3.0-only",
+        }
+        doc = _make_spdx3_doc_with_packages([pkg])
+        doc["@graph"].append(license_element)
+        doc["@graph"].append(
+            self._make_relationship(
+                pkg["spdxId"],
+                license_element["spdxId"],
+                "hasConcludedLicense",
+            )
+        )
+        delta, findings = _validate_spdx3_packages(doc)
+        # Field-on-Package wins (Apache-2.0); the Relationship fallback is
+        # never consulted because the field is already present.
+        assert delta == 30
+        assert findings == []
+
+    def test_spdx3_relationship_to_noassertion_treated_as_missing(self):
+        """`to[0] == NOASSERTION` is treated as missing per BSI rule."""
+        pkg = self._make_package_without("pkg1", drop=("supplier",))
+        doc = _make_spdx3_doc_with_packages([pkg])
+        doc["@graph"].append(
+            self._make_relationship(
+                pkg["spdxId"],
+                "NOASSERTION",
+                "hasSuppliedBy",
+            )
+        )
+        delta, findings = _validate_spdx3_packages(doc)
+        assert delta == 0
+        assert any("supplier" in finding.message for finding in findings)
+
+    def test_spdx3_relationship_unknown_type_ignored(self):
+        """Relationships with unknown `relationshipType` do not satisfy any field."""
+        pkg = self._make_package_without("pkg1", drop=("supplier",))
+        organization = {
+            "type": "Organization",
+            "spdxId": "urn:spdx:agent-vendor",
+            "name": "Vendor",
+        }
+        doc = _make_spdx3_doc_with_packages([pkg])
+        doc["@graph"].append(organization)
+        doc["@graph"].append(
+            self._make_relationship(
+                pkg["spdxId"],
+                organization["spdxId"],
+                "dependsOn",
+            )
+        )
+        delta, findings = _validate_spdx3_packages(doc)
+        # `dependsOn` is not in the relationship-to-field map; supplier
+        # remains unresolved.
+        assert delta == 0
+        assert any("supplier" in finding.message for finding in findings)
+
+    def test_spdx3_relationship_has_declared_license_lower_priority(self):
+        """`hasConcludedLicense` outranks `hasDeclaredLicense` when both present."""
+        pkg = self._make_package_without("pkg1", drop=("license",))
+        concluded = {
+            "type": "simplelicensing_LicenseExpression",
+            "spdxId": "urn:spdx:license-mit",
+            "simplelicensing_licenseExpression": "MIT",
+        }
+        declared = {
+            "type": "simplelicensing_LicenseExpression",
+            "spdxId": "urn:spdx:license-gpl",
+            "simplelicensing_licenseExpression": "GPL-3.0-only",
+        }
+        doc = _make_spdx3_doc_with_packages([pkg])
+        doc["@graph"].append(concluded)
+        doc["@graph"].append(declared)
+        # Add hasDeclaredLicense first to verify priority is by relationshipType,
+        # not by graph order.
+        doc["@graph"].append(
+            self._make_relationship(pkg["spdxId"], declared["spdxId"], "hasDeclaredLicense")
+        )
+        doc["@graph"].append(
+            self._make_relationship(pkg["spdxId"], concluded["spdxId"], "hasConcludedLicense")
+        )
+        # Either relationship satisfies "license"; the resolution rule
+        # picks the lowest priority value (hasConcludedLicense).
+        delta, findings = _validate_spdx3_packages(doc)
+        assert delta == 30
+        assert findings == []
+
+    def test_spdx3_relationship_security_skipped(self):
+        """Relationships whose type starts with `security_` are skipped."""
+        pkg = self._make_package_without("pkg1", drop=("license",))
+        license_element = {
+            "type": "simplelicensing_LicenseExpression",
+            "spdxId": "urn:spdx:license-mit",
+            "simplelicensing_licenseExpression": "MIT",
+        }
+        doc = _make_spdx3_doc_with_packages([pkg])
+        doc["@graph"].append(license_element)
+        # A VEX relationship with the same `from` field MUST be skipped by
+        # the resolver - the security_ prefix gates traversal.
+        doc["@graph"].append(
+            {
+                "type": "security_VexNotAffectedVulnAssessmentRelationship",
+                "spdxId": "urn:spdx:vex-1",
+                "from": pkg["spdxId"],
+                "relationshipType": "hasConcludedLicense",
+                "to": [license_element["spdxId"]],
+            }
+        )
+        delta, findings = _validate_spdx3_packages(doc)
+        # security_ Relationships do not feed the field resolver.
+        assert delta == 0
+        assert any("license" in finding.message for finding in findings)

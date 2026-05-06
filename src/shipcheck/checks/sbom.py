@@ -31,6 +31,21 @@ SPDX3_FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "checksums": ("verifiedUsing", "checksums"),
 }
 
+# SPDX 3.0 Relationship-encoded fallback for per-Package field resolution.
+# Real Yocto Scarthgap (poky cb2dcb4963e5fbe449f1bcb019eae883ddecc8ec) emits
+# license and supplier as separate Elements linked by a Relationship Element
+# rather than as fields on the Package itself. The map below routes a
+# `relationshipType` value to a logical field plus a priority (lower numeric
+# wins). When two relationship types resolve the same logical field, the
+# lower-priority value is picked first; the higher-priority value is the
+# fallback.
+SPDX3_RELATIONSHIP_TYPE_FIELD_MAP: dict[str, tuple[str, int]] = {
+    "hasConcludedLicense": ("license", 1),
+    "hasDeclaredLicense": ("license", 2),
+    "hasSuppliedBy": ("supplier", 1),
+    "hasOriginatedBy": ("supplier", 2),
+}
+
 # Element type aliases for graph traversal. SPDX 3.0 serializers emit either
 # the bare type name or the namespaced (`core_*`/`software_*`) form depending
 # on context. Match both.
@@ -38,6 +53,13 @@ _CREATION_INFO_TYPES = ("CreationInfo", "core_CreationInfo")
 _SBOM_TYPES = ("Sbom", "software_Sbom")
 _PACKAGE_TYPE = "software_Package"
 _PRIMARY_PURPOSE_ARCHIVE = "archive"
+_RELATIONSHIP_TYPES = ("Relationship", "core_Relationship")
+_ORGANIZATION_TYPES = ("Organization", "core_Organization", "Agent", "core_Agent")
+_LICENSE_EXPRESSION_TYPES = (
+    "simplelicensing_LicenseExpression",
+    "LicenseExpression",
+    "simplelicensing_SimpleLicensingText",
+)
 
 
 def _element_type(element: dict) -> str:
@@ -402,6 +424,138 @@ def _is_spdx3_field_present(value: object) -> bool:
     return True
 
 
+def _spdx3_index_by_id(graph: list) -> dict[str, dict]:
+    """Index every Element in ``@graph`` by ``spdxId`` (skipping security_)."""
+    index: dict[str, dict] = {}
+    for element in graph:
+        if not isinstance(element, dict):
+            continue
+        if _element_type(element).startswith("security_"):
+            continue
+        spdx_id = element.get("spdxId")
+        if isinstance(spdx_id, str) and spdx_id:
+            index[spdx_id] = element
+    return index
+
+
+def _spdx3_relationships_from(graph: list) -> dict[str, list[dict]]:
+    """Index Relationship Elements by their ``from`` field (one hop only).
+
+    Skips Elements whose type begins with ``security_`` so that VEX
+    relationship Elements never feed the per-Package field resolver. The
+    returned dict maps a Package ``spdxId`` to the list of Relationship
+    Elements naming it as ``from``.
+    """
+    index: dict[str, list[dict]] = {}
+    for element in graph:
+        if not isinstance(element, dict):
+            continue
+        type_value = _element_type(element)
+        if type_value.startswith("security_"):
+            continue
+        if type_value not in _RELATIONSHIP_TYPES:
+            continue
+        from_id = element.get("from")
+        if not isinstance(from_id, str) or not from_id:
+            continue
+        index.setdefault(from_id, []).append(element)
+    return index
+
+
+def _spdx3_resolve_target_value(target: dict, logical_field: str) -> str | None:
+    """Return the identifying value of a relationship target Element.
+
+    For ``license``: the SPDX expression string from
+    ``simplelicensing_licenseExpression`` (preferred) or ``name``.
+    For ``supplier``: the ``Organization`` / ``Agent`` ``name`` field.
+    Returns ``None`` when no usable value is present.
+    """
+    target_type = _element_type(target)
+    if logical_field == "license":
+        # Prefer the rendered SPDX expression. Fall back to the LicenseExpression
+        # Element's name (Yocto sometimes attaches the expression to `name`).
+        value = target.get("simplelicensing_licenseExpression")
+        if isinstance(value, str) and value.strip():
+            return value
+        if target_type in _LICENSE_EXPRESSION_TYPES:
+            name_value = target.get("name")
+            if isinstance(name_value, str) and name_value.strip():
+                return name_value
+        return None
+    if logical_field == "supplier":
+        if target_type in _ORGANIZATION_TYPES:
+            name_value = target.get("name")
+            if isinstance(name_value, str) and name_value.strip():
+                return name_value
+        return None
+    return None
+
+
+def _resolve_spdx3_field_via_relationships(
+    pkg: dict,
+    logical_field: str,
+    relationships_by_from: dict[str, list[dict]],
+    elements_by_id: dict[str, dict],
+) -> object:
+    """Walk Relationship Elements (one hop) to resolve ``logical_field`` for ``pkg``.
+
+    Returns the identifying value resolved off the related Element (a
+    license expression string for ``license``; an Organization / Agent
+    name for ``supplier``), or ``None`` when no Relationship of a known
+    type for the field exists, or the target cannot be resolved.
+
+    The literal string ``"NOASSERTION"`` on a relationship target is
+    treated as missing (consistent with the existing 2.x rule).
+
+    Resolution rule: among Relationships matching this Package, prefer
+    the entry whose ``relationshipType`` has the LOWEST priority value
+    in ``SPDX3_RELATIONSHIP_TYPE_FIELD_MAP`` (``hasConcludedLicense``
+    outranks ``hasDeclaredLicense``; ``hasSuppliedBy`` outranks
+    ``hasOriginatedBy``). Unknown relationshipType values are ignored.
+    """
+    package_id = pkg.get("spdxId")
+    if not isinstance(package_id, str) or not package_id:
+        return None
+    candidates = relationships_by_from.get(package_id, [])
+    if not candidates:
+        return None
+
+    best_priority: int | None = None
+    best_value: str | None = None
+    for rel in candidates:
+        rel_type = rel.get("relationshipType")
+        if not isinstance(rel_type, str):
+            continue
+        mapping = SPDX3_RELATIONSHIP_TYPE_FIELD_MAP.get(rel_type)
+        if mapping is None:
+            continue
+        mapped_field, priority = mapping
+        if mapped_field != logical_field:
+            continue
+        if best_priority is not None and priority >= best_priority:
+            continue
+        targets = rel.get("to")
+        if not isinstance(targets, list) or not targets:
+            continue
+        first_target_id = targets[0]
+        if not isinstance(first_target_id, str) or not first_target_id:
+            continue
+        if first_target_id.strip() == "NOASSERTION":
+            continue
+        target_element = elements_by_id.get(first_target_id)
+        if target_element is None:
+            continue
+        target_value = _spdx3_resolve_target_value(target_element, logical_field)
+        if target_value is None or not target_value.strip():
+            continue
+        if target_value.strip() == "NOASSERTION":
+            continue
+        best_priority = priority
+        best_value = target_value
+
+    return best_value
+
+
 def _validate_spdx3_packages(doc: dict) -> tuple[int, list[Finding]]:
     """Validate per-Package SPDX 3.0 fields per BSI v2.1.0 -> 3.0 mapping.
 
@@ -412,13 +566,25 @@ def _validate_spdx3_packages(doc: dict) -> tuple[int, list[Finding]]:
 
     For each surviving Package, the five logical fields (``name``,
     ``version``, ``supplier``, ``license``, ``checksums``) are resolved
-    through ``SPDX3_FIELD_ALIASES`` first-match-wins. The literal string
-    ``"NOASSERTION"`` for the supplier or license logical fields counts
-    as MISSING and produces a finding.
+    in two phases:
+
+    1. ``SPDX3_FIELD_ALIASES`` first-match-wins on the Package itself.
+    2. On miss for ``supplier`` or ``license``, walk Relationship
+       Elements (one hop) where ``from == Package.spdxId`` and the
+       ``relationshipType`` matches a row in
+       ``SPDX3_RELATIONSHIP_TYPE_FIELD_MAP``. The Relationship's
+       ``to`` resolves to a sibling Element in ``@graph`` whose
+       identifying value (license expression string for ``license``;
+       Organization name for ``supplier``) is taken as the value.
+
+    The literal string ``"NOASSERTION"`` (on a Package field or on a
+    relationship target) for the supplier or license logical fields
+    counts as MISSING and produces a finding.
 
     Required-field set is sourced from
     ``audits/0003-spdx3-mapping/mapping.md`` (group 2 of the v2.1.0 ->
-    3.0 mapping).
+    3.0 mapping). The Relationship-traversal extension is documented
+    in the same audit doc under the Resolution-path section (group 9).
 
     Returns:
         Tuple of (score_delta, findings). ``score_delta`` is 30 points
@@ -455,6 +621,9 @@ def _validate_spdx3_packages(doc: dict) -> tuple[int, list[Finding]]:
             )
         ]
 
+    relationships_by_from = _spdx3_relationships_from(graph)
+    elements_by_id = _spdx3_index_by_id(graph)
+
     compliant = 0
     for pkg in packages:
         pkg_name_value = _resolve_spdx3_field(pkg, SPDX3_FIELD_ALIASES["name"])
@@ -466,14 +635,25 @@ def _validate_spdx3_packages(doc: dict) -> tuple[int, list[Finding]]:
         for logical_field in ("name", "version", "supplier", "license", "checksums"):
             aliases = SPDX3_FIELD_ALIASES[logical_field]
             value = _resolve_spdx3_field(pkg, aliases)
-            if not _is_spdx3_field_present(value):
-                pkg_issues.append(logical_field)
-                continue
+            present = _is_spdx3_field_present(value)
             if (
-                logical_field in ("supplier", "license")
+                present
+                and logical_field in ("supplier", "license")
                 and isinstance(value, str)
                 and value.strip() == "NOASSERTION"
             ):
+                present = False
+                value = None
+
+            if not present and logical_field in ("supplier", "license"):
+                fallback = _resolve_spdx3_field_via_relationships(
+                    pkg, logical_field, relationships_by_from, elements_by_id
+                )
+                if _is_spdx3_field_present(fallback):
+                    value = fallback
+                    present = True
+
+            if not present:
                 pkg_issues.append(logical_field)
 
         if pkg_issues:
