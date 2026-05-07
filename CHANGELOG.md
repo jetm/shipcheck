@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.0.6] - 2026-04-30
+
+### Added
+
+- SPDX 3.0 detection and field validation against BSI TR-03183-2 v2.1.0 in `sbom-generation`. Detects via `CreationInfo.specVersion`, validates `Sbom` rootElement chain, per-Package required fields (name, version, supplier, license, checksums) with first-match-wins alias resolution and Relationship traversal (`hasConcludedLicense`, `hasSuppliedBy`, `hasOriginatedBy`, `hasDeclaredLicense`). Synthetic fixtures and the pilot 0006 real-Yocto fixture exercise the full validator; pilot 0006 scores 20/50 because Yocto Scarthgap's `create-spdx-3.0` emission omits `hasSuppliedBy` Relationships and per-Package `verifiedUsing` (the gap is documented in `audits/0003-spdx3-mapping/upstream-poky-spdx3.md` with a drafted dual-emit patch series for openembedded-core).
+- Audit document `audits/0003-spdx3-mapping/upstream-poky-spdx3.md` covering `git log` walks against poky scarthgap, walnascar, and master since the Scarthgap pin, the smallest upstream patch that would close the SPDX 3.0 emission gap to reach 50/50 against the BSI v2.1.0 mapping, and submission guidance for the openembedded-core list.
+
+Pilot: pilots/0006-poky-scarthgap-spdx3/REPORT.md
+
 ## [0.0.5] - 2026-04-29
 
 ### Added
