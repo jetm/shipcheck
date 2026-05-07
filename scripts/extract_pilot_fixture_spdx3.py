@@ -59,11 +59,28 @@ DEFAULT_OUTPUT = Path(
     "tests/fixtures/pilot_real/spdx3/tmp/deploy/images/qemux86-64/"
     "core-image-minimal-qemux86-64.rootfs.spdx.json"
 )
-
 _SBOM_TYPE = "software_Sbom"
 _PACKAGE_TYPE = "software_Package"
 _CREATION_INFO_TYPE = "CreationInfo"
 _ARCHIVE_PURPOSE = "archive"
+
+# Field-bearing Relationship types we keep on the second pass.
+# MUST stay in sync with SPDX3_RELATIONSHIP_TYPE_FIELD_MAP in
+# src/shipcheck/checks/sbom.py - the validator only resolves per-Package
+# license/supplier via these relationshipTypes, so the slicer keeps exactly
+# the same set so a sliced fixture exercises the same code paths a full
+# Yocto build would.
+_FIELD_BEARING_RELATIONSHIP_TYPES: frozenset[str] = frozenset(
+    {
+        "hasConcludedLicense",
+        "hasDeclaredLicense",
+        "hasSuppliedBy",
+        "hasOriginatedBy",
+    }
+)
+
+# Element types that count as Relationships (matches sbom.py's _RELATIONSHIP_TYPES).
+_RELATIONSHIP_ELEMENT_TYPES: frozenset[str] = frozenset({"Relationship", "core_Relationship"})
 
 
 def _die(msg: str) -> None:
@@ -235,6 +252,55 @@ def _slice(
                     continue
                 kept_ids.add(id(target))
                 queue.append((target, depth + 1))
+    # Second pass: keep Relationship Elements connecting kept Packages to
+    # their license / supplier targets. The validator in
+    # ``src/shipcheck/checks/sbom.py`` resolves per-Package license and
+    # supplier by walking these Relationship Elements one hop, so without
+    # them in the slice the real fixture cannot exercise the
+    # ``_resolve_spdx3_field_via_relationships`` code path.
+    package_spdx_ids: set[str] = set()
+    for el in graph:
+        if not isinstance(el, dict):
+            continue
+        if id(el) not in kept_ids:
+            continue
+        if _element_type(el) != _PACKAGE_TYPE:
+            continue
+        spdx_id = el.get("spdxId")
+        if isinstance(spdx_id, str) and spdx_id:
+            package_spdx_ids.add(spdx_id)
+
+    for el in graph:
+        if not isinstance(el, dict):
+            continue
+        if _element_type(el) not in _RELATIONSHIP_ELEMENT_TYPES:
+            continue
+        from_id = el.get("from")
+        if not isinstance(from_id, str) or from_id not in package_spdx_ids:
+            continue
+        rel_type = el.get("relationshipType")
+        if not isinstance(rel_type, str) or rel_type not in _FIELD_BEARING_RELATIONSHIP_TYPES:
+            continue
+        kept_ids.add(id(el))
+        targets = el.get("to")
+        if not isinstance(targets, list):
+            continue
+        for target_ref in targets:
+            if not isinstance(target_ref, str) or not target_ref:
+                continue
+            if target_ref.strip() == "NOASSERTION":
+                continue
+            target = by_id.get(target_ref)
+            if target is None or id(target) in kept_ids:
+                continue
+            kept_ids.add(id(target))
+            # Also keep the target's CreationInfo so the slice stays
+            # self-consistent (every Element references one).
+            target_ci_ref = target.get("creationInfo")
+            if isinstance(target_ci_ref, str):
+                target_ci = by_id.get(target_ci_ref)
+                if target_ci is not None:
+                    kept_ids.add(id(target_ci))
 
     # Re-emit in original graph order so the slice keeps Yocto's layout.
     return [el for el in graph if isinstance(el, dict) and id(el) in kept_ids]

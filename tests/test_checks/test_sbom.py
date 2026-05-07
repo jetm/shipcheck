@@ -2063,11 +2063,15 @@ class TestSpdx3RealFixture:
     def test_spdx3_real_fixture_validates_packages(self, real_spdx3_doc: dict):
         """Per-Package validator returns score 0 plus medium findings.
 
-        Yocto image-level packages do not carry supplier / license /
-        per-package checksums, so every package emits the same triple of
-        ``missing or invalid {supplier,license,checksums}`` findings. The
-        archive package additionally lacks version. None are fully
-        compliant under the BSI v2.1.0 mapping, so score is 0/30.
+        Yocto image-level install packages now resolve ``license`` via the
+        ``hasConcludedLicense`` Relationship Elements committed in the
+        slice, so they only emit ``missing or invalid {supplier,checksums}``
+        findings. The archive package (``core-image-minimal``) does not
+        have a ``hasConcludedLicense`` Relationship, so it additionally
+        emits ``missing or invalid {license,version}``. No package clears
+        all five logical fields - ``supplier`` is missing on every
+        Package because Yocto Scarthgap does not emit ``hasSuppliedBy``
+        - so the proportional score is 0/30.
         """
         score, findings = _validate_spdx3_packages(real_spdx3_doc)
         assert score == 0
@@ -2095,19 +2099,28 @@ class TestSpdx3RealFixture:
           - 10 format detection (spdx-3)
           - 5 metadata (CreationInfo has created + createdBy)
           - 5 rootElement (Sbom rootElement resolves to software_Package)
-          - 0 per-Package (no Package carries supplier/license/checksums)
+          - 0 per-Package (no Package is fully compliant)
 
-        Relationship-traversal fallback (task 9.2) does NOT lift this
-        score because the committed slice has zero Relationship Elements
-        - the slicer kept Packages and CreationInfo but dropped every
-        ``Relationship`` from ``@graph`` to stay under the 500 KB
-        budget. The traversal is exercised by the unit tests in
-        ``TestSpdx3PackageRelationshipResolution`` (synthetic fixtures
-        with explicit Relationship Elements). The 20/50 here remains
-        the floor for what shipcheck can score on the real Yocto
-        Scarthgap-encoded image-level rootfs SPDX 3.0 slice as
-        committed; see PROVENANCE.md for the slicer rationale and
-        SIG-013 for the recipe-level / full-fixture follow-up.
+        The committed slice now retains the per-Package
+        ``hasConcludedLicense`` Relationship Elements (4 of them, one per
+        install Package), so the validator's
+        ``_resolve_spdx3_field_via_relationships`` path resolves
+        ``license`` for those packages on this real fixture. Score still
+        does not climb past 0/30 on the per-Package axis because Yocto
+        Scarthgap's ``create-spdx-3.0.bbclass`` does not emit
+        ``hasSuppliedBy`` Relationships (so ``supplier`` stays missing
+        for every Package) and emits ``verifiedUsing`` only on source
+        Packages, not the install Packages this slice keeps (so
+        ``checksums`` also stays missing). The archive Package
+        additionally lacks ``software_packageVersion`` and any
+        Relationship-encoded license. None of the 5 Packages clear all
+        five logical fields, so the proportional score is 0.
+        ``audits/0003-spdx3-mapping/upstream-poky-spdx3.md`` documents
+        the smallest upstream patch that would lift this to 50/50; until
+        that lands the 20/50 floor reflects what shipcheck can score
+        against a real Yocto Scarthgap image-level rootfs SPDX 3.0
+        document. See PROVENANCE.md for the slicer rationale and SIG-013
+        for the recipe-level / full-fixture follow-up.
         """
         spdx_dir = tmp_path / "tmp" / "deploy" / "spdx"
         _write_spdx(spdx_dir / "image.spdx.json", real_spdx3_doc)

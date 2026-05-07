@@ -97,6 +97,37 @@
       "specVersion": "3.0.1"
     },
     {
+      "type": "CreationInfo",
+      "@id": "_:CreationInfo271",
+      "created": "2011-04-05T23:00:00Z",
+      "createdBy": [
+        "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/agent/OpenEmbedded"
+      ],
+      "createdUsing": [
+        "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/tool/oe-spdx-creator_1_0"
+      ],
+      "specVersion": "3.0.1"
+    },
+    {
+      "type": "CreationInfo",
+      "@id": "_:CreationInfo276",
+      "created": "2023-05-18T22:31:00Z",
+      "createdBy": [
+        "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/agent/OpenEmbedded"
+      ],
+      "createdUsing": [
+        "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/tool/oe-spdx-creator_1_0"
+      ],
+      "specVersion": "3.0.1"
+    },
+    {
+      "type": "simplelicensing_LicenseExpression",
+      "spdxId": "http://spdx.org/spdxdocs/base-files-ee9424e3-1d7e-5739-b9cd-237a1a6f843f/17b29a2358175438c251b7e2859973caf993e7686ba504de03312797da2207ba/license/3_14_0/GPL-2_0-only",
+      "creationInfo": "_:CreationInfo271",
+      "simplelicensing_licenseExpression": "GPL-2.0-only",
+      "simplelicensing_licenseListVersion": "3.14.0"
+    },
+    {
       "type": "software_Package",
       "spdxId": "http://spdx.org/spdxdocs/base-files-ee9424e3-1d7e-5739-b9cd-237a1a6f843f/17b29a2358175438c251b7e2859973caf993e7686ba504de03312797da2207ba/package/base-files",
       "creationInfo": "_:CreationInfo256",
@@ -112,6 +143,16 @@
       "summary": "Miscellaneous files for the base system",
       "software_primaryPurpose": "install",
       "software_packageVersion": "3.0.14"
+    },
+    {
+      "type": "Relationship",
+      "spdxId": "http://spdx.org/spdxdocs/base-files-ee9424e3-1d7e-5739-b9cd-237a1a6f843f/17b29a2358175438c251b7e2859973caf993e7686ba504de03312797da2207ba/relationship/e238a906d95f30b66ca7e2b697c81289",
+      "creationInfo": "_:CreationInfo256",
+      "from": "http://spdx.org/spdxdocs/base-files-ee9424e3-1d7e-5739-b9cd-237a1a6f843f/17b29a2358175438c251b7e2859973caf993e7686ba504de03312797da2207ba/package/base-files",
+      "relationshipType": "hasConcludedLicense",
+      "to": [
+        "http://spdx.org/spdxdocs/base-files-ee9424e3-1d7e-5739-b9cd-237a1a6f843f/17b29a2358175438c251b7e2859973caf993e7686ba504de03312797da2207ba/license/3_14_0/GPL-2_0-only"
+      ]
     },
     {
       "type": "software_Package",
@@ -132,6 +173,16 @@
       "software_packageVersion": "3.6.3"
     },
     {
+      "type": "Relationship",
+      "spdxId": "http://spdx.org/spdxdocs/base-passwd-78e3ab0a-4686-572d-a886-5105dd9b12de/ee06908598bbba2c4f55e42f4a5afc15a60800589dd7880f905e157783a1bcb7/relationship/f72de583edb3effc91568700592b7b58",
+      "creationInfo": "_:CreationInfo245",
+      "from": "http://spdx.org/spdxdocs/base-passwd-78e3ab0a-4686-572d-a886-5105dd9b12de/ee06908598bbba2c4f55e42f4a5afc15a60800589dd7880f905e157783a1bcb7/package/base-passwd",
+      "relationshipType": "hasConcludedLicense",
+      "to": [
+        "http://spdx.org/spdxdocs/base-files-ee9424e3-1d7e-5739-b9cd-237a1a6f843f/17b29a2358175438c251b7e2859973caf993e7686ba504de03312797da2207ba/license/3_14_0/GPL-2_0-only"
+      ]
+    },
+    {
       "type": "Organization",
       "spdxId": "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/agent/OpenEmbedded",
       "creationInfo": "_:CreationInfo235",
@@ -142,6 +193,20 @@
       "spdxId": "http://spdx.org/spdxdocs/bitbake-addba517-4804-5ae3-87c2-0c3a1a5812ba/bitbake/tool/oe-spdx-creator_1_0",
       "creationInfo": "_:CreationInfo235",
       "name": "oe-spdx-creator 1.0"
+    },
+    {
+      "type": "simplelicensing_LicenseExpression",
+      "spdxId": "http://spdx.org/spdxdocs/busybox-88c2f534-0ecc-55ec-b418-e44fadbec098/3b395ad064ec8e8cd94d3caf54aefca3df7af02df939afe52be510fac74d3808/license/3_14_0/GPL-2_0-only_AND_LicenseRef-bzip2-1_0_4/30d08caf9186c642776c622a697ff41f",
+      "creationInfo": "_:CreationInfo276",
+      "simplelicensing_customIdToUri": [
+        {
+          "type": "DictionaryEntry",
+          "key": "LicenseRef-bzip2-1.0.4",
+          "value": "http://spdx.org/spdxdocs/busybox-88c2f534-0ecc-55ec-b418-e44fadbec098/3b395ad064ec8e8cd94d3caf54aefca3df7af02df939afe52be510fac74d3808/license-text/bzip2-1_0_4"
+        }
+      ],
+      "simplelicensing_licenseExpression": "GPL-2.0-only AND LicenseRef-bzip2-1.0.4",
+      "simplelicensing_licenseListVersion": "3.14.0"
     },
     {
       "type": "software_Package",
@@ -178,6 +243,26 @@
       "software_primaryPurpose": "install",
       "software_homePage": "https://www.busybox.net",
       "software_packageVersion": "1.36.1"
+    },
+    {
+      "type": "Relationship",
+      "spdxId": "http://spdx.org/spdxdocs/busybox-88c2f534-0ecc-55ec-b418-e44fadbec098/3b395ad064ec8e8cd94d3caf54aefca3df7af02df939afe52be510fac74d3808/relationship/b3e894f70022f46295d3df3bd48eb4c6",
+      "creationInfo": "_:CreationInfo200",
+      "from": "http://spdx.org/spdxdocs/busybox-88c2f534-0ecc-55ec-b418-e44fadbec098/3b395ad064ec8e8cd94d3caf54aefca3df7af02df939afe52be510fac74d3808/package/busybox-hwclock",
+      "relationshipType": "hasConcludedLicense",
+      "to": [
+        "http://spdx.org/spdxdocs/busybox-88c2f534-0ecc-55ec-b418-e44fadbec098/3b395ad064ec8e8cd94d3caf54aefca3df7af02df939afe52be510fac74d3808/license/3_14_0/GPL-2_0-only_AND_LicenseRef-bzip2-1_0_4/30d08caf9186c642776c622a697ff41f"
+      ]
+    },
+    {
+      "type": "Relationship",
+      "spdxId": "http://spdx.org/spdxdocs/busybox-88c2f534-0ecc-55ec-b418-e44fadbec098/3b395ad064ec8e8cd94d3caf54aefca3df7af02df939afe52be510fac74d3808/relationship/df30536c1cae507948eb4a226150bb0c",
+      "creationInfo": "_:CreationInfo161",
+      "from": "http://spdx.org/spdxdocs/busybox-88c2f534-0ecc-55ec-b418-e44fadbec098/3b395ad064ec8e8cd94d3caf54aefca3df7af02df939afe52be510fac74d3808/package/busybox",
+      "relationshipType": "hasConcludedLicense",
+      "to": [
+        "http://spdx.org/spdxdocs/busybox-88c2f534-0ecc-55ec-b418-e44fadbec098/3b395ad064ec8e8cd94d3caf54aefca3df7af02df939afe52be510fac74d3808/license/3_14_0/GPL-2_0-only_AND_LicenseRef-bzip2-1_0_4/30d08caf9186c642776c622a697ff41f"
+      ]
     },
     {
       "type": "software_Package",

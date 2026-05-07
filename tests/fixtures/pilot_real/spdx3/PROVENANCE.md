@@ -45,13 +45,18 @@ sibling to the SPDX 2.x extractor). The slicer:
   drawn deterministically from install-purpose first, then source-purpose),
 - BFS-follows IRI / blank-node spdxId references for 2 hops to pull in
   any transitively-referenced Element (CreationInfo, hashes, etc.),
+- second pass keeps every `Relationship` Element where `from` is a
+  kept Package's `spdxId` and `relationshipType` is in the
+  field-bearing allowlist (`hasConcludedLicense`, `hasDeclaredLicense`,
+  `hasSuppliedBy`, `hasOriginatedBy`) - mirroring
+  `SPDX3_RELATIONSHIP_TYPE_FIELD_MAP` in
+  `src/shipcheck/checks/sbom.py` - and pulls each Relationship's `to`
+  target Element (e.g. `simplelicensing_LicenseExpression`,
+  `Organization`) plus its `creationInfo` into the slice so the
+  validator's `_resolve_spdx3_field_via_relationships` path runs
+  end-to-end on real Yocto bytes,
 - narrows the Sbom's `rootElement` list to entries that resolve into
   the slice.
-
-The synthetic fixture from task 1.2 (`tests/fixtures/spdx3/generator.py`)
-remains the ground truth for the full Yocto-shaped JSON-LD with
-relationships and externalIdentifier objects; the real fixture is the
-ground truth for what the validator will actually score on a live build.
 
 ## Out of scope (tracked separately)
 
@@ -64,23 +69,34 @@ in the spdx-3-validation change.
 ## Files committed
 
 - `tmp/deploy/images/qemux86-64/core-image-minimal-qemux86-64.rootfs.spdx.json`
-  — ~9 KB, 16 `@graph` entries (1 `software_Sbom`, 5 `software_Package`,
-  8 `CreationInfo`, 1 `Organization`, 1 `Tool`).
+  — ~14 KB, 24 `@graph` entries (1 `software_Sbom`, 5 `software_Package`,
+  10 `CreationInfo`, 4 `Relationship` (all `hasConcludedLicense`), 2
+  `simplelicensing_LicenseExpression`, 1 `Organization`, 1 `Tool`).
 
-Total: ~13 KB (well under the 500 KB pilot fixture budget).
+Total: ~18 KB (well under the 500 KB pilot fixture budget).
 
 ## Real-fixture scoring expectations
 
 The integration test in `tests/test_checks/test_sbom.py` expects a
 partial 20/50 score on this fixture: 10 (format) + 5 (metadata) + 5
-(rootElement resolves) + 0 (per-Package). Yocto's image-level
-`software_Package` Elements do not carry `supplier`,
-`software_declaredLicense`, or per-package `verifiedUsing`; license is
-expressed via separate `Relationship`/`hasConcludedLicense` Elements
-pointing to `simplelicensing_LicenseExpression` Elements elsewhere in
-`@graph`. That is a data-model difference from BSI v2.1.0's
-field-on-Package expectation, not a validator bug. The synthetic fixture
-exercises the fully-compliant path.
+(rootElement resolves) + 0 (per-Package). The slice retains four
+`hasConcludedLicense` Relationship Elements (one per install Package),
+so the validator's `_resolve_spdx3_field_via_relationships` path
+resolves the `license` field for those packages on this real fixture
+- but the per-Package score is still 0 because no Package clears all
+five logical fields. Yocto Scarthgap's `create-spdx-3.0.bbclass` does
+not emit `hasSuppliedBy` Relationships (so `supplier` is missing for
+every Package) and emits `verifiedUsing` only on source-purpose
+Packages, not the install-purpose Packages this slice keeps (so
+`checksums` is missing). The archive-purpose Package
+(`core-image-minimal`) additionally lacks `software_packageVersion`
+and any Relationship-encoded license. None of the 5 Packages clear all
+five logical fields, so the proportional score is 0/30.
+
+That floor is a Yocto-encoding gap, not a validator bug; the synthetic
+fixture exercises the fully-compliant 50/50 path. See
+`audits/0003-spdx3-mapping/upstream-poky-spdx3.md` for the smallest
+upstream patch that would lift this real-fixture score to 50/50.
 
 ## Regenerate
 
