@@ -248,7 +248,7 @@ Pilot (`hardening-flags` check): see [`pilots/0005-code-integrity-and-hardening/
 
 Open improvements to existing checks rather than new phases:
 
-- SPDX 3.0 and CycloneDX full field validation
+- CycloneDX full field validation
 - Secure Boot PE/COFF binary signature verification
 - Secure Boot PKI chain validation (PK / KEK / DB enrollment)
 - CI pipeline signing-step detection in `.gitlab-ci.yml` / GitHub workflows
@@ -261,6 +261,10 @@ Open improvements to existing checks rather than new phases:
   `uefi_secure_boot`, `ota_server_signed`, `ima_evm`, or `other` with
   rationale; `code-integrity` check accepts the declared strategy as
   evidence for Annex I Part I §f). Tracked as signal SIG-012.
+
+### Upstream contributions
+
+- Upstream Yocto patches: dual-emit `suppliedBy` and per-Package `verifiedUsing` on `software_Package` Elements in `meta/classes/create-spdx-3.0.bbclass` and `meta/lib/oe/spdx30_tasks.py` so SBOMs validate at 50/50 against shipcheck's BSI v2.1.0 mapping. Draft series in `audits/0003-spdx3-mapping/upstream-poky-spdx3.md`.
 
 ## Configuration
 
