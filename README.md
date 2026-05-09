@@ -53,7 +53,7 @@ shipcheck check \
 
 | Check id | What it inspects |
 | -------- | ---------------- |
-| `sbom-generation` | SPDX 2.3 documents under `tmp/deploy/spdx/` against BSI TR-03183-2; detects SPDX 3.0 / CycloneDX |
+| `sbom-generation` | SPDX 2.x and 3.0 field validation against BSI TR-03183-2 v2.1.0; detects CycloneDX |
 | `cve-tracking` | `cve-check`, `vex.bbclass`, and `sbom-cve-check` JSON under `tmp/deploy/images/` |
 | `code-integrity` | UEFI/sbsign signing classes, FIT (U-Boot) signatures, dm-verity images, and IMA/EVM (config + `ima-evm-utils` package presence) |
 | `image-features` | Insecure `IMAGE_FEATURES` (e.g. `debug-tweaks`, `empty-root-password`, `allow-root-login`) |
@@ -108,11 +108,17 @@ limitations, not defects:
   (`TUNE_CCARGS:append:pn-foo`) is intentionally skipped - global
   scope only. It does NOT parse ELF binaries to confirm per-binary
   hardening, and does NOT consume `image-buildinfo.bbclass` output;
-  both are tracked as follow-ups (signal SIG-011).
-- **`sbom-generation` accepts SPDX 2.x, not only 2.3** - poky Scarthgap's
-  `create-spdx` class emits SPDX 2.2 documents; shipcheck accepts both 2.2
-  and 2.3 against the BSI TR-03183-2 v2.1.0 field requirements. SPDX 3.0
-  is detected but not field-validated.
+  both are tracked as follow-ups.
+- **`sbom-generation` validates SPDX 2.x and 3.0** - poky Scarthgap's
+  `create-spdx` class emits SPDX 2.2; shipcheck accepts 2.2 and 2.3 against
+  the BSI TR-03183-2 v2.1.0 field requirements. SPDX 3.0 field validation
+  (v0.0.6+) scores Yocto Scarthgap at 20/50: format, CreationInfo, and
+  rootElement checks pass (20 pts), but per-Package supplier and checksums
+  score zero because `create-spdx-3.0` does not emit `hasSuppliedBy`
+  Relationships or per-Package `verifiedUsing`. The gap is a Yocto emission
+  limitation documented in `audits/0003-spdx3-mapping/upstream-poky-spdx3.md`
+  with a drafted upstream patch series for openembedded-core. See
+  [issue #3](https://github.com/jetm/shipcheck/issues/3) for details.
 - **`cve-tracking` looks for specific Yocto output locations** - pilot 0001
   surfaced that `cve-tracking` and `yocto-cve-check` use different lookup
   logic; the two checks now share a common CVE-discovery helper and
@@ -230,6 +236,20 @@ Pilot (`image-features` check): see [`pilots/0005-code-integrity-and-hardening/R
 
 Pilot (`hardening-flags` check): see [`pilots/0005-code-integrity-and-hardening/REPORT.md`](pilots/0005-code-integrity-and-hardening/REPORT.md).
 
+#### v0.0.6 (2026-04-30) - SPDX 3.0 field validation
+
+- SPDX 3.0 detection and field validation in `sbom-generation` against BSI
+  TR-03183-2 v2.1.0. Detects via `CreationInfo.specVersion`; validates `Sbom`
+  rootElement chain, per-Package required fields (name, version, supplier,
+  license, checksums), and Relationship traversal fallback
+  (`hasConcludedLicense`, `hasSuppliedBy`, `hasOriginatedBy`,
+  `hasDeclaredLicense`). Pilot 0006 (Yocto Scarthgap `core-image-minimal`)
+  scores 20/50; the per-Package gap is a Yocto emission limitation documented
+  in `audits/0003-spdx3-mapping/upstream-poky-spdx3.md` with a drafted
+  upstream patch series for openembedded-core.
+
+Pilot: see [`pilots/0006-poky-scarthgap-spdx3/REPORT.md`](pilots/0006-poky-scarthgap-spdx3/REPORT.md).
+
 ### Planned
 
 - **Phase 3 — Update mechanism + OP-TEE.** Detect capsule update /
@@ -254,13 +274,12 @@ Open improvements to existing checks rather than new phases:
 - CI pipeline signing-step detection in `.gitlab-ci.yml` / GitHub workflows
 - Hardening-flags Signals C+D and per-recipe overrides
   (`image-buildinfo.bbclass` parsing, ELF artifact verification,
-  `TUNE_CCARGS:append:pn-foo`-style overrides). Tracked as signal
-  SIG-011.
+  `TUNE_CCARGS:append:pn-foo`-style overrides).
 - `product.yaml` `code_integrity` block + validation (manufacturer
   declares the chosen integrity strategy: `fit_dm_verity`,
   `uefi_secure_boot`, `ota_server_signed`, `ima_evm`, or `other` with
   rationale; `code-integrity` check accepts the declared strategy as
-  evidence for Annex I Part I §f). Tracked as signal SIG-012.
+  evidence for Annex I Part I §f).
 
 ### Upstream contributions
 
