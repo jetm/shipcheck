@@ -1,105 +1,61 @@
-[build-system]
-requires = ["uv_build"]
-build-backend = "uv_build"
-
 [project]
 name = "shipcheck"
 version = "0.0.6"
 description = "Embedded Linux compliance auditor — CRA, Secure Boot, SBOM, CVE tracking"
-authors = [{name = "Javier Tia"}]
-license = "Apache-2.0"
-requires-python = ">=3.13"
 readme = "README.md"
-keywords = ["yocto", "embedded", "compliance", "cra", "sbom", "cve", "security", "firmware"]
+requires-python = ">=3.13"
+license = "Apache-2.0"
+authors = [{ name = "Javier Tia" }]
+keywords = [
+  "compliance",
+  "cra",
+  "cve",
+  "embedded",
+  "firmware",
+  "sbom",
+  "security",
+  "yocto"
+]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
-    "Intended Audience :: Developers",
-    "Topic :: Security",
-    "Topic :: Software Development :: Quality Assurance",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.13",
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Security",
+  "Topic :: Software Development :: Quality Assurance",
 ]
 
 dependencies = [
-    "typer>=0.9.0",
-    "rich>=13.0.0",
-    "jinja2>=3.1.0",
-    "pyyaml>=6.0",
+  "jinja2>=3.1.0",
+  "pyyaml>=6.0",
+  "rich>=13.0.0",
+  "typer>=0.9.0",
 ]
 
-[dependency-groups]
-dev = [
-    "bump-my-version",
-    "pre-commit",
-    "ruff",
-    "ty",
-    "pytest>=9.0.2",
-    "pytest-cov>=6.0",
-    "pytest-randomly>=3.15",
-    "pytest-timeout>=2.3",
-    "spdx-python-model==0.0.5",
-]
+[project.urls]
+Homepage = "https://github.com/jetm/shipcheck"
+Issues = "https://github.com/jetm/shipcheck/issues"
+Repository = "https://github.com/jetm/shipcheck"
 
 [project.scripts]
 shipcheck = "shipcheck.__main__:main"
 
-[project.urls]
-Homepage = "https://github.com/jetm/shipcheck"
-Repository = "https://github.com/jetm/shipcheck"
-Issues = "https://github.com/jetm/shipcheck/issues"
-
-[tool.uv]
-package = true
-
-[tool.uv.build-backend]
-module-name = "shipcheck"
-module-root = "src"
-source-include = ["src/shipcheck/**/*.yaml"]
-wheel-exclude = []
-
-[tool.ruff]
-line-length = 100
-target-version = "py313"
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "TCH"]
-
-[tool.ruff.lint.isort]
-known-first-party = ["shipcheck"]
-
-[tool.ruff.lint.per-file-ignores]
-"src/shipcheck/cli.py" = ["B008"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["src"]
-addopts = ["-v", "--tb=short", "--cov=shipcheck", "--cov-report=term-missing"]
-timeout = 30
-markers = [
-    "integration: tests requiring external tools or filesystem",
+[dependency-groups]
+dev = [
+  "bump-my-version",
+  "pre-commit",
+  "pytest>=9.0.2",
+  "pytest-cov>=6.0",
+  "pytest-randomly>=3.15",
+  "pytest-timeout>=2.3",
+  "ruff",
+  "spdx-python-model==0.0.5",
+  "ty",
 ]
 
-[tool.coverage.run]
-source = ["src/shipcheck"]
-omit = ["tests/*"]
-
-[tool.coverage.report]
-precision = 2
-show_missing = true
-fail_under = 90
-exclude_lines = [
-    "pragma: no cover",
-    "if TYPE_CHECKING:",
-    "if __name__ == .__main__.",
-]
-
-[tool.ty.rules]
-call-non-callable = "ignore"
-invalid-argument-type = "ignore"
-invalid-type-form = "ignore"
-no-matching-overload = "ignore"
-not-subscriptable = "ignore"
-unresolved-attribute = "ignore"
+[build-system]
+requires = ["uv_build"]
+build-backend = "uv_build"
 
 [tool.bumpversion]
 current_version = "0.0.6"
@@ -124,3 +80,56 @@ replace = "__version__ = \"{new_version}\""
 filename = "CHANGELOG.md"
 search = "## [Unreleased]"
 replace = "## [Unreleased]\n\n## [{new_version}] - {now:%Y-%m-%d}"
+
+[tool.coverage.run]
+source = ["src/shipcheck"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+fail_under = 90
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "if __name__ == .__main__.",
+]
+
+[tool.pytest.ini_options]
+addopts = ["-v", "--tb=short", "--cov=shipcheck", "--cov-report=term-missing"]
+markers = [
+  "integration: tests requiring external tools or filesystem",
+]
+pythonpath = ["src"]
+testpaths = ["tests"]
+timeout = 30
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "TCH"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["shipcheck"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/shipcheck/cli.py" = ["B008"]
+
+[tool.ty.rules]
+call-non-callable = "ignore"
+invalid-argument-type = "ignore"
+invalid-type-form = "ignore"
+no-matching-overload = "ignore"
+not-subscriptable = "ignore"
+unresolved-attribute = "ignore"
+
+[tool.uv]
+package = true
+
+[tool.uv.build-backend]
+module-name = "shipcheck"
+module-root = "src"
+source-include = ["src/shipcheck/**/*.yaml"]
+wheel-exclude = []
