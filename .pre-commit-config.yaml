@@ -38,6 +38,12 @@ repos:
   # Local hooks - TOML and custom validation
   - repo: local
     hooks:
+      - id: ty
+        name: ty type check
+        entry: uv run ty check src/
+        language: system
+        types: [python]
+        pass_filenames: false
       - id: tombi-format
         name: tombi format
         entry: tombi format
