@@ -2,7 +2,7 @@ name: Publish to PyPI
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["v[0-9]*"]
 
 permissions:
   id-token: write
@@ -11,6 +11,7 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - uses: actions/checkout@v6
 
@@ -31,6 +32,7 @@ jobs:
             }
             p { print }
           ' CHANGELOG.md > release-notes.md
+          test -s release-notes.md || { echo "release-notes.md is empty" >&2; exit 1; }
           echo "=== Release notes for ${GITHUB_REF_NAME} ==="
           cat release-notes.md
 

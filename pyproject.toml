@@ -54,7 +54,7 @@ dev = [
 ]
 
 [build-system]
-requires = ["uv_build"]
+requires = ["uv_build>=0.6,<0.13"]
 build-backend = "uv_build"
 
 [tool.bumpversion]
@@ -84,6 +84,7 @@ replace = "## [Unreleased]\n\n## [{new_version}] - {now:%Y-%m-%d}"
 [tool.coverage.run]
 source = ["src/shipcheck"]
 omit = ["tests/*"]
+branch = true
 
 [tool.coverage.report]
 precision = 2
@@ -109,7 +110,13 @@ line-length = 100
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "TCH"]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "TC"]
+ignore = [
+  "SIM102",  # nested if - often more readable than combined condition
+  "SIM105",  # contextlib.suppress - adds import for minimal benefit
+  "SIM108",  # ternary operator - reduces readability for complex conditions
+  "SIM110",  # any() instead of for loop - sometimes less clear
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["shipcheck"]
