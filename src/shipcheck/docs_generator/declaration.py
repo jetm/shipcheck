@@ -64,6 +64,7 @@ def _require_manufacturer_address(product: ProductConfig) -> None:
 def generate_declaration(
     product: ProductConfig,
     out_path: Path,
+    *,
     simplified: bool = False,
 ) -> None:
     """Render an EU Declaration of Conformity to ``out_path``.

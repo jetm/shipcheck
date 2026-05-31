@@ -222,7 +222,9 @@ def detect(build_dir: Path, config: Mapping[str, object] | None = None) -> Mecha
     """
     cfg = config or {}
     raw_known = cfg.get("known_test_keys", []) if isinstance(cfg, dict) else []
-    known_test_keys: list[str] = list(raw_known) if isinstance(raw_known, list) else []
+    known_test_keys: list[str] = (
+        [k for k in raw_known if isinstance(k, str)] if isinstance(raw_known, list) else []
+    )
 
     configs = _read_config_files(build_dir)
     signing_classes = _detect_signing_classes(configs)
