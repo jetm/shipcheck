@@ -111,6 +111,7 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "TC"]
+extend-select = ["PLR0913", "FBT001", "FBT002", "FBT003"]
 ignore = [
   "SIM102",  # nested if - often more readable than combined condition
   "SIM105",  # contextlib.suppress - adds import for minimal benefit
@@ -122,7 +123,10 @@ ignore = [
 known-first-party = ["shipcheck"]
 
 [tool.ruff.lint.per-file-ignores]
-"src/shipcheck/cli.py" = ["B008"]
+"src/shipcheck/cli.py" = ["B008", "PLR0913", "FBT001", "FBT002", "FBT003"]
+
+[tool.ruff.lint.pylint]
+max-args = 5
 
 [tool.ty.rules]
 call-non-callable = "ignore"
